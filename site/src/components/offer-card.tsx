@@ -10,7 +10,7 @@ export function OfferCard({ offer }: OfferCardProps) {
     offer.approvalTone === "high" ? "text-emerald-700" : "text-amber-600";
 
   return (
-    <article className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+    <article className="flex h-full flex-col rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex min-h-16 items-start gap-4">
         <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-emerald-50 text-2xl font-black text-emerald-700">
           {offer.logoText}
@@ -74,16 +74,18 @@ export function OfferCard({ offer }: OfferCardProps) {
         ))}
       </div>
 
-      <Link
-        href={`/offers/${offer.slug}`}
-        className="mt-6 inline-flex min-h-11 w-full items-center justify-center rounded-md bg-emerald-700 px-4 font-semibold text-white transition hover:bg-emerald-800"
-      >
-        Подробнее
-      </Link>
-      <p className="mt-3 text-xs leading-5 text-slate-500">
-        Решение о выдаче принимает МФО. Перед оформлением проверьте полную
-        стоимость займа и условия договора.
-      </p>
+      <div className="mt-auto pt-6">
+        <Link
+          href={`/offers/${offer.slug}`}
+          className="inline-flex min-h-11 w-full items-center justify-center rounded-md bg-emerald-700 px-4 font-semibold text-white transition hover:bg-emerald-800"
+        >
+          Подробнее
+        </Link>
+        <p className="mt-3 text-xs leading-5 text-slate-500">
+          Решение о выдаче принимает МФО. Перед оформлением проверьте полную
+          стоимость займа и условия договора.
+        </p>
+      </div>
     </article>
   );
 }
