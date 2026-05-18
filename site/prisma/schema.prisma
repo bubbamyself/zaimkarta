@@ -1,0 +1,141 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum OfferStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+
+enum AffiliateNetwork {
+  LEADS_SU
+  LEADGID
+  DIRECT
+  OTHER
+}
+
+enum ApprovalTone {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+model Offer {
+  id              String            @id @default(cuid())
+  slug            String            @unique
+  status          OfferStatus       @default(DRAFT)
+  brandName       String
+  legalName       String?
+  logoText        String?
+  logoUrl         String?
+  officialSite    String?
+  shortDescription String?
+  badge           String?
+  rating          Decimal?          @db.Decimal(3, 2)
+  reviewsCount    Int               @default(0)
+  minAmount       Int?
+  maxAmount       Int?
+  minTermDays     Int?
+  maxTermDays     Int?
+  dailyRateFrom   Decimal?          @db.Decimal(5, 2)
+  dailyRateTo     Decimal?          @db.Decimal(5, 2)
+  pskFrom         Decimal?          @db.Decimal(6, 2)
+  pskTo           Decimal?          @db.Decimal(6, 2)
+  approvalLabel   String?
+  approvalTone    ApprovalTone      @default(MEDIUM)
+  decisionTime    String?
+  payoutMethods   String[]          @default([])
+  repaymentMethods String[]         @default([])
+  requirements    String[]          @default([])
+  documents       String[]          @default([])
+  advantages      String[]          @default([])
+  warnings        String[]          @default([])
+  legalDisclosure String?
+  updatedByUserAt DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  affiliateOffers AffiliateOffer[]
+  offerClicks     OfferClick[]
+}
+
+model AffiliateOffer {
+  id                     String           @id @default(cuid())
+  offerId                String
+  network                AffiliateNetwork
+  networkOfferId         String?
+  targetAction           String?
+  payoutAmount           Decimal?         @db.Decimal(10, 2)
+  currency               String           @default("RUB")
+  holdDays               Int?
+  reconciliationPeriod   String?
+  geoIncluded            String[]         @default([])
+  geoExcluded            String[]         @default([])
+  dailyCap               Int?
+  monthlyCap             Int?
+  allowedTrafficTypes    String[]         @default([])
+  forbiddenTrafficTypes  String[]         @default([])
+  trackingBaseUrl        String
+  trackingParamsTemplate Json?
+  isActive               Boolean          @default(true)
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
+
+  offer                  Offer            @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  offerClicks            OfferClick[]
+
+  @@index([offerId])
+  @@index([network])
+  @@index([isActive])
+}
+
+model Lead {
+  id               String         @id @default(cuid())
+  leadId           String         @unique
+  landingPageUrl   String?
+  referrer         String?
+  utmSource        String?
+  utmMedium        String?
+  utmCampaign      String?
+  utmContent       String?
+  utmTerm          String?
+  userAgent        String?
+  ipHash           String?
+  firstSeenAt      DateTime       @default(now())
+  lastSeenAt       DateTime       @updatedAt
+  createdAt        DateTime       @default(now())
+
+  offerClicks      OfferClick[]
+
+  @@index([createdAt])
+  @@index([leadId])
+}
+
+model OfferClick {
+  id               String          @id @default(cuid())
+  leadId           String
+  offerId          String
+  affiliateOfferId String?
+  pageUrl          String?
+  pageType         String?
+  categorySlug     String?
+  cardPosition     Int?
+  redirectUrl      String
+  createdAt        DateTime        @default(now())
+
+  lead             Lead            @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  offer            Offer           @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  affiliateOffer   AffiliateOffer? @relation(fields: [affiliateOfferId], references: [id], onDelete: SetNull)
+
+  @@index([leadId])
+  @@index([offerId])
+  @@index([affiliateOfferId])
+  @@index([createdAt])
+  @@index([categorySlug])
+}
