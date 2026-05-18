@@ -1,0 +1,60 @@
+name: Check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  site:
+    name: Site lint and build
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: zaimkarta
+          POSTGRES_USER: zaimkarta
+          POSTGRES_PASSWORD: zaimkarta_local_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U zaimkarta -d zaimkarta"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    defaults:
+      run:
+        working-directory: site
+
+    env:
+      DATABASE_URL: postgresql://zaimkarta:zaimkarta_local_password@127.0.0.1:5432/zaimkarta?schema=public
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run db:generate
+
+      - name: Apply database migrations
+        run: npx prisma migrate deploy
+
+      - name: Seed demo data
+        run: npm run db:seed
+
+      - name: Run project checks
+        run: npm run check
