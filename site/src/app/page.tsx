@@ -100,8 +100,13 @@ export default async function Home() {
         </div>
 
         <div className="grid gap-4 md:grid-cols-3">
-          {offers.map((offer) => (
-            <OfferCard key={offer.name} offer={offer} />
+          {offers.map((offer, index) => (
+            <OfferCard
+              key={offer.name}
+              offer={offer}
+              pageType="home"
+              position={index + 1}
+            />
           ))}
         </div>
       </section>

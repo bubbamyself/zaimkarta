@@ -73,8 +73,14 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
         </div>
 
         <div className="grid gap-4 md:grid-cols-3">
-          {offers.map((offer) => (
-            <OfferCard key={offer.name} offer={offer} />
+          {offers.map((offer, index) => (
+            <OfferCard
+              key={offer.name}
+              offer={offer}
+              pageType="category"
+              categorySlug={slug}
+              position={index + 1}
+            />
           ))}
         </div>
       </section>

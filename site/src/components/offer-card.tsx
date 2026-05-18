@@ -3,11 +3,30 @@ import Link from "next/link";
 
 type OfferCardProps = {
   offer: OfferCardData;
+  pageType?: string;
+  categorySlug?: string;
+  position?: number;
 };
 
-export function OfferCard({ offer }: OfferCardProps) {
+export function OfferCard({
+  offer,
+  pageType = "home",
+  categorySlug,
+  position,
+}: OfferCardProps) {
   const approvalClass =
     offer.approvalTone === "high" ? "text-emerald-700" : "text-amber-600";
+  const clickParams = new URLSearchParams({
+    page_type: pageType,
+  });
+
+  if (categorySlug) {
+    clickParams.set("category", categorySlug);
+  }
+
+  if (position) {
+    clickParams.set("position", String(position));
+  }
 
   return (
     <article className="flex h-full flex-col rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
@@ -74,10 +93,16 @@ export function OfferCard({ offer }: OfferCardProps) {
         ))}
       </div>
 
-      <div className="mt-auto pt-6">
+      <div className="mt-auto grid gap-3 pt-6">
+        <a
+          href={`/api/offers/${offer.slug}/click?${clickParams.toString()}`}
+          className="inline-flex min-h-11 w-full items-center justify-center rounded-md bg-emerald-700 px-4 font-semibold text-white transition hover:bg-emerald-800"
+        >
+          Оформить заем
+        </a>
         <Link
           href={`/offers/${offer.slug}`}
-          className="inline-flex min-h-11 w-full items-center justify-center rounded-md bg-emerald-700 px-4 font-semibold text-white transition hover:bg-emerald-800"
+          className="inline-flex min-h-11 w-full items-center justify-center rounded-md border border-slate-300 bg-white px-4 font-semibold text-slate-800 transition hover:border-slate-500"
         >
           Подробнее
         </Link>
