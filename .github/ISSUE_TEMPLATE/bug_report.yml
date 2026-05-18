@@ -1,0 +1,76 @@
+name: Bug report
+description: Сообщить о проблеме в проекте
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Заполни только то, что знаешь. Главное — чтобы баг можно было повторить.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Что сломалось?
+      description: Коротко опиши проблему.
+      placeholder: Например, кнопка "Подробнее" съехала вниз на одной карточке.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Как повторить?
+      description: Напиши шаги, после которых появляется проблема.
+      placeholder: |
+        1. Открыть главную страницу
+        2. Прокрутить до карточек
+        3. Посмотреть на вторую карточку
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Как должно быть?
+      description: Что ты ожидал увидеть вместо проблемы?
+      placeholder: Все кнопки должны быть на одной высоте.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Что происходит сейчас?
+      description: Опиши фактическое поведение.
+      placeholder: Кнопка на средней карточке ниже остальных.
+    validations:
+      required: false
+
+  - type: input
+    id: page
+    attributes:
+      label: Где видно проблему?
+      description: Страница, адрес или раздел сайта.
+      placeholder: Главная, /, /offers/zaimer
+    validations:
+      required: false
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Скриншоты
+      description: Перетащи сюда скриншоты, если они есть.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Насколько срочно?
+      options:
+        - Низко
+        - Средне
+        - Высоко
+    validations:
+      required: false

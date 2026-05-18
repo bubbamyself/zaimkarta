@@ -1,0 +1,58 @@
+name: Task or improvement
+description: Описать новую задачу или улучшение
+title: "[Task]: "
+labels: ["task"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Этот шаблон для идей, доработок и обычных рабочих задач.
+
+  - type: textarea
+    id: goal
+    attributes:
+      label: Что нужно сделать?
+      description: Опиши задачу простыми словами.
+      placeholder: Например, добавить фильтр предложений по сумме займа.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reason
+    attributes:
+      label: Зачем это нужно?
+      description: Какую пользу даст изменение?
+      placeholder: Пользователь быстрее найдет подходящие предложения.
+    validations:
+      required: false
+
+  - type: textarea
+    id: result
+    attributes:
+      label: Как понять, что задача готова?
+      description: Критерии готовности.
+      placeholder: |
+        - Фильтр отображается на главной
+        - Можно выбрать сумму
+        - Список карточек меняется после выбора
+    validations:
+      required: true
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Дополнительные заметки
+      description: Ссылки, скриншоты, ограничения или важные детали.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Приоритет
+      options:
+        - Низкий
+        - Средний
+        - Высокий
+    validations:
+      required: false
