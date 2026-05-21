@@ -76,6 +76,7 @@ model AffiliateOffer {
   id                     String           @id @default(cuid())
   offerId                String
   network                AffiliateNetwork
+  networkName            String?
   networkOfferId         String?
   targetAction           String?
   payoutAmount           Decimal?         @db.Decimal(10, 2)

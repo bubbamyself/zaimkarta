@@ -1,28 +1,26 @@
 "use server";
 
-import type { AffiliateNetwork, ApprovalTone, OfferStatus } from "@prisma/client";
+import type { ApprovalTone, OfferStatus } from "@prisma/client";
 import { randomUUID } from "crypto";
 import { mkdir, writeFile } from "fs/promises";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import path from "path";
 import { getAdminSession } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 
 const LOGO_UPLOAD_DIR = path.join(process.cwd(), "public", "uploads", "logos");
 const LOGO_PUBLIC_PATH = "/uploads/logos";
-const MAX_LOGO_DIMENSION = 256;
 const MAX_LOGO_BYTES = 400 * 1024;
 const OFFER_STATUSES: OfferStatus[] = ["ACTIVE", "PAUSED", "ARCHIVED"];
-const AFFILIATE_NETWORKS: AffiliateNetwork[] = [
-  "LEADS_SU",
-  "LEADGID",
-  "DIRECT",
-  "OTHER",
-];
 const APPROVAL_TONES: ApprovalTone[] = ["LOW", "MEDIUM", "HIGH"];
 
 function readString(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
+}
+
+function actionError(message: string) {
+  return new Error(message);
 }
 
 function readOptionalString(formData: FormData, key: string) {
@@ -85,7 +83,7 @@ function readDate(formData: FormData, key: string) {
 
 function validateSlug(slug: string) {
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
-    throw new Error("Slug должен быть латиницей в формате primer-offera");
+    throw actionError("Slug должен быть латиницей в формате primer-offera");
   }
 }
 
@@ -99,102 +97,24 @@ function validateHttpsUrl(value: string | null, label: string) {
   try {
     url = new URL(value);
   } catch {
-    throw new Error(`${label}: ссылка должна быть корректным URL`);
+    throw actionError(`${label}: ссылка должна быть корректным URL`);
   }
 
   if (url.protocol !== "https:") {
-    throw new Error(`${label}: используем только https-ссылки`);
+    throw actionError(`${label}: используем только https-ссылки`);
   }
 }
 
-function readUInt32(buffer: Buffer, offset: number) {
-  return buffer.readUInt32BE(offset);
-}
-
-function getPngDimensions(buffer: Buffer) {
-  const pngSignature = "89504e470d0a1a0a";
-
-  if (buffer.subarray(0, 8).toString("hex") !== pngSignature) {
-    return null;
-  }
-
-  return {
-    width: readUInt32(buffer, 16),
-    height: readUInt32(buffer, 20),
-  };
-}
-
-function getJpegDimensions(buffer: Buffer) {
-  if (buffer[0] !== 0xff || buffer[1] !== 0xd8) {
-    return null;
-  }
-
-  let offset = 2;
-
-  while (offset < buffer.length) {
-    if (buffer[offset] !== 0xff) {
-      return null;
-    }
-
-    const marker = buffer[offset + 1];
-    const length = buffer.readUInt16BE(offset + 2);
-
-    if (marker >= 0xc0 && marker <= 0xc3) {
-      return {
-        height: buffer.readUInt16BE(offset + 5),
-        width: buffer.readUInt16BE(offset + 7),
-      };
-    }
-
-    offset += 2 + length;
-  }
-
-  return null;
-}
-
-function getSvgDimensions(buffer: Buffer) {
+function validateSvgLogo(buffer: Buffer) {
   const svg = buffer.toString("utf8");
+
+  if (!/<svg[\s>]/i.test(svg)) {
+    throw new Error("Файл логотипа должен быть корректным SVG");
+  }
 
   if (/<script|on\w+=|javascript:/i.test(svg)) {
     throw new Error("SVG не должен содержать скрипты или inline-обработчики");
   }
-
-  const widthMatch = svg.match(/\bwidth=["']?([0-9.]+)/i);
-  const heightMatch = svg.match(/\bheight=["']?([0-9.]+)/i);
-
-  if (widthMatch?.[1] && heightMatch?.[1]) {
-    return {
-      width: Number(widthMatch[1]),
-      height: Number(heightMatch[1]),
-    };
-  }
-
-  const viewBoxMatch = svg.match(/\bviewBox=["'][^"']*?\s([0-9.]+)\s([0-9.]+)["']/i);
-
-  if (viewBoxMatch?.[1] && viewBoxMatch?.[2]) {
-    return {
-      width: Number(viewBoxMatch[1]),
-      height: Number(viewBoxMatch[2]),
-    };
-  }
-
-  return null;
-}
-
-function getLogoDimensions(buffer: Buffer, mimeType: string) {
-  if (mimeType === "image/png") {
-    return getPngDimensions(buffer);
-  }
-
-  if (mimeType === "image/jpeg") {
-    return getJpegDimensions(buffer);
-  }
-
-  if (mimeType === "image/svg+xml") {
-    return getSvgDimensions(buffer);
-  }
-
-  return null;
 }
 
 async function saveLogoUpload(formData: FormData, slug: string) {
@@ -204,15 +124,8 @@ async function saveLogoUpload(formData: FormData, slug: string) {
     return readOptionalString(formData, "currentLogoUrl");
   }
 
-  const allowedMimeTypes = new Map([
-    ["image/svg+xml", "svg"],
-    ["image/png", "png"],
-    ["image/jpeg", "jpg"],
-  ]);
-  const extension = allowedMimeTypes.get(file.type);
-
-  if (!extension) {
-    throw new Error("Логотип должен быть в формате SVG, PNG или JPEG");
+  if (file.type !== "image/svg+xml") {
+    throw new Error("Логотип должен быть в формате SVG");
   }
 
   if (file.size > MAX_LOGO_BYTES) {
@@ -220,25 +133,14 @@ async function saveLogoUpload(formData: FormData, slug: string) {
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
-  const dimensions = getLogoDimensions(buffer, file.type);
-
-  if (!dimensions) {
-    throw new Error("Не удалось определить размер логотипа");
-  }
-
-  if (
-    dimensions.width > MAX_LOGO_DIMENSION ||
-    dimensions.height > MAX_LOGO_DIMENSION
-  ) {
-    throw new Error("Логотип должен быть не больше 256x256 пикселей");
-  }
+  validateSvgLogo(buffer);
 
   await mkdir(LOGO_UPLOAD_DIR, {
     recursive: true,
   });
 
   const safeSlug = slug.replace(/[^a-z0-9-]/g, "");
-  const fileName = `${safeSlug}-${randomUUID()}.${extension}`;
+  const fileName = `${safeSlug}-${randomUUID()}.svg`;
   await writeFile(path.join(LOGO_UPLOAD_DIR, fileName), buffer);
 
   return `${LOGO_PUBLIC_PATH}/${fileName}`;
@@ -311,7 +213,8 @@ function collectAffiliateData(formData: FormData) {
   }
 
   return {
-    network: readEnum(formData, "network", AFFILIATE_NETWORKS, "OTHER"),
+    network: "OTHER" as const,
+    networkName: readOptionalString(formData, "networkName"),
     networkOfferId: readOptionalString(formData, "networkOfferId"),
     targetAction: readOptionalString(formData, "targetAction"),
     payoutAmount: readDecimal(formData, "payoutAmount"),
@@ -352,6 +255,7 @@ export async function createOffer(formData: FormData) {
 
   revalidatePath("/");
   revalidatePath("/admin");
+  redirect(`/admin?section=offers&created=${offerData.slug}`);
 }
 
 export async function updateOffer(formData: FormData) {
@@ -400,5 +304,7 @@ export async function updateOffer(formData: FormData) {
 
   revalidatePath("/");
   revalidatePath("/admin");
+  revalidatePath(`/admin/offers/${offerId}`);
   revalidatePath(`/offers/${offerData.slug}`);
+  redirect(`/admin/offers/${offerId}?saved=1`);
 }
