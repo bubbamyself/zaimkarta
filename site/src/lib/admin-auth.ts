@@ -1,23 +1,51 @@
 import "server-only";
 import { createHmac, timingSafeEqual } from "crypto";
+import type { AdminRole } from "@prisma/client";
 import { cookies } from "next/headers";
+import { prisma } from "@/lib/prisma";
+import { verifyPassword } from "@/lib/password";
 
 const ADMIN_COOKIE_NAME = "zk_admin_session";
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 12;
 
-function getAdminUsername() {
-  return process.env.ADMIN_USERNAME;
-}
+export type AdminSession = {
+  id: string;
+  username: string;
+  role: AdminRole;
+  permissions: string[];
+};
 
-function getAdminPassword() {
-  return process.env.ADMIN_PASSWORD;
-}
+type SessionPayload = {
+  adminId: string;
+  expiresAt: number;
+};
 
 function getSessionSecret() {
   return process.env.ADMIN_SESSION_SECRET;
 }
 
-function signSession(username: string, expiresAt: number) {
+function encodePayload(payload: SessionPayload) {
+  return Buffer.from(JSON.stringify(payload)).toString("base64url");
+}
+
+function decodePayload(value: string): SessionPayload | null {
+  try {
+    const parsed = JSON.parse(Buffer.from(value, "base64url").toString("utf8"));
+
+    if (
+      typeof parsed.adminId !== "string" ||
+      typeof parsed.expiresAt !== "number"
+    ) {
+      return null;
+    }
+
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function signPayload(encodedPayload: string) {
   const sessionSecret = getSessionSecret();
 
   if (!sessionSecret) {
@@ -25,8 +53,8 @@ function signSession(username: string, expiresAt: number) {
   }
 
   return createHmac("sha256", sessionSecret)
-    .update(`${username}.${expiresAt}`)
-    .digest("hex");
+    .update(encodedPayload)
+    .digest("base64url");
 }
 
 function safeEqual(left: string, right: string) {
@@ -40,32 +68,46 @@ function safeEqual(left: string, right: string) {
   return timingSafeEqual(leftBuffer, rightBuffer);
 }
 
-export function verifyAdminCredentials(username: string, password: string) {
-  const adminUsername = getAdminUsername();
-  const adminPassword = getAdminPassword();
-
-  if (!adminUsername || !adminPassword || !getSessionSecret()) {
-    return false;
+export async function verifyAdminCredentials(
+  username: string,
+  password: string,
+): Promise<AdminSession | null> {
+  if (!getSessionSecret()) {
+    return null;
   }
 
-  return (
-    safeEqual(username, adminUsername) &&
-    safeEqual(password, adminPassword)
-  );
+  const admin = await prisma.adminUser.findUnique({
+    where: {
+      username,
+    },
+  });
+
+  if (!admin?.isActive || !verifyPassword(password, admin.passwordHash)) {
+    return null;
+  }
+
+  return {
+    id: admin.id,
+    username: admin.username,
+    role: admin.role,
+    permissions: admin.permissions,
+  };
 }
 
-export async function createAdminSession() {
-  const username = getAdminUsername();
-  const expiresAt = Date.now() + SESSION_MAX_AGE_SECONDS * 1000;
-  const signature = username ? signSession(username, expiresAt) : null;
+export async function createAdminSession(admin: AdminSession) {
+  const payload = encodePayload({
+    adminId: admin.id,
+    expiresAt: Date.now() + SESSION_MAX_AGE_SECONDS * 1000,
+  });
+  const signature = signPayload(payload);
 
-  if (!username || !signature) {
+  if (!signature) {
     return;
   }
 
   const cookieStore = await cookies();
 
-  cookieStore.set(ADMIN_COOKIE_NAME, `${username}.${expiresAt}.${signature}`, {
+  cookieStore.set(ADMIN_COOKIE_NAME, `${payload}.${signature}`, {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
@@ -79,30 +121,50 @@ export async function clearAdminSession() {
   cookieStore.delete(ADMIN_COOKIE_NAME);
 }
 
-export async function hasAdminSession() {
+export async function getAdminSession(): Promise<AdminSession | null> {
   const cookieStore = await cookies();
   const value = cookieStore.get(ADMIN_COOKIE_NAME)?.value;
 
   if (!value) {
-    return false;
+    return null;
   }
 
-  const [username, expiresAtValue, signature] = value.split(".");
-  const expiresAt = Number(expiresAtValue);
+  const [encodedPayload, signature] = value.split(".");
 
-  if (!username || !signature || !Number.isFinite(expiresAt)) {
-    return false;
+  if (!encodedPayload || !signature) {
+    return null;
   }
 
-  if (expiresAt < Date.now()) {
-    return false;
+  const expectedSignature = signPayload(encodedPayload);
+
+  if (!expectedSignature || !safeEqual(signature, expectedSignature)) {
+    return null;
   }
 
-  const expectedSignature = signSession(username, expiresAt);
+  const payload = decodePayload(encodedPayload);
 
-  if (!expectedSignature) {
-    return false;
+  if (!payload || payload.expiresAt < Date.now()) {
+    return null;
   }
 
-  return safeEqual(signature, expectedSignature);
+  const admin = await prisma.adminUser.findUnique({
+    where: {
+      id: payload.adminId,
+    },
+  });
+
+  if (!admin?.isActive) {
+    return null;
+  }
+
+  return {
+    id: admin.id,
+    username: admin.username,
+    role: admin.role,
+    permissions: admin.permissions,
+  };
+}
+
+export async function hasAdminSession() {
+  return Boolean(await getAdminSession());
 }

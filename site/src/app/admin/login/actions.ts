@@ -13,13 +13,14 @@ export async function loginAdmin(
 ): Promise<LoginState> {
   const username = String(formData.get("username") ?? "");
   const password = String(formData.get("password") ?? "");
+  const admin = await verifyAdminCredentials(username, password);
 
-  if (!verifyAdminCredentials(username, password)) {
+  if (!admin) {
     return {
       error: "Неверный логин или пароль",
     };
   }
 
-  await createAdminSession();
+  await createAdminSession(admin);
   redirect("/admin");
 }

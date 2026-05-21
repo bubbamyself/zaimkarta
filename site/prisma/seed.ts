@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { createPasswordHash } from "../src/lib/password";
 
 const connectionString = process.env.DATABASE_URL;
 
@@ -11,6 +12,23 @@ const adapter = new PrismaPg({ connectionString });
 const prisma = new PrismaClient({ adapter });
 
 async function main() {
+  await prisma.adminUser.upsert({
+    where: {
+      username: "ADMIN_ZAIM",
+    },
+    update: {
+      role: "BOSS",
+      isActive: true,
+    },
+    create: {
+      username: "ADMIN_ZAIM",
+      passwordHash: createPasswordHash("admin123"),
+      role: "BOSS",
+      permissions: ["analytics", "admin_users"],
+      isActive: true,
+    },
+  });
+
   const offers = [
     {
       slug: "zaymer",
