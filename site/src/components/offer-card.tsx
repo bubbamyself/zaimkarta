@@ -32,7 +32,15 @@ export function OfferCard({
     <article className="flex h-full flex-col rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex min-h-16 items-start gap-4">
         <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-emerald-50 text-2xl font-black text-emerald-700">
-          {offer.logoText}
+          {offer.logoUrl ? (
+            <img
+              src={offer.logoUrl}
+              alt={`Логотип ${offer.name}`}
+              className="h-full w-full rounded-lg bg-white object-contain p-1.5"
+            />
+          ) : (
+            offer.logoText
+          )}
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">

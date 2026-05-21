@@ -81,7 +81,15 @@ export default async function OfferPage({ params }: OfferPageProps) {
           <div>
             <div className="flex items-start gap-4">
               <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-emerald-50 text-3xl font-black text-emerald-700">
-                {offer.logoText}
+                {offer.logoUrl ? (
+                  <img
+                    src={offer.logoUrl}
+                    alt={`Логотип ${offer.name}`}
+                    className="h-full w-full rounded-lg bg-white object-contain p-2"
+                  />
+                ) : (
+                  offer.logoText
+                )}
               </div>
               <div>
                 <p className="mb-2 inline-flex rounded-md bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">

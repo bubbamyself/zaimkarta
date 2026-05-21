@@ -1,0 +1,4 @@
+ALTER TABLE "Offer"
+ADD COLUMN "displayPriority" INTEGER NOT NULL DEFAULT 100,
+ADD COLUMN "conditionsCheckedAt" TIMESTAMP(3);
+

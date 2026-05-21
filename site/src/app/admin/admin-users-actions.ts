@@ -6,7 +6,12 @@ import { getAdminSession } from "@/lib/admin-auth";
 import { createPasswordHash } from "@/lib/password";
 import { prisma } from "@/lib/prisma";
 
-const ALLOWED_PERMISSIONS = ["analytics", "offers_read", "clicks_read"];
+const ALLOWED_PERMISSIONS = [
+  "analytics",
+  "offers_read",
+  "offers_write",
+  "clicks_read",
+];
 
 function readString(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();

@@ -5,6 +5,7 @@ export type OfferCardData = {
   name: string;
   slug: string;
   logoText: string;
+  logoUrl: string | null;
   badge: string;
   rating: string;
   reviewsCount: number;
@@ -73,13 +74,14 @@ export async function getActiveOffers(): Promise<OfferCardData[]> {
     where: {
       status: "ACTIVE",
     },
-    orderBy: [{ rating: "desc" }, { brandName: "asc" }],
+    orderBy: [{ displayPriority: "asc" }, { rating: "desc" }, { brandName: "asc" }],
   });
 
   return offers.map((offer) => ({
     name: offer.brandName,
     slug: offer.slug,
     logoText: offer.logoText ?? offer.brandName.slice(0, 1),
+    logoUrl: offer.logoUrl,
     badge: offer.badge ?? "онлайн заем",
     rating: offer.rating?.toString() ?? "0",
     reviewsCount: offer.reviewsCount,
@@ -116,6 +118,7 @@ export async function getOfferDetails(
     name: offer.brandName,
     slug: offer.slug,
     logoText: offer.logoText ?? offer.brandName.slice(0, 1),
+    logoUrl: offer.logoUrl,
     badge: offer.badge ?? "онлайн заем",
     rating: offer.rating?.toString() ?? "0",
     reviewsCount: offer.reviewsCount,

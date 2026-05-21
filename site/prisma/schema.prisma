@@ -34,7 +34,7 @@ enum AdminRole {
 model Offer {
   id              String            @id @default(cuid())
   slug            String            @unique
-  status          OfferStatus       @default(DRAFT)
+  status          OfferStatus       @default(PAUSED)
   brandName       String
   legalName       String?
   logoText        String?
@@ -62,6 +62,8 @@ model Offer {
   advantages      String[]          @default([])
   warnings        String[]          @default([])
   legalDisclosure String?
+  displayPriority Int               @default(100)
+  conditionsCheckedAt DateTime?
   updatedByUserAt DateTime?
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import type { AffiliateOffer, Offer } from "@prisma/client";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
@@ -8,6 +9,7 @@ import {
   updateAdminUser,
 } from "./admin-users-actions";
 import { logoutAdmin } from "./logout-action";
+import { createOffer, updateOffer } from "./offer-actions";
 import { getAdminSession } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 
@@ -40,6 +42,34 @@ function StatCard({ label, value }: { label: string; value: string | number }) {
   );
 }
 
+function getOfferStatusLabel(status: Offer["status"]) {
+  if (status === "ACTIVE") {
+    return "Активен";
+  }
+
+  if (status === "PAUSED") {
+    return "На паузе";
+  }
+
+  if (status === "ARCHIVED") {
+    return "Архив";
+  }
+
+  return "На паузе";
+}
+
+function getOfferStatusClass(status: Offer["status"]) {
+  if (status === "ACTIVE") {
+    return "bg-emerald-50 text-emerald-700";
+  }
+
+  if (status === "PAUSED") {
+    return "bg-amber-50 text-amber-700";
+  }
+
+  return "bg-slate-100 text-slate-600";
+}
+
 function PermissionCheckbox({
   name,
   label,
@@ -63,6 +93,293 @@ function PermissionCheckbox({
   );
 }
 
+type OfferWithAffiliate = Offer & {
+  affiliateOffers: AffiliateOffer[];
+};
+
+function toInputDate(value: Date | null) {
+  return value ? value.toISOString().slice(0, 10) : "";
+}
+
+function toFieldValue(value: unknown) {
+  if (value === null || value === undefined) {
+    return "";
+  }
+
+  if (typeof value === "object" && "toString" in value) {
+    return value.toString();
+  }
+
+  return String(value);
+}
+
+function Field({
+  label,
+  name,
+  defaultValue,
+  type = "text",
+  required,
+}: {
+  label: string;
+  name: string;
+  defaultValue?: unknown;
+  type?: string;
+  required?: boolean;
+}) {
+  return (
+    <label className="grid gap-2">
+      <span className="text-sm font-medium text-slate-700">{label}</span>
+      <input
+        name={name}
+        type={type}
+        defaultValue={toFieldValue(defaultValue)}
+        required={required}
+        className="h-11 rounded-md border border-slate-300 bg-white px-3 text-slate-900"
+      />
+    </label>
+  );
+}
+
+function FileField({
+  label,
+  name,
+  currentUrl,
+  hint,
+}: {
+  label: string;
+  name: string;
+  currentUrl?: string | null;
+  hint?: string;
+}) {
+  return (
+    <label className="grid gap-2">
+      <span className="text-sm font-medium text-slate-700">{label}</span>
+      <input type="hidden" name="currentLogoUrl" value={currentUrl ?? ""} />
+      <input
+        name={name}
+        type="file"
+        accept=".svg,.png,.jpg,.jpeg,image/svg+xml,image/png,image/jpeg"
+        className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 file:mr-3 file:rounded-md file:border-0 file:bg-slate-950 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white"
+      />
+      {hint ? <span className="text-xs leading-5 text-slate-500">{hint}</span> : null}
+      {currentUrl ? (
+        <span className="flex items-center gap-3 text-xs text-slate-500">
+          <img
+            src={currentUrl}
+            alt=""
+            className="h-10 w-10 rounded-md border border-slate-200 bg-white object-contain p-1"
+          />
+          Загружен: {currentUrl}
+        </span>
+      ) : null}
+    </label>
+  );
+}
+
+function TextArea({
+  label,
+  name,
+  defaultValue,
+  rows = 3,
+}: {
+  label: string;
+  name: string;
+  defaultValue?: string[] | string | null;
+  rows?: number;
+}) {
+  const value = Array.isArray(defaultValue)
+    ? defaultValue.join("\n")
+    : defaultValue ?? "";
+
+  return (
+    <label className="grid gap-2">
+      <span className="text-sm font-medium text-slate-700">{label}</span>
+      <textarea
+        name={name}
+        defaultValue={value}
+        rows={rows}
+        className="rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-900"
+      />
+    </label>
+  );
+}
+
+function SelectField({
+  label,
+  name,
+  defaultValue,
+  options,
+}: {
+  label: string;
+  name: string;
+  defaultValue?: string;
+  options: { value: string; label: string }[];
+}) {
+  return (
+    <label className="grid gap-2">
+      <span className="text-sm font-medium text-slate-700">{label}</span>
+      <select
+        name={name}
+        defaultValue={defaultValue}
+        className="h-11 rounded-md border border-slate-300 bg-white px-3 text-slate-900"
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function OfferEditor({ offer }: { offer?: OfferWithAffiliate }) {
+  const affiliateOffer = offer?.affiliateOffers.at(0);
+  const isEdit = Boolean(offer);
+
+  return (
+    <form
+      action={isEdit ? updateOffer : createOffer}
+      className="grid gap-6 rounded-lg border border-slate-200 bg-slate-50 p-4"
+    >
+      {offer ? <input type="hidden" name="offerId" value={offer.id} /> : null}
+      {affiliateOffer ? (
+        <input type="hidden" name="affiliateOfferId" value={affiliateOffer.id} />
+      ) : null}
+
+      <div>
+        <h3 className="text-lg font-bold text-slate-950">
+          {isEdit ? "Редактирование оффера" : "Новый оффер"}
+        </h3>
+        <p className="mt-1 text-sm text-slate-500">
+          Это внутренняя форма для оффера, который ты сам выбрал в CPA-сети.
+        </p>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <Field label="Название МФО" name="brandName" defaultValue={offer?.brandName} required />
+        <Field label="Slug" name="slug" defaultValue={offer?.slug} required />
+        <SelectField
+          label="Статус"
+          name="status"
+          defaultValue={offer?.status === "DRAFT" ? "PAUSED" : offer?.status ?? "PAUSED"}
+          options={[
+            { value: "ACTIVE", label: "Активен" },
+            { value: "PAUSED", label: "На паузе" },
+            { value: "ARCHIVED", label: "Архив" },
+          ]}
+        />
+        <Field label="Юр. название" name="legalName" defaultValue={offer?.legalName} />
+        <Field label="Официальный сайт" name="officialSite" defaultValue={offer?.officialSite} />
+        <Field label="Лого-текст" name="logoText" defaultValue={offer?.logoText} />
+        <FileField
+          label="Логотип МФО"
+          name="logoFile"
+          currentUrl={offer?.logoUrl}
+          hint="SVG, PNG или JPEG до 256x256 px. Лучше белый или прозрачный фон."
+        />
+        <Field label="Бейдж" name="badge" defaultValue={offer?.badge} />
+        <Field label="Приоритет показа" name="displayPriority" type="number" defaultValue={offer?.displayPriority ?? 100} />
+        <Field label="Дата проверки условий" name="conditionsCheckedAt" type="date" defaultValue={toInputDate(offer?.conditionsCheckedAt ?? null)} />
+      </div>
+
+      <TextArea
+        label="Короткое описание"
+        name="shortDescription"
+        defaultValue={offer?.shortDescription}
+      />
+
+      <div className="grid gap-4 md:grid-cols-4">
+        <Field label="Мин. сумма" name="minAmount" type="number" defaultValue={offer?.minAmount} />
+        <Field label="Макс. сумма" name="maxAmount" type="number" defaultValue={offer?.maxAmount} />
+        <Field label="Мин. срок, дней" name="minTermDays" type="number" defaultValue={offer?.minTermDays} />
+        <Field label="Макс. срок, дней" name="maxTermDays" type="number" defaultValue={offer?.maxTermDays} />
+        <Field label="Ставка от, %/день" name="dailyRateFrom" defaultValue={offer?.dailyRateFrom} />
+        <Field label="Ставка до, %/день" name="dailyRateTo" defaultValue={offer?.dailyRateTo} />
+        <Field label="ПСК от, %" name="pskFrom" defaultValue={offer?.pskFrom} />
+        <Field label="ПСК до, %" name="pskTo" defaultValue={offer?.pskTo} />
+        <Field label="Рейтинг" name="rating" defaultValue={offer?.rating} />
+        <Field label="Отзывы" name="reviewsCount" type="number" defaultValue={offer?.reviewsCount ?? 0} />
+        <Field label="Одобрение" name="approvalLabel" defaultValue={offer?.approvalLabel} />
+        <SelectField
+          label="Тон одобрения"
+          name="approvalTone"
+          defaultValue={offer?.approvalTone ?? "MEDIUM"}
+          options={[
+            { value: "LOW", label: "Низкий" },
+            { value: "MEDIUM", label: "Средний" },
+            { value: "HIGH", label: "Высокий" },
+          ]}
+        />
+        <Field label="Время решения" name="decisionTime" defaultValue={offer?.decisionTime} />
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <TextArea label="Способы получения" name="payoutMethods" defaultValue={offer?.payoutMethods} />
+        <TextArea label="Способы погашения" name="repaymentMethods" defaultValue={offer?.repaymentMethods} />
+        <TextArea label="Требования" name="requirements" defaultValue={offer?.requirements} />
+        <TextArea label="Документы" name="documents" defaultValue={offer?.documents} />
+        <TextArea label="Плюсы/теги" name="advantages" defaultValue={offer?.advantages} />
+        <TextArea label="Предупреждения" name="warnings" defaultValue={offer?.warnings} />
+      </div>
+
+      <TextArea
+        label="Юридическая/рекламная сноска"
+        name="legalDisclosure"
+        defaultValue={offer?.legalDisclosure}
+      />
+
+      <div className="rounded-lg border border-slate-200 bg-white p-4">
+        <h4 className="font-bold text-slate-950">Партнерская ссылка</h4>
+        <p className="mt-1 text-sm text-slate-500">
+          Сюда вставляется ссылка, которую ты сам получил в CPA-сети.
+        </p>
+        <div className="mt-4 grid gap-4 md:grid-cols-3">
+          <SelectField
+            label="CPA-сеть"
+            name="network"
+            defaultValue={affiliateOffer?.network ?? "OTHER"}
+            options={[
+              { value: "LEADS_SU", label: "Leads.su" },
+              { value: "LEADGID", label: "Leadgid" },
+              { value: "DIRECT", label: "Прямая" },
+              { value: "OTHER", label: "Другая" },
+            ]}
+          />
+          <Field label="Offer ID в сети" name="networkOfferId" defaultValue={affiliateOffer?.networkOfferId} />
+          <SelectField
+            label="Ссылка активна"
+            name="affiliateIsActive"
+            defaultValue={affiliateOffer?.isActive === false ? "off" : "on"}
+            options={[
+              { value: "on", label: "Да" },
+              { value: "off", label: "Нет" },
+            ]}
+          />
+          <Field label="Партнерская ссылка" name="trackingBaseUrl" defaultValue={affiliateOffer?.trackingBaseUrl} />
+          <Field label="Целевое действие" name="targetAction" defaultValue={affiliateOffer?.targetAction} />
+          <Field label="Выплата" name="payoutAmount" defaultValue={affiliateOffer?.payoutAmount} />
+          <Field label="Валюта" name="currency" defaultValue={affiliateOffer?.currency ?? "RUB"} />
+          <Field label="Холд, дней" name="holdDays" type="number" defaultValue={affiliateOffer?.holdDays} />
+          <Field label="Период сверки" name="reconciliationPeriod" defaultValue={affiliateOffer?.reconciliationPeriod} />
+          <Field label="Дневной лимит" name="dailyCap" type="number" defaultValue={affiliateOffer?.dailyCap} />
+          <Field label="Месячный лимит" name="monthlyCap" type="number" defaultValue={affiliateOffer?.monthlyCap} />
+        </div>
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <TextArea label="GEO включено" name="geoIncluded" defaultValue={affiliateOffer?.geoIncluded} />
+          <TextArea label="GEO исключено" name="geoExcluded" defaultValue={affiliateOffer?.geoExcluded} />
+          <TextArea label="Разрешенный трафик" name="allowedTrafficTypes" defaultValue={affiliateOffer?.allowedTrafficTypes} />
+          <TextArea label="Запрещенный трафик" name="forbiddenTrafficTypes" defaultValue={affiliateOffer?.forbiddenTrafficTypes} />
+        </div>
+      </div>
+
+      <button className="w-fit rounded-md bg-emerald-700 px-5 py-3 text-sm font-semibold text-white hover:bg-emerald-800">
+        {isEdit ? "Сохранить оффер" : "Создать оффер"}
+      </button>
+    </form>
+  );
+}
+
 export default async function AdminPage() {
   const session = await getAdminSession();
 
@@ -71,16 +388,18 @@ export default async function AdminPage() {
   }
 
   const canManageAdmins = session.role === "BOSS";
+  const canManageOffers =
+    session.role === "BOSS" || session.permissions.includes("offers_write");
   const canViewAnalytics =
     session.role === "BOSS" || session.permissions.includes("analytics");
 
   const [offers, clicksCount, leadsCount, latestClicks, adminUsers] = await Promise.all([
     prisma.offer.findMany({
-      orderBy: [{ status: "asc" }, { brandName: "asc" }],
+      orderBy: [{ displayPriority: "asc" }, { status: "asc" }, { brandName: "asc" }],
       include: {
         affiliateOffers: {
-          where: {
-            isActive: true,
+          orderBy: {
+            createdAt: "desc",
           },
           take: 1,
         },
@@ -107,6 +426,14 @@ export default async function AdminPage() {
   ]);
 
   const activeOffersCount = offers.filter((offer) => offer.status === "ACTIVE").length;
+  const pausedOffersCount = offers.filter(
+    (offer) => offer.status === "PAUSED" || offer.status === "DRAFT",
+  ).length;
+  const archivedOffersCount = offers.filter(
+    (offer) => offer.status === "ARCHIVED",
+  ).length;
+  const workingOffers = offers.filter((offer) => offer.status !== "ARCHIVED");
+  const archivedOffers = offers.filter((offer) => offer.status === "ARCHIVED");
 
   return (
     <main className="min-h-screen bg-[#f6f8fb] text-slate-950">
@@ -142,31 +469,59 @@ export default async function AdminPage() {
           <>
             <section>
               <h1 className="text-3xl font-bold text-slate-950">Статистика</h1>
-              <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
                 <StatCard label="Активные офферы" value={activeOffersCount} />
-                <StatCard label="Всего офферов" value={offers.length} />
+                <StatCard label="На паузе" value={pausedOffersCount} />
+                <StatCard label="В архиве" value={archivedOffersCount} />
                 <StatCard label="Лиды" value={leadsCount} />
                 <StatCard label="Клики" value={clicksCount} />
               </div>
             </section>
 
+            {canManageOffers ? (
+              <section className="rounded-lg border border-slate-200 bg-white">
+                <div className="border-b border-slate-200 p-5">
+                  <h2 className="text-xl font-bold text-slate-950">
+                    Добавить оффер
+                  </h2>
+                  <p className="mt-2 text-sm text-slate-500">
+                    Для оффера, который ты сам выбрал в CPA-сети.
+                  </p>
+                </div>
+                <div className="p-5">
+                  <OfferEditor />
+                </div>
+              </section>
+            ) : null}
+
             <section className="rounded-lg border border-slate-200 bg-white">
               <div className="border-b border-slate-200 p-5">
-                <h2 className="text-xl font-bold text-slate-950">Офферы</h2>
+                <h2 className="text-xl font-bold text-slate-950">
+                  Офферы в работе
+                </h2>
+                <p className="mt-2 text-sm text-slate-500">
+                  Активные показываются на витрине и имеют публичную страницу.
+                  Офферы на паузе остаются в работе, но не показываются трафику.
+                </p>
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[820px] border-collapse text-left text-sm">
+                <table className="w-full min-w-[980px] border-collapse text-left text-sm">
                   <thead className="bg-slate-50 text-slate-500">
                     <tr>
                       <th className="px-5 py-3 font-semibold">Бренд</th>
                       <th className="px-5 py-3 font-semibold">Статус</th>
+                      <th className="px-5 py-3 font-semibold">Приоритет</th>
                       <th className="px-5 py-3 font-semibold">Сумма</th>
+                      <th className="px-5 py-3 font-semibold">Проверено</th>
                       <th className="px-5 py-3 font-semibold">CPA-ссылка</th>
                       <th className="px-5 py-3 font-semibold">Страница</th>
+                      {canManageOffers ? (
+                        <th className="px-5 py-3 font-semibold">Правка</th>
+                      ) : null}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {offers.map((offer) => {
+                    {workingOffers.map((offer) => {
                       const affiliateOffer = offer.affiliateOffers.at(0);
 
                       return (
@@ -175,11 +530,23 @@ export default async function AdminPage() {
                             {offer.brandName}
                           </td>
                           <td className="px-5 py-4 text-slate-700">
-                            {offer.status}
+                            <span
+                              className={`rounded-md px-2 py-1 text-xs font-semibold ${getOfferStatusClass(offer.status)}`}
+                            >
+                              {getOfferStatusLabel(offer.status)}
+                            </span>
+                          </td>
+                          <td className="px-5 py-4 text-slate-700">
+                            {offer.displayPriority}
                           </td>
                           <td className="px-5 py-4 text-slate-700">
                             {offer.minAmount?.toLocaleString("ru-RU") ?? "—"}-
                             {offer.maxAmount?.toLocaleString("ru-RU") ?? "—"} ₽
+                          </td>
+                          <td className="px-5 py-4 text-slate-700">
+                            {offer.conditionsCheckedAt
+                              ? formatDate(offer.conditionsCheckedAt)
+                              : "—"}
                           </td>
                           <td className="max-w-xs truncate px-5 py-4 text-slate-700">
                             {affiliateOffer?.trackingBaseUrl ?? "не подключена"}
@@ -187,11 +554,27 @@ export default async function AdminPage() {
                           <td className="px-5 py-4">
                             <Link
                               href={`/offers/${offer.slug}`}
-                              className="font-semibold text-emerald-700 hover:text-emerald-800"
+                              className={`font-semibold ${
+                                offer.status === "ACTIVE"
+                                  ? "text-emerald-700 hover:text-emerald-800"
+                                  : "pointer-events-none text-slate-400"
+                              }`}
                             >
-                              открыть
+                              {offer.status === "ACTIVE" ? "открыть" : "скрыта"}
                             </Link>
                           </td>
+                          {canManageOffers ? (
+                            <td className="px-5 py-4">
+                              <details>
+                                <summary className="cursor-pointer font-semibold text-emerald-700 hover:text-emerald-800">
+                                  редактировать
+                                </summary>
+                                <div className="mt-4 min-w-[900px]">
+                                  <OfferEditor offer={offer} />
+                                </div>
+                              </details>
+                            </td>
+                          ) : null}
                         </tr>
                       );
                     })}
@@ -199,6 +582,65 @@ export default async function AdminPage() {
                 </table>
               </div>
             </section>
+
+            {archivedOffers.length > 0 ? (
+              <section className="rounded-lg border border-slate-200 bg-white">
+                <details>
+                  <summary className="cursor-pointer border-b border-slate-200 p-5 text-xl font-bold text-slate-950">
+                    Архив офферов ({archivedOffers.length})
+                  </summary>
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[900px] border-collapse text-left text-sm">
+                      <thead className="bg-slate-50 text-slate-500">
+                        <tr>
+                          <th className="px-5 py-3 font-semibold">Бренд</th>
+                          <th className="px-5 py-3 font-semibold">Статус</th>
+                          <th className="px-5 py-3 font-semibold">CPA-ссылка</th>
+                          {canManageOffers ? (
+                            <th className="px-5 py-3 font-semibold">Правка</th>
+                          ) : null}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {archivedOffers.map((offer) => {
+                          const affiliateOffer = offer.affiliateOffers.at(0);
+
+                          return (
+                            <tr key={offer.id}>
+                              <td className="px-5 py-4 font-semibold text-slate-950">
+                                {offer.brandName}
+                              </td>
+                              <td className="px-5 py-4">
+                                <span
+                                  className={`rounded-md px-2 py-1 text-xs font-semibold ${getOfferStatusClass(offer.status)}`}
+                                >
+                                  {getOfferStatusLabel(offer.status)}
+                                </span>
+                              </td>
+                              <td className="max-w-xs truncate px-5 py-4 text-slate-700">
+                                {affiliateOffer?.trackingBaseUrl ?? "не подключена"}
+                              </td>
+                              {canManageOffers ? (
+                                <td className="px-5 py-4">
+                                  <details>
+                                    <summary className="cursor-pointer font-semibold text-emerald-700 hover:text-emerald-800">
+                                      редактировать
+                                    </summary>
+                                    <div className="mt-4 min-w-[900px]">
+                                      <OfferEditor offer={offer} />
+                                    </div>
+                                  </details>
+                                </td>
+                              ) : null}
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </details>
+              </section>
+            ) : null}
 
             <section className="rounded-lg border border-slate-200 bg-white">
               <div className="border-b border-slate-200 p-5">
@@ -316,6 +758,10 @@ export default async function AdminPage() {
                     defaultChecked
                   />
                   <PermissionCheckbox name="offers_read" label="Офферы" />
+                  <PermissionCheckbox
+                    name="offers_write"
+                    label="Управление офферами"
+                  />
                   <PermissionCheckbox name="clicks_read" label="Клики" />
                 </fieldset>
                 <button className="self-end rounded-md bg-emerald-700 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-800">
@@ -374,6 +820,11 @@ export default async function AdminPage() {
                                 name="offers_read"
                                 label="Офферы"
                                 defaultChecked={admin.permissions.includes("offers_read")}
+                              />
+                              <PermissionCheckbox
+                                name="offers_write"
+                                label="Управление офферами"
+                                defaultChecked={admin.permissions.includes("offers_write")}
                               />
                               <PermissionCheckbox
                                 name="clicks_read"
