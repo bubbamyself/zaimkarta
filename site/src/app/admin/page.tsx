@@ -7,6 +7,7 @@ import {
   updateAdminPassword,
   updateAdminUser,
 } from "./admin-users-actions";
+import { logoutAdmin } from "./logout-action";
 import { getAdminSession } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 
@@ -120,12 +121,19 @@ export default async function AdminPage() {
               {session.username} · {session.role}
             </p>
           </div>
-          <Link
-            href="/"
-            className="inline-flex min-h-10 items-center justify-center rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 transition hover:border-slate-500"
-          >
-            На сайт
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link
+              href="/"
+              className="inline-flex min-h-10 items-center justify-center rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 transition hover:border-slate-500"
+            >
+              На сайт
+            </Link>
+            <form action={logoutAdmin}>
+              <button className="inline-flex min-h-10 items-center justify-center rounded-md bg-slate-950 px-4 text-sm font-semibold text-white transition hover:bg-slate-800">
+                Выйти
+              </button>
+            </form>
+          </div>
         </div>
       </header>
 
