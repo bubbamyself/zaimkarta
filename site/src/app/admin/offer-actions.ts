@@ -232,6 +232,70 @@ function collectAffiliateData(formData: FormData) {
   };
 }
 
+function shouldRetryWithoutNetworkName(error: unknown) {
+  return (
+    error instanceof Error &&
+    error.message.includes("Unknown argument `networkName`")
+  );
+}
+
+function removeNetworkName<T extends { networkName?: string | null }>(data: T) {
+  const safeData = { ...data };
+  delete safeData.networkName;
+
+  return safeData;
+}
+
+async function updateAffiliateOffer(
+  affiliateOfferId: string,
+  affiliateData: NonNullable<ReturnType<typeof collectAffiliateData>>,
+) {
+  try {
+    await prisma.affiliateOffer.update({
+      where: {
+        id: affiliateOfferId,
+      },
+      data: affiliateData,
+    });
+  } catch (error) {
+    if (!shouldRetryWithoutNetworkName(error)) {
+      throw error;
+    }
+
+    await prisma.affiliateOffer.update({
+      where: {
+        id: affiliateOfferId,
+      },
+      data: removeNetworkName(affiliateData),
+    });
+  }
+}
+
+async function createAffiliateOffer(
+  offerId: string,
+  affiliateData: NonNullable<ReturnType<typeof collectAffiliateData>>,
+) {
+  try {
+    await prisma.affiliateOffer.create({
+      data: {
+        ...affiliateData,
+        offerId,
+      },
+    });
+  } catch (error) {
+    if (!shouldRetryWithoutNetworkName(error)) {
+      throw error;
+    }
+
+    await prisma.affiliateOffer.create({
+      data: {
+        ...removeNetworkName(affiliateData),
+        offerId,
+      },
+    });
+  }
+}
+
 export async function createOffer(formData: FormData) {
   await requireOfferManager();
 
@@ -242,16 +306,15 @@ export async function createOffer(formData: FormData) {
     throw new Error("Название МФО обязательно");
   }
 
-  await prisma.offer.create({
+  const offer = await prisma.offer.create({
     data: {
       ...offerData,
-      affiliateOffers: affiliateData
-        ? {
-            create: affiliateData,
-          }
-        : undefined,
     },
   });
+
+  if (affiliateData) {
+    await createAffiliateOffer(offer.id, affiliateData);
+  }
 
   revalidatePath("/");
   revalidatePath("/admin");
@@ -278,19 +341,9 @@ export async function updateOffer(formData: FormData) {
   });
 
   if (affiliateData && affiliateOfferId) {
-    await prisma.affiliateOffer.update({
-      where: {
-        id: affiliateOfferId,
-      },
-      data: affiliateData,
-    });
+    await updateAffiliateOffer(affiliateOfferId, affiliateData);
   } else if (affiliateData) {
-    await prisma.affiliateOffer.create({
-      data: {
-        ...affiliateData,
-        offerId,
-      },
-    });
+    await createAffiliateOffer(offerId, affiliateData);
   } else if (affiliateOfferId) {
     await prisma.affiliateOffer.update({
       where: {

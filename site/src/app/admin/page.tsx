@@ -23,6 +23,10 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
+const REPORT_TIME_ZONE = "Asia/Ho_Chi_Minh";
+const REPORT_TIME_ZONE_OFFSET = "+07:00";
+const ANALYTICS_TABLE_LIMIT = 100;
+
 function formatDate(value: Date) {
   return new Intl.DateTimeFormat("ru-RU", {
     day: "2-digit",
@@ -30,6 +34,7 @@ function formatDate(value: Date) {
     year: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: REPORT_TIME_ZONE,
   }).format(value);
 }
 
@@ -99,6 +104,8 @@ type AdminPageProps = {
   searchParams?: Promise<{
     section?: string;
     status?: string;
+    from?: string;
+    to?: string;
   }>;
 };
 
@@ -134,6 +141,45 @@ function readOfferFilter(value: string | undefined): OfferFilter {
   }
 
   return "all";
+}
+
+function toInputDate(value: Date) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: REPORT_TIME_ZONE,
+    year: "numeric",
+  }).formatToParts(value);
+  const dateParts = Object.fromEntries(
+    parts.map((part) => [part.type, part.value]),
+  );
+
+  return `${dateParts.year}-${dateParts.month}-${dateParts.day}`;
+}
+
+function createPeriodBoundary(value: string, endOfDay = false) {
+  return new Date(
+    `${value}T${endOfDay ? "23:59:59.999" : "00:00:00.000"}${REPORT_TIME_ZONE_OFFSET}`,
+  );
+}
+
+function readPeriod(valueFrom: string | undefined, valueTo: string | undefined) {
+  const today = new Date();
+  const defaultTo = toInputDate(today);
+  const defaultFromDate = new Date(today);
+  defaultFromDate.setDate(defaultFromDate.getDate() - 30);
+  const defaultFrom = toInputDate(defaultFromDate);
+  const from = valueFrom && /^\d{4}-\d{2}-\d{2}$/.test(valueFrom)
+    ? valueFrom
+    : defaultFrom;
+  const to = valueTo && /^\d{4}-\d{2}-\d{2}$/.test(valueTo) ? valueTo : defaultTo;
+
+  return {
+    from,
+    to,
+    fromDate: createPeriodBoundary(from),
+    toDate: createPeriodBoundary(to, true),
+  };
 }
 
 function SectionLink({
@@ -176,8 +222,20 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     session.role === "BOSS" || session.permissions.includes("analytics");
   const activeSection = readSection(resolvedSearchParams?.section, canManageAdmins);
   const offerFilter = readOfferFilter(resolvedSearchParams?.status);
+  const analyticsPeriod = readPeriod(
+    resolvedSearchParams?.from,
+    resolvedSearchParams?.to,
+  );
 
-  const [offers, clicksCount, leadsCount, latestClicks, adminUsers, offerClickCounts] = await Promise.all([
+  const [
+    offers,
+    clicksCount,
+    leadsCount,
+    latestClicks,
+    adminUsers,
+    offerClickCounts,
+    periodOfferClickCounts,
+  ] = await Promise.all([
     prisma.offer.findMany({
       orderBy: [{ displayPriority: "asc" }, { status: "asc" }, { brandName: "asc" }],
       include: {
@@ -189,13 +247,33 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         },
       },
     }),
-    prisma.offerClick.count(),
-    prisma.lead.count(),
+    prisma.offerClick.count({
+      where: {
+        createdAt: {
+          gte: analyticsPeriod.fromDate,
+          lte: analyticsPeriod.toDate,
+        },
+      },
+    }),
+    prisma.lead.count({
+      where: {
+        createdAt: {
+          gte: analyticsPeriod.fromDate,
+          lte: analyticsPeriod.toDate,
+        },
+      },
+    }),
     prisma.offerClick.findMany({
+      where: {
+        createdAt: {
+          gte: analyticsPeriod.fromDate,
+          lte: analyticsPeriod.toDate,
+        },
+      },
       orderBy: {
         createdAt: "desc",
       },
-      take: 20,
+      take: ANALYTICS_TABLE_LIMIT,
       include: {
         offer: true,
         affiliateOffer: true,
@@ -209,6 +287,18 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       : Promise.resolve([]),
     prisma.offerClick.groupBy({
       by: ["offerId"],
+      _count: {
+        id: true,
+      },
+    }),
+    prisma.offerClick.groupBy({
+      by: ["offerId"],
+      where: {
+        createdAt: {
+          gte: analyticsPeriod.fromDate,
+          lte: analyticsPeriod.toDate,
+        },
+      },
       _count: {
         id: true,
       },
@@ -241,6 +331,14 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   const offerClicksById = new Map(
     offerClickCounts.map((item) => [item.offerId, item._count.id]),
   );
+  const offersById = new Map(offers.map((offer) => [offer.id, offer]));
+  const periodOfferStats = periodOfferClickCounts
+    .map((item) => ({
+      clicks: item._count.id,
+      offer: offersById.get(item.offerId),
+      offerId: item.offerId,
+    }))
+    .sort((first, second) => second.clicks - first.clicks);
   const navSections = canManageAdmins
     ? [...ADMIN_SECTIONS, { id: "access" as const, label: "Доступы" }]
     : ADMIN_SECTIONS;
@@ -291,20 +389,134 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         {activeSection === "analytics" && canViewAnalytics ? (
           <>
             <section>
-              <h1 className="text-3xl font-bold text-slate-950">Статистика</h1>
+              <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
+                <div>
+                  <h1 className="text-3xl font-bold text-slate-950">
+                    Аналитика и клики
+                  </h1>
+                  <p className="mt-2 text-sm text-slate-500">
+                    Статистика ниже считается за выбранный период.
+                  </p>
+                </div>
+                <form
+                  action="/admin"
+                  method="get"
+                  className="flex flex-wrap items-end gap-3 rounded-lg border border-slate-200 bg-white p-4"
+                >
+                  <input type="hidden" name="section" value="analytics" />
+                  <label className="grid gap-2">
+                    <span className="text-sm font-medium text-slate-700">С</span>
+                    <input
+                      type="date"
+                      name="from"
+                      defaultValue={analyticsPeriod.from}
+                      className="h-10 rounded-md border border-slate-300 bg-white px-3"
+                    />
+                  </label>
+                  <label className="grid gap-2">
+                    <span className="text-sm font-medium text-slate-700">По</span>
+                    <input
+                      type="date"
+                      name="to"
+                      defaultValue={analyticsPeriod.to}
+                      className="h-10 rounded-md border border-slate-300 bg-white px-3"
+                    />
+                  </label>
+                  <button
+                    type="submit"
+                    className="h-10 rounded-md bg-slate-950 px-4 text-sm font-semibold text-white"
+                  >
+                    Показать
+                  </button>
+                  <Link
+                    href={`/admin/analytics/export?from=${analyticsPeriod.from}&to=${analyticsPeriod.to}&format=csv`}
+                    className="inline-flex h-10 items-center rounded-md border border-slate-300 px-4 text-sm font-semibold text-slate-700"
+                  >
+                    CSV
+                  </Link>
+                  <Link
+                    href={`/admin/analytics/export?from=${analyticsPeriod.from}&to=${analyticsPeriod.to}&format=xlsx`}
+                    className="inline-flex h-10 items-center rounded-md border border-slate-300 px-4 text-sm font-semibold text-slate-700"
+                  >
+                    XLSX
+                  </Link>
+                </form>
+              </div>
               <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
                 <StatCard label="Активные офферы" value={activeOffersCount} />
                 <StatCard label="На паузе" value={pausedOffersCount} />
                 <StatCard label="В архиве" value={archivedOffersCount} />
-                <StatCard label="Лиды" value={leadsCount} />
-                <StatCard label="Клики" value={clicksCount} />
+                <StatCard label="Лиды за период" value={leadsCount} />
+                <StatCard label="Клики за период" value={clicksCount} />
+              </div>
+              <p className="mt-4 text-sm text-slate-500">
+                Период: {analyticsPeriod.from} — {analyticsPeriod.to}. На экране
+                показаны последние {Math.min(latestClicks.length, ANALYTICS_TABLE_LIMIT)} из{" "}
+                {clicksCount} кликов за период.
+              </p>
+            </section>
+
+            <section className="rounded-lg border border-slate-200 bg-white">
+              <div className="border-b border-slate-200 p-5">
+                <h2 className="text-xl font-bold text-slate-950">
+                  Сводка по офферам за период
+                </h2>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[720px] border-collapse text-left text-sm">
+                  <thead className="bg-slate-50 text-slate-500">
+                    <tr>
+                      <th className="px-5 py-3 font-semibold">Оффер</th>
+                      <th className="px-5 py-3 font-semibold">Slug</th>
+                      <th className="px-5 py-3 font-semibold">Статус</th>
+                      <th className="px-5 py-3 font-semibold">Клики</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {periodOfferStats.length > 0 ? (
+                      periodOfferStats.map((item) => (
+                        <tr key={item.offerId}>
+                          <td className="px-5 py-4 font-semibold text-slate-950">
+                            {item.offer?.brandName ?? "Оффер удален"}
+                          </td>
+                          <td className="px-5 py-4 text-slate-700">
+                            {item.offer?.slug ?? item.offerId}
+                          </td>
+                          <td className="px-5 py-4 text-slate-700">
+                            {item.offer ? (
+                              <span
+                                className={`rounded-md px-2 py-1 text-xs font-semibold ${getOfferStatusClass(item.offer.status)}`}
+                              >
+                                {getOfferStatusLabel(item.offer.status)}
+                              </span>
+                            ) : (
+                              "—"
+                            )}
+                          </td>
+                          <td className="px-5 py-4 font-semibold text-slate-950">
+                            {item.clicks}
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td
+                          className="px-5 py-8 text-center text-slate-500"
+                          colSpan={4}
+                        >
+                          За выбранный период кликов нет
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             </section>
 
             <section className="rounded-lg border border-slate-200 bg-white">
               <div className="border-b border-slate-200 p-5">
                 <h2 className="text-xl font-bold text-slate-950">
-                  Последние клики
+                  Клики за период
                 </h2>
               </div>
               <div className="overflow-x-auto">
