@@ -115,11 +115,10 @@ export default async function OfferPage({ params }: OfferPageProps) {
               Переход к заявке
             </p>
             <p className="mt-3 text-sm leading-6 text-slate-600">
-              Кнопка ниже ведет через внутренний учет клика и затем перенаправляет
-              на CPA-ссылку.
+              Кнопка ниже откроет страницу заявки на сайте МФО.
             </p>
             <a
-              href={`/api/offers/${offer.slug}/click?page_type=offer&position=1`}
+              href={`/go/${offer.slug}?page_type=offer&position=1`}
               className="mt-5 inline-flex min-h-12 w-full items-center justify-center rounded-md bg-emerald-700 px-5 text-base font-semibold text-white transition hover:bg-emerald-800"
             >
               Оформить заем

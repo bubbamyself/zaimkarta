@@ -103,7 +103,7 @@ export function OfferCard({
 
       <div className="mt-auto grid gap-3 pt-6">
         <a
-          href={`/api/offers/${offer.slug}/click?${clickParams.toString()}`}
+          href={`/go/${offer.slug}?${clickParams.toString()}`}
           className="inline-flex min-h-11 w-full items-center justify-center rounded-md bg-emerald-700 px-4 font-semibold text-white transition hover:bg-emerald-800"
         >
           Оформить заем
