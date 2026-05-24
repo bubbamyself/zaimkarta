@@ -49,6 +49,10 @@ function StatCard({ label, value }: { label: string; value: string | number }) {
 }
 
 function getOfferStatusLabel(status: Offer["status"]) {
+  if (status === "DRAFT") {
+    return "Черновик";
+  }
+
   if (status === "ACTIVE") {
     return "Активен";
   }
@@ -65,6 +69,10 @@ function getOfferStatusLabel(status: Offer["status"]) {
 }
 
 function getOfferStatusClass(status: Offer["status"]) {
+  if (status === "DRAFT") {
+    return "bg-sky-50 text-sky-700";
+  }
+
   if (status === "ACTIVE") {
     return "bg-emerald-50 text-emerald-700";
   }

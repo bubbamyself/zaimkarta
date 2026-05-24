@@ -12,7 +12,7 @@ import { prisma } from "@/lib/prisma";
 const LOGO_UPLOAD_DIR = path.join(process.cwd(), "public", "uploads", "logos");
 const LOGO_PUBLIC_PATH = "/uploads/logos";
 const MAX_LOGO_BYTES = 400 * 1024;
-const OFFER_STATUSES: OfferStatus[] = ["ACTIVE", "PAUSED", "ARCHIVED"];
+const OFFER_STATUSES: OfferStatus[] = ["DRAFT", "ACTIVE", "PAUSED", "ARCHIVED"];
 const APPROVAL_TONES: ApprovalTone[] = ["LOW", "MEDIUM", "HIGH"];
 
 function readString(formData: FormData, key: string) {
@@ -242,6 +242,98 @@ function collectAffiliateData(formData: FormData) {
   };
 }
 
+function hasValue(value: unknown) {
+  if (typeof value === "string") {
+    return value.trim().length > 0;
+  }
+
+  if (typeof value === "number") {
+    return Number.isFinite(value) && value > 0;
+  }
+
+  if (Array.isArray(value)) {
+    return value.length > 0;
+  }
+
+  return value !== null && value !== undefined;
+}
+
+function validateOfferPublication(
+  offerData: Awaited<ReturnType<typeof collectOfferData>>,
+  affiliateData: ReturnType<typeof collectAffiliateData>,
+) {
+  if (offerData.status !== "ACTIVE") {
+    return;
+  }
+
+  const missingFields: string[] = [];
+
+  const requiredOfferFields: [string, unknown][] = [
+    ["Название МФО", offerData.brandName],
+    ["Slug", offerData.slug],
+    ["Юр. название", offerData.legalName],
+    ["Лого-текст", offerData.logoText],
+    ["Логотип МФО", offerData.logoUrl],
+    ["Официальный сайт", offerData.officialSite],
+    ["Короткое описание", offerData.shortDescription],
+    ["Бейдж", offerData.badge],
+    ["Приоритет показа", offerData.displayPriority],
+    ["Дата проверки условий", offerData.conditionsCheckedAt],
+    ["Мин. сумма", offerData.minAmount],
+    ["Макс. сумма", offerData.maxAmount],
+    ["Мин. срок, дней", offerData.minTermDays],
+    ["Макс. срок, дней", offerData.maxTermDays],
+    ["Ставка от", offerData.dailyRateFrom],
+    ["Ставка до", offerData.dailyRateTo],
+    ["ПСК от", offerData.pskFrom],
+    ["ПСК до", offerData.pskTo],
+    ["Рейтинг", offerData.rating],
+    ["Отзывы", offerData.reviewsCount],
+    ["Одобрение", offerData.approvalLabel],
+    ["Тон одобрения", offerData.approvalTone],
+    ["Время решения", offerData.decisionTime],
+    ["Способы получения", offerData.payoutMethods],
+    ["Способы погашения", offerData.repaymentMethods],
+    ["Требования", offerData.requirements],
+    ["Документы", offerData.documents],
+    ["Плюсы/теги", offerData.advantages],
+    ["Предупреждения", offerData.warnings],
+    ["Юридическая/рекламная сноска", offerData.legalDisclosure],
+  ];
+
+  for (const [label, value] of requiredOfferFields) {
+    if (!hasValue(value)) {
+      missingFields.push(label);
+    }
+  }
+
+  if (!affiliateData) {
+    missingFields.push("Партнерская ссылка");
+  } else {
+    const requiredAffiliateFields: [string, unknown][] = [
+      ["CPA-сеть", affiliateData.networkName],
+      ["Offer ID в сети", affiliateData.networkOfferId],
+      ["Партнерская ссылка", affiliateData.trackingBaseUrl],
+    ];
+
+    for (const [label, value] of requiredAffiliateFields) {
+      if (!hasValue(value)) {
+        missingFields.push(label);
+      }
+    }
+
+    if (!affiliateData.isActive) {
+      missingFields.push("Ссылка активна");
+    }
+  }
+
+  if (missingFields.length > 0) {
+    throw actionError(
+      `Нельзя активировать оффер. Заполни поля: ${missingFields.join(", ")}.`,
+    );
+  }
+}
+
 function shouldRetryWithoutNetworkName(error: unknown) {
   return (
     error instanceof Error &&
@@ -311,6 +403,7 @@ export async function createOffer(formData: FormData) {
 
   const offerData = await collectOfferData(formData);
   const affiliateData = collectAffiliateData(formData);
+  validateOfferPublication(offerData, affiliateData);
 
   if (!offerData.brandName) {
     throw new Error("Название МФО обязательно");
@@ -338,6 +431,7 @@ export async function updateOffer(formData: FormData) {
   const affiliateOfferId = readOptionalString(formData, "affiliateOfferId");
   const offerData = await collectOfferData(formData);
   const affiliateData = collectAffiliateData(formData);
+  validateOfferPublication(offerData, affiliateData);
 
   if (!offerId) {
     throw new Error("Не найден ID оффера");

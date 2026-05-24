@@ -22,6 +22,66 @@ function toFieldValue(value: unknown) {
   return String(value);
 }
 
+function hasChecklistValue(value: unknown) {
+  if (typeof value === "string") {
+    return value.trim().length > 0;
+  }
+
+  if (typeof value === "number") {
+    return Number.isFinite(value) && value > 0;
+  }
+
+  if (Array.isArray(value)) {
+    return value.length > 0;
+  }
+
+  return value !== null && value !== undefined;
+}
+
+function getPublicationChecklist(
+  offer: OfferWithAffiliate | undefined,
+  affiliateOffer: AffiliateOffer | undefined,
+) {
+  return [
+    ["Название МФО", offer?.brandName],
+    ["Slug", offer?.slug],
+    ["Юр. название", offer?.legalName],
+    ["Лого-текст", offer?.logoText],
+    ["Логотип МФО", offer?.logoUrl],
+    ["Официальный сайт", offer?.officialSite],
+    ["Короткое описание", offer?.shortDescription],
+    ["Бейдж", offer?.badge],
+    ["Приоритет показа", offer?.displayPriority],
+    ["Дата проверки условий", offer?.conditionsCheckedAt],
+    ["Мин. сумма", offer?.minAmount],
+    ["Макс. сумма", offer?.maxAmount],
+    ["Мин. срок", offer?.minTermDays],
+    ["Макс. срок", offer?.maxTermDays],
+    ["Ставка от", offer?.dailyRateFrom],
+    ["Ставка до", offer?.dailyRateTo],
+    ["ПСК от", offer?.pskFrom],
+    ["ПСК до", offer?.pskTo],
+    ["Рейтинг", offer?.rating],
+    ["Отзывы", offer?.reviewsCount],
+    ["Одобрение", offer?.approvalLabel],
+    ["Время решения", offer?.decisionTime],
+    ["Способы получения", offer?.payoutMethods],
+    ["Способы погашения", offer?.repaymentMethods],
+    ["Требования", offer?.requirements],
+    ["Документы", offer?.documents],
+    ["Плюсы/теги", offer?.advantages],
+    ["Предупреждения", offer?.warnings],
+    ["Юридическая/рекламная сноска", offer?.legalDisclosure],
+    ["CPA-сеть", affiliateOffer?.networkName],
+    ["Offer ID в сети", affiliateOffer?.networkOfferId],
+    ["Партнерская ссылка", affiliateOffer?.trackingBaseUrl],
+    ["Ссылка активна", affiliateOffer?.isActive ? "yes" : null],
+  ].map(([label, value]) => ({
+    label: String(label),
+    ready: hasChecklistValue(value),
+  }));
+}
+
 function Field({
   label,
   name,
@@ -128,6 +188,9 @@ function SelectField({
 export function OfferEditor({ offer }: { offer?: OfferWithAffiliate }) {
   const affiliateOffer = offer?.affiliateOffers.at(0);
   const isEdit = Boolean(offer);
+  const publicationChecklist = getPublicationChecklist(offer, affiliateOffer);
+  const readyCount = publicationChecklist.filter((item) => item.ready).length;
+  const missingItems = publicationChecklist.filter((item) => !item.ready);
 
   return (
     <form
@@ -148,6 +211,42 @@ export function OfferEditor({ offer }: { offer?: OfferWithAffiliate }) {
         </p>
       </div>
 
+      <details className="rounded-lg border border-slate-200 bg-white">
+        <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-slate-800">
+          Чеклист готовности к публикации: {readyCount}/
+          {publicationChecklist.length}
+        </summary>
+        <div className="border-t border-slate-200 p-4">
+          <p className="text-sm leading-6 text-slate-600">
+            Черновик можно сохранить неполным. Статус “Активен” пройдет только
+            после заполнения всех пунктов ниже.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {publicationChecklist.map((item) => (
+              <span
+                key={item.label}
+                className={`rounded-md px-2.5 py-1 text-xs font-semibold ${
+                  item.ready
+                    ? "bg-emerald-50 text-emerald-700"
+                    : "bg-slate-100 text-slate-500"
+                }`}
+              >
+                {item.ready ? "✓" : "—"} {item.label}
+              </span>
+            ))}
+          </div>
+          {missingItems.length > 0 ? (
+            <p className="mt-4 text-sm text-slate-500">
+              Не хватает: {missingItems.map((item) => item.label).join(", ")}.
+            </p>
+          ) : (
+            <p className="mt-4 text-sm font-semibold text-emerald-700">
+              Оффер готов к публикации.
+            </p>
+          )}
+        </div>
+      </details>
+
       <div className="grid gap-4 md:grid-cols-3">
         <Field label="Название МФО" name="brandName" defaultValue={offer?.brandName} required />
         <Field
@@ -163,8 +262,9 @@ export function OfferEditor({ offer }: { offer?: OfferWithAffiliate }) {
         <SelectField
           label="Статус"
           name="status"
-          defaultValue={offer?.status === "DRAFT" ? "PAUSED" : offer?.status ?? "PAUSED"}
+          defaultValue={offer?.status ?? "DRAFT"}
           options={[
+            { value: "DRAFT", label: "Черновик" },
             { value: "ACTIVE", label: "Активен" },
             { value: "PAUSED", label: "На паузе" },
             { value: "ARCHIVED", label: "Архив" },
