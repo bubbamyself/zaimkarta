@@ -53,6 +53,16 @@ function readDecimal(formData: FormData, key: string) {
   return value;
 }
 
+function readReferenceDecimal(formData: FormData, key: string) {
+  const value = readString(formData, key).replace(",", ".");
+
+  if (!value || !/^\d+(\.\d+)?$/.test(value)) {
+    return null;
+  }
+
+  return value;
+}
+
 function readList(formData: FormData, key: string) {
   return readString(formData, key)
     .split(/\n|,/)
@@ -217,7 +227,7 @@ function collectAffiliateData(formData: FormData) {
     networkName: readOptionalString(formData, "networkName"),
     networkOfferId: readOptionalString(formData, "networkOfferId"),
     targetAction: readOptionalString(formData, "targetAction"),
-    payoutAmount: readDecimal(formData, "payoutAmount"),
+    payoutAmount: readReferenceDecimal(formData, "payoutAmount"),
     currency: readOptionalString(formData, "currency") ?? "RUB",
     holdDays: readInt(formData, "holdDays"),
     reconciliationPeriod: readOptionalString(formData, "reconciliationPeriod"),
@@ -360,4 +370,31 @@ export async function updateOffer(formData: FormData) {
   revalidatePath(`/admin/offers/${offerId}`);
   revalidatePath(`/offers/${offerData.slug}`);
   redirect(`/admin/offers/${offerId}?saved=1`);
+}
+
+export async function updateOfferDisplayOrder(offerIds: string[]) {
+  await requireOfferManager();
+
+  const uniqueOfferIds = Array.from(new Set(offerIds)).filter(Boolean);
+
+  if (uniqueOfferIds.length === 0) {
+    return;
+  }
+
+  await prisma.$transaction(
+    uniqueOfferIds.map((offerId, index) =>
+      prisma.offer.update({
+        where: {
+          id: offerId,
+        },
+        data: {
+          displayPriority: index + 1,
+          updatedByUserAt: new Date(),
+        },
+      }),
+    ),
+  );
+
+  revalidatePath("/");
+  revalidatePath("/admin");
 }

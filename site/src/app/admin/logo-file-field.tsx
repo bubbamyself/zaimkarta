@@ -49,14 +49,14 @@ export function LogoFileField({
   const [fileName, setFileName] = useState("");
 
   return (
-    <label className="grid gap-2">
+    <label className="grid content-start gap-2">
       <span className="text-sm font-medium text-slate-700">{label}</span>
       <input type="hidden" name="currentLogoUrl" value={currentUrl ?? ""} />
       <input
         name={name}
         type="file"
         accept=".svg,image/svg+xml"
-        className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 file:mr-3 file:rounded-md file:border-0 file:bg-slate-950 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white"
+        className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-900 file:mr-3 file:rounded-md file:border-0 file:bg-slate-950 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white"
         onChange={async (event) => {
           const input = event.currentTarget;
           const file = input.files?.[0];
@@ -77,17 +77,15 @@ export function LogoFileField({
           }
         }}
       />
-      {fileName ? (
-        <span className="text-xs leading-5 text-emerald-700">
-          Выбран файл: {fileName}
-        </span>
-      ) : null}
-      {error ? (
-        <span className="text-xs leading-5 text-red-600">{error}</span>
-      ) : null}
-      {hint ? <span className="text-xs leading-5 text-slate-500">{hint}</span> : null}
+      <span
+        className={`min-h-5 text-xs leading-5 ${
+          error ? "text-red-600" : fileName ? "text-emerald-700" : "text-slate-500"
+        }`}
+      >
+        {error ?? (fileName ? `Выбран файл: ${fileName}` : hint ?? "")}
+      </span>
       {currentUrl ? (
-        <span className="flex items-center gap-3 text-xs text-slate-500">
+        <span className="flex min-h-10 items-center gap-3 text-xs text-slate-500">
           <img
             src={currentUrl}
             alt=""

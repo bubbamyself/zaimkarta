@@ -10,6 +10,7 @@ import {
 } from "./admin-users-actions";
 import { logoutAdmin } from "./logout-action";
 import { OfferEditor } from "./offer-editor";
+import { OfferOrderTable, type OfferOrderRow } from "./offer-order-table";
 import { getAdminSession } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 
@@ -339,6 +340,29 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       offerId: item.offerId,
     }))
     .sort((first, second) => second.clicks - first.clicks);
+  const workingOfferRows: OfferOrderRow[] = workingOffers.map((offer) => {
+    const affiliateOffer = offer.affiliateOffers.at(0);
+
+    return {
+      id: offer.id,
+      brandName: offer.brandName,
+      slug: offer.slug,
+      networkLabel:
+        affiliateOffer?.networkName ?? affiliateOffer?.network ?? "—",
+      networkOfferId: affiliateOffer?.networkOfferId ?? "—",
+      status: offer.status,
+      statusLabel: getOfferStatusLabel(offer.status),
+      statusClassName: getOfferStatusClass(offer.status),
+      displayPriority: offer.displayPriority,
+      amountLabel: `${offer.minAmount?.toLocaleString("ru-RU") ?? "—"}-${
+        offer.maxAmount?.toLocaleString("ru-RU") ?? "—"
+      } ₽`,
+      conditionsCheckedAtLabel: offer.conditionsCheckedAt
+        ? formatDate(offer.conditionsCheckedAt)
+        : "—",
+      clicks: offerClicksById.get(offer.id) ?? 0,
+    };
+  });
   const navSections = canManageAdmins
     ? [...ADMIN_SECTIONS, { id: "access" as const, label: "Доступы" }]
     : ADMIN_SECTIONS;
@@ -658,96 +682,11 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                 </Link>
               </div>
             </div>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[1160px] border-collapse text-left text-sm">
-                  <thead className="bg-slate-50 text-slate-500">
-                    <tr>
-                      <th className="px-5 py-3 font-semibold">Бренд</th>
-                      <th className="px-5 py-3 font-semibold">Идентификаторы</th>
-                      <th className="px-5 py-3 font-semibold">Статус</th>
-                      <th className="px-5 py-3 font-semibold">Приоритет</th>
-                      <th className="px-5 py-3 font-semibold">Сумма</th>
-                      <th className="px-5 py-3 font-semibold">Проверено</th>
-                      <th className="px-5 py-3 font-semibold">Клики</th>
-                      <th className="px-5 py-3 font-semibold">Страница</th>
-                      {canManageOffers ? (
-                        <th className="px-5 py-3 font-semibold">Правка</th>
-                      ) : null}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {workingOffers.map((offer) => {
-                      const affiliateOffer = offer.affiliateOffers.at(0);
-
-                      return (
-                        <tr key={offer.id}>
-                          <td className="px-5 py-4 font-semibold text-slate-950">
-                            {offer.brandName}
-                          </td>
-                          <td className="px-5 py-4 text-xs text-slate-600">
-                            <div className="grid gap-1">
-                              <span>slug: {offer.slug}</span>
-                              <span>
-                                сеть:{" "}
-                                {affiliateOffer?.networkName ??
-                                  affiliateOffer?.network ??
-                                  "—"}
-                              </span>
-                              <span>
-                                offer ID: {affiliateOffer?.networkOfferId ?? "—"}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="px-5 py-4 text-slate-700">
-                            <span
-                              className={`rounded-md px-2 py-1 text-xs font-semibold ${getOfferStatusClass(offer.status)}`}
-                            >
-                              {getOfferStatusLabel(offer.status)}
-                            </span>
-                          </td>
-                          <td className="px-5 py-4 text-slate-700">
-                            {offer.displayPriority}
-                          </td>
-                          <td className="px-5 py-4 text-slate-700">
-                            {offer.minAmount?.toLocaleString("ru-RU") ?? "—"}-
-                            {offer.maxAmount?.toLocaleString("ru-RU") ?? "—"} ₽
-                          </td>
-                          <td className="px-5 py-4 text-slate-700">
-                            {offer.conditionsCheckedAt
-                              ? formatDate(offer.conditionsCheckedAt)
-                              : "—"}
-                          </td>
-                          <td className="px-5 py-4 font-semibold text-slate-950">
-                            {offerClicksById.get(offer.id) ?? 0}
-                          </td>
-                          <td className="px-5 py-4">
-                            <Link
-                              href={`/offers/${offer.slug}`}
-                              className={`font-semibold ${
-                                offer.status === "ACTIVE"
-                                  ? "text-emerald-700 hover:text-emerald-800"
-                                  : "pointer-events-none text-slate-400"
-                              }`}
-                            >
-                              {offer.status === "ACTIVE" ? "открыть" : "скрыта"}
-                            </Link>
-                          </td>
-                          {canManageOffers ? (
-                            <td className="px-5 py-4">
-                              <Link
-                                href={`/admin/offers/${offer.id}`}
-                                className="font-semibold text-emerald-700 hover:text-emerald-800"
-                              >
-                                редактировать
-                              </Link>
-                            </td>
-                          ) : null}
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              <OfferOrderTable
+                key={`${offerFilter}:${workingOfferRows.map((offer) => offer.id).join(",")}`}
+                canManageOffers={canManageOffers}
+                offers={workingOfferRows}
+              />
             </section>
         ) : null}
 

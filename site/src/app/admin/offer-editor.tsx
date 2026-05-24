@@ -31,6 +31,7 @@ function Field({
   pattern,
   title,
   hint,
+  placeholder,
 }: {
   label: string;
   name: string;
@@ -40,9 +41,10 @@ function Field({
   pattern?: string;
   title?: string;
   hint?: string;
+  placeholder?: string;
 }) {
   return (
-    <label className="grid gap-2">
+    <label className="grid content-start gap-2">
       <span className="text-sm font-medium text-slate-700">{label}</span>
       <input
         name={name}
@@ -51,9 +53,12 @@ function Field({
         required={required}
         pattern={pattern}
         title={title}
-        className="h-11 rounded-md border border-slate-300 bg-white px-3 text-slate-900"
+        placeholder={placeholder}
+        className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-slate-900"
       />
-      {hint ? <span className="text-xs leading-5 text-slate-500">{hint}</span> : null}
+      <span className="min-h-5 text-xs leading-5 text-slate-500">
+        {hint ?? ""}
+      </span>
     </label>
   );
 }
@@ -74,13 +79,13 @@ function TextArea({
     : defaultValue ?? "";
 
   return (
-    <label className="grid gap-2">
+    <label className="grid content-start gap-2">
       <span className="text-sm font-medium text-slate-700">{label}</span>
       <textarea
         name={name}
         defaultValue={value}
         rows={rows}
-        className="rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-900"
+        className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-900"
       />
     </label>
   );
@@ -91,19 +96,21 @@ function SelectField({
   name,
   defaultValue,
   options,
+  hint,
 }: {
   label: string;
   name: string;
   defaultValue?: string;
   options: { value: string; label: string }[];
+  hint?: string;
 }) {
   return (
-    <label className="grid gap-2">
+    <label className="grid content-start gap-2">
       <span className="text-sm font-medium text-slate-700">{label}</span>
       <select
         name={name}
         defaultValue={defaultValue}
-        className="h-11 rounded-md border border-slate-300 bg-white px-3 text-slate-900"
+        className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-slate-900"
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>
@@ -111,6 +118,9 @@ function SelectField({
           </option>
         ))}
       </select>
+      <span className="min-h-5 text-xs leading-5 text-slate-500">
+        {hint ?? ""}
+      </span>
     </label>
   );
 }
@@ -147,7 +157,8 @@ export function OfferEditor({ offer }: { offer?: OfferWithAffiliate }) {
           required
           pattern="[a-z0-9]+(-[a-z0-9]+)*"
           title="Латиница, цифры и дефисы, например zaymer или bistro-dengi"
-          hint="Латиница, цифры и дефисы: zaymer, bistro-dengi."
+          placeholder="zaymer"
+          hint="Технический адрес оффера."
         />
         <SelectField
           label="Статус"
@@ -229,7 +240,8 @@ export function OfferEditor({ offer }: { offer?: OfferWithAffiliate }) {
             label="CPA-сеть"
             name="networkName"
             defaultValue={affiliateOffer?.networkName}
-            hint="Например: Leads.su, Leadgid, прямой оффер."
+            placeholder="Leads.su"
+            hint="Название сети или прямой оффер."
           />
           <Field label="Offer ID в сети" name="networkOfferId" defaultValue={affiliateOffer?.networkOfferId} />
           <SelectField
@@ -241,26 +253,33 @@ export function OfferEditor({ offer }: { offer?: OfferWithAffiliate }) {
               { value: "off", label: "Нет" },
             ]}
           />
-        <Field
-          label="Партнерская ссылка"
-          name="trackingBaseUrl"
-          defaultValue={affiliateOffer?.trackingBaseUrl}
-          required={!isEdit}
-        />
-          <Field label="Целевое действие" name="targetAction" defaultValue={affiliateOffer?.targetAction} />
-          <Field label="Выплата" name="payoutAmount" defaultValue={affiliateOffer?.payoutAmount} />
-          <Field label="Валюта" name="currency" defaultValue={affiliateOffer?.currency ?? "RUB"} />
-          <Field label="Холд, дней" name="holdDays" type="number" defaultValue={affiliateOffer?.holdDays} />
-          <Field label="Период сверки" name="reconciliationPeriod" defaultValue={affiliateOffer?.reconciliationPeriod} />
-          <Field label="Дневной лимит" name="dailyCap" type="number" defaultValue={affiliateOffer?.dailyCap} />
-          <Field label="Месячный лимит" name="monthlyCap" type="number" defaultValue={affiliateOffer?.monthlyCap} />
+          <Field
+            label="Партнерская ссылка"
+            name="trackingBaseUrl"
+            defaultValue={affiliateOffer?.trackingBaseUrl}
+            required={!isEdit}
+          />
         </div>
-        <div className="mt-4 grid gap-4 md:grid-cols-2">
-          <TextArea label="GEO включено" name="geoIncluded" defaultValue={affiliateOffer?.geoIncluded} />
-          <TextArea label="GEO исключено" name="geoExcluded" defaultValue={affiliateOffer?.geoExcluded} />
-          <TextArea label="Разрешенный трафик" name="allowedTrafficTypes" defaultValue={affiliateOffer?.allowedTrafficTypes} />
-          <TextArea label="Запрещенный трафик" name="forbiddenTrafficTypes" defaultValue={affiliateOffer?.forbiddenTrafficTypes} />
-        </div>
+        <details className="mt-5 rounded-lg border border-slate-200 bg-slate-50">
+          <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-slate-700">
+            Справочная памятка по условиям CPA
+          </summary>
+          <div className="grid gap-4 border-t border-slate-200 p-4 md:grid-cols-3">
+            <Field label="Целевое действие" name="targetAction" defaultValue={affiliateOffer?.targetAction} />
+            <Field label="Выплата" name="payoutAmount" defaultValue={affiliateOffer?.payoutAmount} />
+            <Field label="Валюта" name="currency" defaultValue={affiliateOffer?.currency ?? "RUB"} />
+            <Field label="Холд, дней" name="holdDays" type="number" defaultValue={affiliateOffer?.holdDays} />
+            <Field label="Период сверки" name="reconciliationPeriod" defaultValue={affiliateOffer?.reconciliationPeriod} />
+            <Field label="Дневной лимит" name="dailyCap" type="number" defaultValue={affiliateOffer?.dailyCap} />
+            <Field label="Месячный лимит" name="monthlyCap" type="number" defaultValue={affiliateOffer?.monthlyCap} />
+          </div>
+          <div className="grid gap-4 px-4 pb-4 md:grid-cols-2">
+            <TextArea label="GEO включено" name="geoIncluded" defaultValue={affiliateOffer?.geoIncluded} />
+            <TextArea label="GEO исключено" name="geoExcluded" defaultValue={affiliateOffer?.geoExcluded} />
+            <TextArea label="Разрешенный трафик" name="allowedTrafficTypes" defaultValue={affiliateOffer?.allowedTrafficTypes} />
+            <TextArea label="Запрещенный трафик" name="forbiddenTrafficTypes" defaultValue={affiliateOffer?.forbiddenTrafficTypes} />
+          </div>
+        </details>
       </div>
 
       <button className="w-fit rounded-md bg-emerald-700 px-5 py-3 text-sm font-semibold text-white hover:bg-emerald-800">
