@@ -82,6 +82,24 @@ Expected result:
 - public service page shows the tool near the top;
 - result CTA and related offers/pages are clear.
 
+### 6. Advertising Inventory / Promo Slots
+
+Status: backlog, after core SEO pages are stable.
+
+Purpose:
+
+- reserve controlled advertising and promo placements across the site;
+- keep future monetization flexible for Yandex Advertising Network, Google Display Network, direct banners, or our own cross-products;
+- avoid hardcoding ad blocks into page layouts before the monetization model is clear.
+
+Expected result:
+
+- site layouts have named placement zones, for example `home_top`, `category_after_intro`, `category_sidebar`, `article_mid_content`, `offer_page_sidebar`, `footer_promo`;
+- placements can be enabled, paused, and configured from the admin panel;
+- each placement can later render an external ad script, internal promo, direct banner, or be empty;
+- ad/promo blocks do not push offers too low on commercial pages;
+- pages remain usable if all advertising placements are disabled.
+
 ## Horizon 1: MVP
 
 1. Add database primitives:
@@ -146,6 +164,7 @@ Expected result:
 - Standalone service page for checklist.
 - Loan type quiz.
 - `relatedPages` block.
+- Advertising/promo placement zones.
 - Simple interaction tracking for tools.
 - CTA tracking after tool result.
 - Better preview.
@@ -174,7 +193,11 @@ Expected result:
 - Avoid collecting personal data in tools.
 - Make calculator results approximate and clearly explained.
 - Always provide a next step after tool result.
+- Treat ad slots as optional inventory, not as required content.
+- Keep commercial SEO pages offer-first; advertising must not hide the main comparison experience.
+- Support internal promos before external ad networks so slots can be useful even without RYA/GDN integration.
 
-## Current Next Prompt
+## Current Prompts
 
-The next focused dialog should use `docs/prompts/interactive-core-seotool-mvp.md`.
+- Product/technical specification prompt: `docs/prompts/interactive-core-seotool-mvp.md`.
+- Implementation prompt: `docs/prompts/seotool-mvp-implementation.md`.
