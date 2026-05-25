@@ -112,6 +112,62 @@ async function main() {
       trackingBaseUrl: "https://example.com/moneyman",
     },
   ];
+  const seoPages = [
+    {
+      slug: "zaimy-na-kartu",
+      title: "Займы на карту онлайн — ZaimKarta",
+      description:
+        "Подбор предложений МФО с получением денег на банковскую карту. Сравните сумму, срок, ставку и условия перед переходом к заявке.",
+      h1: "Займы на карту онлайн",
+      intro:
+        "Подбор предложений МФО с получением денег на банковскую карту. Сравните сумму, срок, ставку и условия перед переходом к заявке.",
+    },
+    {
+      slug: "srochnye-zaimy",
+      title: "Срочные займы онлайн — ZaimKarta",
+      description:
+        "Предложения для ситуаций, когда деньги нужны быстро. Решение принимает МФО, поэтому важно заранее проверить условия и полную стоимость займа.",
+      h1: "Срочные займы онлайн",
+      intro:
+        "Предложения для ситуаций, когда деньги нужны быстро. Решение принимает МФО, поэтому важно заранее проверить условия и полную стоимость займа.",
+    },
+    {
+      slug: "zaimy-0-procentov",
+      title: "Займы под 0 процентов — ZaimKarta",
+      description:
+        "Подборка предложений, где для новых клиентов может действовать ставка 0% при соблюдении условий договора.",
+      h1: "Займы под 0 процентов",
+      intro:
+        "Подборка предложений, где для новых клиентов может действовать ставка 0% при соблюдении условий договора.",
+    },
+    {
+      slug: "zaimy-novym-klientam",
+      title: "Займы новым клиентам — ZaimKarta",
+      description:
+        "Предложения МФО для первой заявки: акции, лимиты, сроки и требования к заемщику.",
+      h1: "Займы новым клиентам",
+      intro:
+        "Предложения МФО для первой заявки: акции, лимиты, сроки и требования к заемщику.",
+    },
+    {
+      slug: "zaimy-s-plohoy-kreditnoy-istoriey",
+      title: "Займы с плохой кредитной историей — ZaimKarta",
+      description:
+        "Варианты для заемщиков с разной кредитной историей. Одобрение не гарантируется и зависит от проверки конкретной МФО.",
+      h1: "Займы с плохой кредитной историей",
+      intro:
+        "Варианты для заемщиков с разной кредитной историей. Одобрение не гарантируется и зависит от проверки конкретной МФО.",
+    },
+    {
+      slug: "zaimy-bez-otkaza",
+      title: "Займы с высокой вероятностью одобрения — ZaimKarta",
+      description:
+        "Подборка МФО, которые могут рассматривать заявки от разных категорий заемщиков. Мы не обещаем гарантированное одобрение.",
+      h1: "Займы с высокой вероятностью одобрения",
+      intro:
+        "Подборка МФО, которые могут рассматривать заявки от разных категорий заемщиков. Мы не обещаем гарантированное одобрение.",
+    },
+  ];
 
   for (const item of offers) {
     const { trackingBaseUrl, ...offer } = item;
@@ -149,6 +205,79 @@ async function main() {
         isActive: true,
       },
     });
+  }
+
+  const activeOffers = await prisma.offer.findMany({
+    where: {
+      status: "ACTIVE",
+    },
+    orderBy: [{ displayPriority: "asc" }, { brandName: "asc" }],
+  });
+
+  for (const page of seoPages) {
+    const savedPage = await prisma.seoPage.upsert({
+      where: {
+        slug: page.slug,
+      },
+      update: {
+        ...page,
+        status: "PUBLISHED",
+        pageType: "CATEGORY",
+        riskNotice:
+          "Решение о выдаче займа принимает МФО. Перед оформлением проверьте полную стоимость займа, срок, ставку и условия договора.",
+        updatedByUserAt: new Date(),
+      },
+      create: {
+        ...page,
+        status: "PUBLISHED",
+        pageType: "CATEGORY",
+        riskNotice:
+          "Решение о выдаче займа принимает МФО. Перед оформлением проверьте полную стоимость займа, срок, ставку и условия договора.",
+        publishedAt: new Date(),
+        updatedByUserAt: new Date(),
+      },
+    });
+
+    await prisma.seoPageFaqItem.deleteMany({
+      where: {
+        seoPageId: savedPage.id,
+      },
+    });
+
+    await prisma.seoPageFaqItem.createMany({
+      data: [
+        {
+          seoPageId: savedPage.id,
+          question: "ZaimKarta сама выдает займы?",
+          answer:
+            "Нет. ZaimKarta показывает выбранные предложения МФО и ведет пользователя на сайт партнера для оформления заявки.",
+          position: 1,
+        },
+        {
+          seoPageId: savedPage.id,
+          question: "Одобрение по заявке гарантировано?",
+          answer:
+            "Нет. Решение принимает конкретная МФО после проверки анкеты и документов заемщика.",
+          position: 2,
+        },
+      ],
+    });
+
+    await prisma.seoPageOffer.deleteMany({
+      where: {
+        seoPageId: savedPage.id,
+      },
+    });
+
+    if (activeOffers.length > 0) {
+      await prisma.seoPageOffer.createMany({
+        data: activeOffers.map((offer, index) => ({
+          seoPageId: savedPage.id,
+          offerId: offer.id,
+          position: index + 1,
+        })),
+      });
+    }
   }
 }
 

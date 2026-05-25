@@ -2,11 +2,40 @@ import Link from "next/link";
 import { OfferCard } from "@/components/offer-card";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
-import { articles, categories } from "@/lib/mock-data";
 import { getActiveOffers } from "@/lib/offers";
+import { prisma } from "@/lib/prisma";
+
+export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const offers = await getActiveOffers();
+  const [offers, categories, articles] = await Promise.all([
+    getActiveOffers(),
+    prisma.seoPage.findMany({
+      where: {
+        status: "PUBLISHED",
+        pageType: "CATEGORY",
+      },
+      orderBy: [{ createdAt: "asc" }],
+      select: {
+        slug: true,
+        title: true,
+        h1: true,
+      },
+    }),
+    prisma.seoPage.findMany({
+      where: {
+        status: "PUBLISHED",
+        pageType: "ARTICLE",
+      },
+      orderBy: [{ publishedAt: "desc" }, { createdAt: "desc" }],
+      select: {
+        slug: true,
+        title: true,
+        description: true,
+        h1: true,
+      },
+    }),
+  ]);
 
   return (
     <main className="min-h-screen bg-[#f6f8fb] text-slate-950">
@@ -126,7 +155,7 @@ export default async function Home() {
                 href={`/${category.slug}`}
                 className="rounded-lg border border-slate-200 bg-white p-4 font-semibold text-slate-800 transition hover:border-emerald-700 hover:text-emerald-800"
               >
-                {category.title}
+                {category.h1 || category.title}
               </Link>
             ))}
           </div>
@@ -136,19 +165,34 @@ export default async function Home() {
       <section id="articles" className="mx-auto max-w-6xl px-5 py-12">
         <h2 className="text-2xl font-bold text-slate-950">Полезные статьи</h2>
         <div className="mt-6 grid gap-4 md:grid-cols-3">
-          {articles.map((article) => (
+          {articles.length > 0 ? (
+            articles.map((article) => (
+              <Link
+                key={article.slug}
+                href={`/${article.slug}`}
+                className="rounded-lg border border-slate-200 bg-white p-5 transition hover:border-emerald-700"
+              >
+                <h3 className="text-lg font-bold leading-7 text-slate-950">
+                  {article.h1 || article.title}
+                </h3>
+                <p className="mt-3 text-sm leading-6 text-slate-600">
+                  {article.description}
+                </p>
+              </Link>
+            ))
+          ) : (
             <article
-              key={article}
               className="rounded-lg border border-slate-200 bg-white p-5"
             >
               <h3 className="text-lg font-bold leading-7 text-slate-950">
-                {article}
+                Статьи появятся после публикации
               </h3>
               <p className="mt-3 text-sm leading-6 text-slate-600">
-                Разберем условия, риски и важные детали простым языком.
+                Создай SEO-страницу с типом “Статья” и статусом
+                “Опубликована”.
               </p>
             </article>
-          ))}
+          )}
         </div>
       </section>
 

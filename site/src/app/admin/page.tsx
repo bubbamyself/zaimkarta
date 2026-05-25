@@ -11,6 +11,7 @@ import {
 import { logoutAdmin } from "./logout-action";
 import { OfferEditor } from "./offer-editor";
 import { OfferOrderTable, type OfferOrderRow } from "./offer-order-table";
+import { SeoPageEditor } from "./seo-page-editor";
 import { getAdminSession } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 
@@ -75,6 +76,38 @@ function getOfferStatusClass(status: Offer["status"]) {
 
   if (status === "ACTIVE") {
     return "bg-emerald-50 text-emerald-700";
+  }
+
+  if (status === "PAUSED") {
+    return "bg-amber-50 text-amber-700";
+  }
+
+  return "bg-slate-100 text-slate-600";
+}
+
+function getSeoStatusLabel(status: string) {
+  if (status === "PUBLISHED") {
+    return "Опубликована";
+  }
+
+  if (status === "DRAFT") {
+    return "Черновик";
+  }
+
+  if (status === "PAUSED") {
+    return "На паузе";
+  }
+
+  return "Архив";
+}
+
+function getSeoStatusClass(status: string) {
+  if (status === "PUBLISHED") {
+    return "bg-emerald-50 text-emerald-700";
+  }
+
+  if (status === "DRAFT") {
+    return "bg-sky-50 text-sky-700";
   }
 
   if (status === "PAUSED") {
@@ -244,6 +277,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     adminUsers,
     offerClickCounts,
     periodOfferClickCounts,
+    seoPages,
   ] = await Promise.all([
     prisma.offer.findMany({
       orderBy: [{ displayPriority: "asc" }, { status: "asc" }, { brandName: "asc" }],
@@ -310,6 +344,13 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       },
       _count: {
         id: true,
+      },
+    }),
+    prisma.seoPage.findMany({
+      orderBy: [{ status: "asc" }, { pageType: "asc" }, { createdAt: "asc" }],
+      include: {
+        offers: true,
+        faqItems: true,
       },
     }),
   ]);
@@ -768,16 +809,82 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         ) : null}
 
         {activeSection === "seo" ? (
-          <section className="rounded-lg border border-slate-200 bg-white p-6">
-            <h1 className="text-2xl font-bold text-slate-950">
-              SEO-контент
-            </h1>
-            <p className="mt-3 max-w-2xl leading-7 text-slate-600">
-              Раздел заготовлен под будущую работу с подборками, статьями,
-              FAQ, мета-тегами и внутренней перелинковкой. Функционал добавим
-              после бизнесовых инструментов.
-            </p>
-          </section>
+          <div className="grid gap-6">
+            <section className="rounded-lg border border-slate-200 bg-white">
+              <div className="border-b border-slate-200 p-5">
+                <h1 className="text-2xl font-bold text-slate-950">
+                  SEO-страницы
+                </h1>
+                <p className="mt-2 text-sm text-slate-500">
+                  Управляемые подборки, статьи и сервисные страницы. Только
+                  опубликованные страницы доступны на сайте.
+                </p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[980px] border-collapse text-left text-sm">
+                  <thead className="bg-slate-50 text-slate-500">
+                    <tr>
+                      <th className="px-5 py-3 font-semibold">Страница</th>
+                      <th className="px-5 py-3 font-semibold">Тип</th>
+                      <th className="px-5 py-3 font-semibold">Статус</th>
+                      <th className="px-5 py-3 font-semibold">Офферы</th>
+                      <th className="px-5 py-3 font-semibold">FAQ</th>
+                      <th className="px-5 py-3 font-semibold">Правка</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {seoPages.map((page) => (
+                      <tr key={page.id}>
+                        <td className="px-5 py-4">
+                          <p className="font-semibold text-slate-950">
+                            {page.h1}
+                          </p>
+                          <p className="mt-1 text-slate-500">/{page.slug}</p>
+                        </td>
+                        <td className="px-5 py-4 text-slate-700">
+                          {page.pageType}
+                        </td>
+                        <td className="px-5 py-4">
+                          <span
+                            className={`rounded-md px-2 py-1 text-xs font-semibold ${getSeoStatusClass(page.status)}`}
+                          >
+                            {getSeoStatusLabel(page.status)}
+                          </span>
+                        </td>
+                        <td className="px-5 py-4 text-slate-700">
+                          {page.offers.length}
+                        </td>
+                        <td className="px-5 py-4 text-slate-700">
+                          {page.faqItems.length}
+                        </td>
+                        <td className="px-5 py-4">
+                          <Link
+                            href={`/admin/seo/${page.id}`}
+                            className="font-semibold text-emerald-700 hover:text-emerald-800"
+                          >
+                            редактировать
+                          </Link>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            {canManageOffers ? (
+              <section className="rounded-lg border border-slate-200 bg-white">
+                <div className="border-b border-slate-200 p-5">
+                  <h2 className="text-xl font-bold text-slate-950">
+                    Создать SEO-страницу
+                  </h2>
+                </div>
+                <div className="p-5">
+                  <SeoPageEditor offers={offers} />
+                </div>
+              </section>
+            ) : null}
+          </div>
         ) : null}
 
         {activeSection === "access" && canManageAdmins ? (

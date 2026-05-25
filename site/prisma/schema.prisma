@@ -31,6 +31,19 @@ enum AdminRole {
   ADMIN
 }
 
+enum SeoPageStatus {
+  DRAFT
+  PUBLISHED
+  PAUSED
+  ARCHIVED
+}
+
+enum SeoPageType {
+  CATEGORY
+  ARTICLE
+  SERVICE
+}
+
 model Offer {
   id              String            @id @default(cuid())
   slug            String            @unique
@@ -70,6 +83,7 @@ model Offer {
 
   affiliateOffers AffiliateOffer[]
   offerClicks     OfferClick[]
+  seoPageOffers   SeoPageOffer[]
 }
 
 model AffiliateOffer {
@@ -160,4 +174,58 @@ model AdminUser {
 
   @@index([role])
   @@index([isActive])
+}
+
+model SeoPage {
+  id              String           @id @default(cuid())
+  slug            String           @unique
+  status          SeoPageStatus    @default(DRAFT)
+  pageType        SeoPageType      @default(CATEGORY)
+  title           String
+  description     String
+  h1              String
+  intro           String?
+  content         String?
+  riskNotice      String?
+  editorNote      String?
+  publishedAt     DateTime?
+  updatedByUserAt DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  offers          SeoPageOffer[]
+  faqItems        SeoPageFaqItem[]
+
+  @@index([status])
+  @@index([pageType])
+}
+
+model SeoPageOffer {
+  id        String   @id @default(cuid())
+  seoPageId String
+  offerId   String
+  position  Int      @default(100)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  seoPage   SeoPage  @relation(fields: [seoPageId], references: [id], onDelete: Cascade)
+  offer     Offer    @relation(fields: [offerId], references: [id], onDelete: Cascade)
+
+  @@unique([seoPageId, offerId])
+  @@index([seoPageId, position])
+  @@index([offerId])
+}
+
+model SeoPageFaqItem {
+  id        String   @id @default(cuid())
+  seoPageId String
+  question  String
+  answer    String
+  position  Int      @default(100)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  seoPage   SeoPage  @relation(fields: [seoPageId], references: [id], onDelete: Cascade)
+
+  @@index([seoPageId, position])
 }

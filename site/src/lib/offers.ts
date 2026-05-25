@@ -1,4 +1,4 @@
-import type { ApprovalTone } from "@prisma/client";
+import type { ApprovalTone, Offer } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 export type OfferCardData = {
@@ -31,6 +31,29 @@ export type OfferDetailsData = OfferCardData & {
   warnings: string[];
   legalDisclosure: string | null;
 };
+
+type OfferForCard = Pick<
+  Offer,
+  | "advantages"
+  | "approvalLabel"
+  | "approvalTone"
+  | "badge"
+  | "brandName"
+  | "dailyRateFrom"
+  | "dailyRateTo"
+  | "decisionTime"
+  | "logoText"
+  | "logoUrl"
+  | "maxAmount"
+  | "maxTermDays"
+  | "minTermDays"
+  | "payoutMethods"
+  | "pskFrom"
+  | "pskTo"
+  | "rating"
+  | "reviewsCount"
+  | "slug"
+>;
 
 function formatMoney(value: number | null) {
   if (value === null) {
@@ -69,15 +92,8 @@ function mapApprovalTone(tone: ApprovalTone): "low" | "medium" | "high" {
   return "medium";
 }
 
-export async function getActiveOffers(): Promise<OfferCardData[]> {
-  const offers = await prisma.offer.findMany({
-    where: {
-      status: "ACTIVE",
-    },
-    orderBy: [{ displayPriority: "asc" }, { rating: "desc" }, { brandName: "asc" }],
-  });
-
-  return offers.map((offer) => ({
+export function mapOfferToCardData(offer: OfferForCard): OfferCardData {
+  return {
     name: offer.brandName,
     slug: offer.slug,
     logoText: offer.logoText ?? offer.brandName.slice(0, 1),
@@ -97,7 +113,18 @@ export async function getActiveOffers(): Promise<OfferCardData[]> {
     approvalTone: mapApprovalTone(offer.approvalTone),
     payoutMethods: offer.payoutMethods,
     tags: offer.advantages.slice(0, 3),
-  }));
+  };
+}
+
+export async function getActiveOffers(): Promise<OfferCardData[]> {
+  const offers = await prisma.offer.findMany({
+    where: {
+      status: "ACTIVE",
+    },
+    orderBy: [{ displayPriority: "asc" }, { rating: "desc" }, { brandName: "asc" }],
+  });
+
+  return offers.map(mapOfferToCardData);
 }
 
 export async function getOfferDetails(
