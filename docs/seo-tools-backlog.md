@@ -115,7 +115,7 @@ Expected result:
    - edit tool;
    - status;
    - type;
-   - config;
+   - owner-friendly config forms;
    - preview;
    - usage list.
 
@@ -186,6 +186,10 @@ Expected result:
 
 - Keep tools reusable.
 - Do not store tool logic only inside page JSON.
+- Do not expose raw JSON as the main admin editing UI.
+- Build type-specific forms for calculator and checklist configs.
+- Build simple structured controls for content blocks.
+- Store JSON internally, but map it to owner-friendly forms.
 - Keep FAQ structured.
 - Keep offer context in `SeoPageOffer`.
 - Do not require every article or category to have a tool.

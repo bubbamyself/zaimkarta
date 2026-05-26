@@ -260,6 +260,27 @@ Use:
 
 Interactive tools are created and configured in "Interactive Tools". Category and article editors only attach existing tools when useful.
 
+## Admin UX Principle: No Raw JSON
+
+JSON can be used as an internal storage format for `SeoTool.config`, `SeoPage.contentBlocks`, and local page-tool overrides, but raw JSON must not be the primary admin interface.
+
+The site owner should work through clear controls:
+
+- text inputs;
+- textareas;
+- selects;
+- toggles and checkboxes;
+- repeatable lists;
+- add, remove, and move controls;
+- type-specific forms for calculators, checklists, and future tools.
+
+Every JSON-backed feature needs mappers:
+
+- form fields to structured JSON;
+- structured JSON to form fields.
+
+Raw JSON may appear only as a developer/debug view. It should not be the owner-facing editing experience.
+
 ## Publication Rules
 
 Common SEO page checks:
