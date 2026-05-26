@@ -6,6 +6,7 @@ type OfferCardProps = {
   pageType?: string;
   categorySlug?: string;
   position?: number;
+  matchReasons?: string[];
 };
 
 export function OfferCard({
@@ -13,6 +14,7 @@ export function OfferCard({
   pageType = "home",
   categorySlug,
   position,
+  matchReasons = [],
 }: OfferCardProps) {
   const approvalClass =
     offer.approvalTone === "high" ? "text-emerald-700" : "text-amber-600";
@@ -91,6 +93,14 @@ export function OfferCard({
       </p>
 
       <div className="mt-5 flex flex-wrap gap-2">
+        {matchReasons.map((reason) => (
+          <span
+            key={reason}
+            className="rounded-md bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800"
+          >
+            {reason}
+          </span>
+        ))}
         {offer.tags.map((tag) => (
           <span
             key={tag}

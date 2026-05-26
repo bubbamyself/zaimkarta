@@ -1,6 +1,10 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { createPasswordHash } from "../src/lib/password";
+import {
+  APPLICATION_CHECKLIST_CONFIG,
+  OVERPAYMENT_CALCULATOR_CONFIG,
+} from "../src/lib/seo-tool-config";
 
 const connectionString = process.env.DATABASE_URL;
 
@@ -214,6 +218,76 @@ async function main() {
     orderBy: [{ displayPriority: "asc" }, { brandName: "asc" }],
   });
 
+  const overpaymentCalculator = await prisma.seoTool.upsert({
+    where: {
+      slug: "overpayment-calculator",
+    },
+    update: {
+      type: "OVERPAYMENT_CALCULATOR",
+      status: "ACTIVE",
+      name: "Калькулятор переплаты",
+      title: "Калькулятор переплаты по займу",
+      description:
+        "Посчитайте ориентировочную переплату до перехода к заявке. Расчет не заменяет договор с МФО.",
+      config: OVERPAYMENT_CALCULATOR_CONFIG,
+      defaultBlock: {
+        id: "tool-1",
+        type: "tool",
+        blockId: "overpayment-main",
+      },
+    },
+    create: {
+      slug: "overpayment-calculator",
+      type: "OVERPAYMENT_CALCULATOR",
+      status: "ACTIVE",
+      name: "Калькулятор переплаты",
+      title: "Калькулятор переплаты по займу",
+      description:
+        "Посчитайте ориентировочную переплату до перехода к заявке. Расчет не заменяет договор с МФО.",
+      config: OVERPAYMENT_CALCULATOR_CONFIG,
+      defaultBlock: {
+        id: "tool-1",
+        type: "tool",
+        blockId: "overpayment-main",
+      },
+    },
+  });
+
+  const applicationChecklist = await prisma.seoTool.upsert({
+    where: {
+      slug: "application-checklist",
+    },
+    update: {
+      type: "APPLICATION_CHECKLIST",
+      status: "ACTIVE",
+      name: "Чек-лист готовности к заявке",
+      title: "Чек-лист перед заявкой на займ",
+      description:
+        "Проверьте документы, карту, план возврата и готовность внимательно прочитать договор.",
+      config: APPLICATION_CHECKLIST_CONFIG,
+      defaultBlock: {
+        id: "tool-1",
+        type: "tool",
+        blockId: "checklist-main",
+      },
+    },
+    create: {
+      slug: "application-checklist",
+      type: "APPLICATION_CHECKLIST",
+      status: "ACTIVE",
+      name: "Чек-лист готовности к заявке",
+      title: "Чек-лист перед заявкой на займ",
+      description:
+        "Проверьте документы, карту, план возврата и готовность внимательно прочитать договор.",
+      config: APPLICATION_CHECKLIST_CONFIG,
+      defaultBlock: {
+        id: "tool-1",
+        type: "tool",
+        blockId: "checklist-main",
+      },
+    },
+  });
+
   for (const page of seoPages) {
     const savedPage = await prisma.seoPage.upsert({
       where: {
@@ -223,6 +297,35 @@ async function main() {
         ...page,
         status: "PUBLISHED",
         pageType: "CATEGORY",
+        intent: page.slug === "zaimy-na-kartu" ? "COMMERCIAL" : "MIXED",
+        contentBlocks:
+          page.slug === "zaimy-na-kartu"
+            ? [
+                {
+                  id: "intro-1",
+                  type: "paragraph",
+                  text: "Перед выбором предложения полезно оценить не только сумму займа, но и примерную переплату за весь срок.",
+                },
+                {
+                  id: "tool-1",
+                  type: "tool",
+                  blockId: "overpayment-main",
+                },
+                {
+                  id: "offers-1",
+                  type: "offers",
+                  title: "Предложения с получением на карту",
+                },
+                {
+                  id: "faq-1",
+                  type: "faq",
+                },
+                {
+                  id: "risk-1",
+                  type: "riskNotice",
+                },
+              ]
+            : undefined,
         riskNotice:
           "Решение о выдаче займа принимает МФО. Перед оформлением проверьте полную стоимость займа, срок, ставку и условия договора.",
         updatedByUserAt: new Date(),
@@ -231,6 +334,35 @@ async function main() {
         ...page,
         status: "PUBLISHED",
         pageType: "CATEGORY",
+        intent: page.slug === "zaimy-na-kartu" ? "COMMERCIAL" : "MIXED",
+        contentBlocks:
+          page.slug === "zaimy-na-kartu"
+            ? [
+                {
+                  id: "intro-1",
+                  type: "paragraph",
+                  text: "Перед выбором предложения полезно оценить не только сумму займа, но и примерную переплату за весь срок.",
+                },
+                {
+                  id: "tool-1",
+                  type: "tool",
+                  blockId: "overpayment-main",
+                },
+                {
+                  id: "offers-1",
+                  type: "offers",
+                  title: "Предложения с получением на карту",
+                },
+                {
+                  id: "faq-1",
+                  type: "faq",
+                },
+                {
+                  id: "risk-1",
+                  type: "riskNotice",
+                },
+              ]
+            : undefined,
         riskNotice:
           "Решение о выдаче займа принимает МФО. Перед оформлением проверьте полную стоимость займа, срок, ставку и условия договора.",
         publishedAt: new Date(),
@@ -272,6 +404,151 @@ async function main() {
     if (activeOffers.length > 0) {
       await prisma.seoPageOffer.createMany({
         data: activeOffers.map((offer, index) => ({
+          seoPageId: savedPage.id,
+          offerId: offer.id,
+          position: index + 1,
+        })),
+      });
+    }
+
+    await prisma.seoPageTool.deleteMany({
+      where: {
+        pageId: savedPage.id,
+      },
+    });
+
+    if (page.slug === "zaimy-na-kartu") {
+      await prisma.seoPageTool.create({
+        data: {
+          pageId: savedPage.id,
+          toolId: overpaymentCalculator.id,
+          position: 20,
+          blockId: "overpayment-main",
+          variant: "FULL",
+        },
+      });
+    }
+  }
+
+  const servicePages = [
+    {
+      slug: "kalkulyator-pereplaty-po-zaymu",
+      title: "Калькулятор переплаты по займу — ZaimKarta",
+      description:
+        "Оцените примерную переплату по сумме, сроку и дневной ставке перед переходом к предложениям МФО.",
+      h1: "Калькулятор переплаты по займу",
+      intro:
+        "Сервис показывает ориентировочный расчет. Точные условия нужно проверять в договоре конкретной МФО.",
+      intent: "SERVICE" as const,
+      tool: overpaymentCalculator,
+      blockId: "overpayment-main",
+      blocks: [
+        {
+          id: "tool-1",
+          type: "tool",
+          blockId: "overpayment-main",
+        },
+        {
+          id: "offers-1",
+          type: "offers",
+          title: "Предложения после расчета",
+        },
+        {
+          id: "risk-1",
+          type: "riskNotice",
+        },
+      ],
+    },
+    {
+      slug: "chek-list-pered-zayavkoy-na-zaym",
+      title: "Чек-лист перед заявкой на займ — ZaimKarta",
+      description:
+        "Проверьте готовность к заявке: документы, карта, план возврата, переплата и договор.",
+      h1: "Чек-лист перед заявкой на займ",
+      intro:
+        "Ответы никуда не сохраняются. Чек-лист помогает заметить слабые места до перехода к МФО.",
+      intent: "SERVICE" as const,
+      tool: applicationChecklist,
+      blockId: "checklist-main",
+      blocks: [
+        {
+          id: "tool-1",
+          type: "tool",
+          blockId: "checklist-main",
+        },
+        {
+          id: "offers-1",
+          type: "offers",
+          title: "Предложения для заявки",
+        },
+        {
+          id: "risk-1",
+          type: "riskNotice",
+        },
+      ],
+    },
+  ];
+
+  for (const page of servicePages) {
+    const savedPage = await prisma.seoPage.upsert({
+      where: {
+        slug: page.slug,
+      },
+      update: {
+        title: page.title,
+        description: page.description,
+        h1: page.h1,
+        intro: page.intro,
+        status: "PUBLISHED",
+        pageType: "SERVICE",
+        intent: page.intent,
+        contentBlocks: page.blocks,
+        riskNotice:
+          "Интерактивный сервис носит справочный характер. Перед оформлением займа проверьте договор, ПСК, комиссии, штрафы и порядок продления.",
+        updatedByUserAt: new Date(),
+      },
+      create: {
+        slug: page.slug,
+        title: page.title,
+        description: page.description,
+        h1: page.h1,
+        intro: page.intro,
+        status: "PUBLISHED",
+        pageType: "SERVICE",
+        intent: page.intent,
+        contentBlocks: page.blocks,
+        riskNotice:
+          "Интерактивный сервис носит справочный характер. Перед оформлением займа проверьте договор, ПСК, комиссии, штрафы и порядок продления.",
+        publishedAt: new Date(),
+        updatedByUserAt: new Date(),
+      },
+    });
+
+    await prisma.seoPageTool.deleteMany({
+      where: {
+        pageId: savedPage.id,
+      },
+    });
+
+    await prisma.seoPageTool.create({
+      data: {
+        pageId: savedPage.id,
+        toolId: page.tool.id,
+        position: 10,
+        blockId: page.blockId,
+        variant: "FULL",
+      },
+    });
+
+    await prisma.seoPageOffer.deleteMany({
+      where: {
+        seoPageId: savedPage.id,
+      },
+    });
+
+    if (activeOffers.length > 0) {
+      await prisma.seoPageOffer.createMany({
+        data: activeOffers.slice(0, 3).map((offer, index) => ({
           seoPageId: savedPage.id,
           offerId: offer.id,
           position: index + 1,

@@ -3,12 +3,17 @@ import type {
   SeoPage,
   SeoPageFaqItem,
   SeoPageOffer,
+  SeoPageTool,
+  SeoTool,
 } from "@prisma/client";
 import { createSeoPage, updateSeoPage } from "./seo-actions";
 
 export type SeoPageWithRelations = SeoPage & {
   faqItems: SeoPageFaqItem[];
   offers: SeoPageOffer[];
+  tools?: (SeoPageTool & {
+    tool: SeoTool;
+  })[];
 };
 
 function toFieldValue(value: unknown) {
@@ -119,9 +124,11 @@ function createEmptyFaqRows(count: number) {
 
 export function SeoPageEditor({
   offers,
+  seoTools = [],
   seoPage,
 }: {
   offers: Offer[];
+  seoTools?: SeoTool[];
   seoPage?: SeoPageWithRelations;
 }) {
   const isEdit = Boolean(seoPage);
@@ -131,6 +138,20 @@ export function SeoPageEditor({
   const faqRows = [
     ...(seoPage?.faqItems ?? []),
     ...createEmptyFaqRows(Math.max(3, 8 - (seoPage?.faqItems.length ?? 0))),
+  ];
+  const toolRows = [
+    ...(seoPage?.tools ?? []),
+    ...Array.from({ length: Math.max(2, 4 - (seoPage?.tools?.length ?? 0)) }, (_, index) => ({
+      id: `new-tool-${index}`,
+      toolId: "",
+      position: (seoPage?.tools?.length ?? 0) + index + 1,
+      blockId: "",
+      variant: "FULL" as const,
+      title: "",
+      intro: "",
+      config: null,
+      tool: null,
+    })),
   ];
 
   return (
@@ -183,6 +204,19 @@ export function SeoPageEditor({
         />
       </div>
 
+      <SelectField
+        label="Intent"
+        name="intent"
+        defaultValue={seoPage?.intent ?? ""}
+        options={[
+          { value: "", label: "Не задан" },
+          { value: "COMMERCIAL", label: "Commercial" },
+          { value: "INFORMATIONAL", label: "Informational" },
+          { value: "SERVICE", label: "Service" },
+          { value: "MIXED", label: "Mixed" },
+        ]}
+      />
+
       <div className="grid gap-4 md:grid-cols-2">
         <Field label="Title" name="title" defaultValue={seoPage?.title} required />
         <Field label="H1" name="h1" defaultValue={seoPage?.h1} required />
@@ -201,6 +235,16 @@ export function SeoPageEditor({
         name="content"
         defaultValue={seoPage?.content}
         rows={8}
+      />
+      <TextArea
+        label="Content blocks JSON"
+        name="contentBlocks"
+        defaultValue={
+          seoPage?.contentBlocks
+            ? JSON.stringify(seoPage.contentBlocks, null, 2)
+            : ""
+        }
+        rows={10}
       />
       <TextArea
         label="Предупреждение о рисках"
@@ -258,6 +302,104 @@ export function SeoPageEditor({
               </label>
             );
           })}
+        </div>
+      </section>
+
+      <section className="rounded-lg border border-slate-200 bg-white p-4">
+        <h4 className="font-bold text-slate-950">Интерактивные сервисы</h4>
+        <p className="mt-1 text-sm text-slate-500">
+          Подключи существующий инструмент. Если в contentBlocks есть блок tool,
+          его blockId должен совпадать с blockId подключения.
+        </p>
+        <div className="mt-4 grid gap-3">
+          {toolRows.map((item, index) => (
+            <div
+              key={item.id}
+              className="grid gap-3 rounded-lg border border-slate-200 p-3 lg:grid-cols-[1.1fr_90px_140px_1fr]"
+            >
+              <label className="grid gap-2">
+                <span className="text-xs font-medium text-slate-500">
+                  Инструмент
+                </span>
+                <select
+                  name="pageToolToolId"
+                  defaultValue={item.toolId}
+                  className="h-10 rounded-md border border-slate-300 bg-white px-3"
+                >
+                  <option value="">Не выбран</option>
+                  {seoTools.map((tool) => (
+                    <option key={tool.id} value={tool.id}>
+                      {tool.name} · {tool.status}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="grid gap-2">
+                <span className="text-xs font-medium text-slate-500">Позиция</span>
+                <input
+                  name="pageToolPosition"
+                  type="number"
+                  min="1"
+                  defaultValue={item.position || index + 1}
+                  className="h-10 rounded-md border border-slate-300 bg-white px-3"
+                />
+              </label>
+              <label className="grid gap-2">
+                <span className="text-xs font-medium text-slate-500">Variant</span>
+                <select
+                  name="pageToolVariant"
+                  defaultValue={item.variant}
+                  className="h-10 rounded-md border border-slate-300 bg-white px-3"
+                >
+                  <option value="FULL">FULL</option>
+                  <option value="COMPACT">COMPACT</option>
+                  <option value="INLINE">INLINE</option>
+                </select>
+              </label>
+              <label className="grid gap-2">
+                <span className="text-xs font-medium text-slate-500">Block ID</span>
+                <input
+                  name="pageToolBlockId"
+                  defaultValue={item.blockId ?? ""}
+                  placeholder="overpayment-main"
+                  className="h-10 rounded-md border border-slate-300 bg-white px-3"
+                />
+              </label>
+              <label className="grid gap-2 lg:col-span-2">
+                <span className="text-xs font-medium text-slate-500">
+                  Локальный заголовок
+                </span>
+                <input
+                  name="pageToolTitle"
+                  defaultValue={item.title ?? ""}
+                  className="h-10 rounded-md border border-slate-300 bg-white px-3"
+                />
+              </label>
+              <label className="grid gap-2 lg:col-span-2">
+                <span className="text-xs font-medium text-slate-500">
+                  Локальный intro
+                </span>
+                <input
+                  name="pageToolIntro"
+                  defaultValue={item.intro ?? ""}
+                  className="h-10 rounded-md border border-slate-300 bg-white px-3"
+                />
+              </label>
+              <label className="grid gap-2 lg:col-span-4">
+                <span className="text-xs font-medium text-slate-500">
+                  Локальный config override JSON
+                </span>
+                <textarea
+                  name="pageToolConfig"
+                  defaultValue={
+                    item.config ? JSON.stringify(item.config, null, 2) : ""
+                  }
+                  rows={3}
+                  className="rounded-md border border-slate-300 bg-white px-3 py-2 font-mono text-sm"
+                />
+              </label>
+            </div>
+          ))}
         </div>
       </section>
 

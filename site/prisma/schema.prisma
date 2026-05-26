@@ -44,6 +44,34 @@ enum SeoPageType {
   SERVICE
 }
 
+enum SeoToolStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+
+enum SeoToolType {
+  OVERPAYMENT_CALCULATOR
+  APPLICATION_CHECKLIST
+  MINI_OFFER_PICKER
+  LOAN_TYPE_QUIZ
+  COMPARISON
+}
+
+enum SeoToolVariant {
+  FULL
+  COMPACT
+  INLINE
+}
+
+enum SeoPageIntent {
+  COMMERCIAL
+  INFORMATIONAL
+  SERVICE
+  MIXED
+}
+
 model Offer {
   id              String            @id @default(cuid())
   slug            String            @unique
@@ -181,11 +209,13 @@ model SeoPage {
   slug            String           @unique
   status          SeoPageStatus    @default(DRAFT)
   pageType        SeoPageType      @default(CATEGORY)
+  intent          SeoPageIntent?
   title           String
   description     String
   h1              String
   intro           String?
   content         String?
+  contentBlocks   Json?
   riskNotice      String?
   editorNote      String?
   publishedAt     DateTime?
@@ -195,6 +225,7 @@ model SeoPage {
 
   offers          SeoPageOffer[]
   faqItems        SeoPageFaqItem[]
+  tools           SeoPageTool[]
 
   @@index([status])
   @@index([pageType])
@@ -205,6 +236,10 @@ model SeoPageOffer {
   seoPageId String
   offerId   String
   position  Int      @default(100)
+  badge     String?
+  note      String?
+  ctaText   String?
+  highlight Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -228,4 +263,44 @@ model SeoPageFaqItem {
   seoPage   SeoPage  @relation(fields: [seoPageId], references: [id], onDelete: Cascade)
 
   @@index([seoPageId, position])
+}
+
+model SeoTool {
+  id           String        @id @default(cuid())
+  slug         String        @unique
+  type         SeoToolType
+  status       SeoToolStatus @default(DRAFT)
+  name         String
+  title        String
+  description  String?
+  config       Json
+  defaultBlock Json?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  pageTools    SeoPageTool[]
+
+  @@index([type])
+  @@index([status])
+}
+
+model SeoPageTool {
+  id        String         @id @default(cuid())
+  pageId    String
+  toolId    String
+  position  Int            @default(100)
+  blockId   String?
+  variant   SeoToolVariant @default(FULL)
+  title     String?
+  intro     String?
+  config    Json?
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  page      SeoPage        @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  tool      SeoTool        @relation(fields: [toolId], references: [id], onDelete: Restrict)
+
+  @@index([pageId, position])
+  @@index([toolId])
+  @@unique([pageId, blockId])
 }

@@ -3,9 +3,9 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getAdminSession } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
-import { SeoPageEditor } from "../../seo-page-editor";
+import { SeoToolEditor } from "../../seo-tool-editor";
 
-type EditSeoPageProps = {
+type EditSeoToolProps = {
   params: Promise<{
     id: string;
   }>;
@@ -15,7 +15,7 @@ type EditSeoPageProps = {
 };
 
 export const metadata: Metadata = {
-  title: "Редактирование SEO-страницы — ZaimKarta",
+  title: "Редактирование инструмента — ZaimKarta",
   robots: {
     index: false,
     follow: false,
@@ -24,10 +24,10 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
-export default async function EditSeoPage({
+export default async function EditSeoTool({
   params,
   searchParams,
-}: EditSeoPageProps) {
+}: EditSeoToolProps) {
   const session = await getAdminSession();
 
   if (!session) {
@@ -38,40 +38,32 @@ export default async function EditSeoPage({
     session.role === "BOSS" || session.permissions.includes("offers_write");
 
   if (!canManageSeo) {
-    redirect("/admin?section=seo");
+    redirect("/admin?section=tools");
   }
 
   const { id } = await params;
   const resolvedSearchParams = await searchParams;
-  const [seoPage, offers, seoTools] = await Promise.all([
-    prisma.seoPage.findUnique({
-      where: {
-        id,
-      },
-      include: {
-        offers: {
-          orderBy: [{ position: "asc" }, { createdAt: "asc" }],
-        },
-        faqItems: {
-          orderBy: [{ position: "asc" }, { createdAt: "asc" }],
-        },
-        tools: {
-          orderBy: [{ position: "asc" }, { createdAt: "asc" }],
-          include: {
-            tool: true,
+  const seoTool = await prisma.seoTool.findUnique({
+    where: {
+      id,
+    },
+    include: {
+      pageTools: {
+        orderBy: [{ position: "asc" }, { createdAt: "asc" }],
+        include: {
+          page: {
+            select: {
+              h1: true,
+              slug: true,
+              status: true,
+            },
           },
         },
       },
-    }),
-    prisma.offer.findMany({
-      orderBy: [{ displayPriority: "asc" }, { status: "asc" }, { brandName: "asc" }],
-    }),
-    prisma.seoTool.findMany({
-      orderBy: [{ status: "asc" }, { type: "asc" }, { name: "asc" }],
-    }),
-  ]);
+    },
+  });
 
-  if (!seoPage) {
+  if (!seoTool) {
     notFound();
   }
 
@@ -80,18 +72,18 @@ export default async function EditSeoPage({
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4">
           <div>
-            <Link href="/admin?section=seo" className="text-xl font-bold">
+            <Link href="/admin?section=tools" className="text-xl font-bold">
               ZaimKarta
             </Link>
             <p className="mt-1 text-sm text-slate-500">
-              Редактирование SEO-страницы
+              Редактирование интерактивного инструмента
             </p>
           </div>
           <Link
-            href="/admin?section=seo"
+            href="/admin?section=tools"
             className="inline-flex min-h-10 items-center justify-center rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 transition hover:border-slate-500"
           >
-            К SEO-страницам
+            К инструментам
           </Link>
         </div>
       </header>
@@ -101,10 +93,10 @@ export default async function EditSeoPage({
           <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
             <div>
               <h1 className="text-2xl font-bold text-slate-950">
-                {seoPage.h1}
+                {seoTool.name}
               </h1>
               <p className="mt-2 text-sm text-slate-500">
-                /{seoPage.slug} · {seoPage.status} · {seoPage.pageType}
+                /{seoTool.slug} · {seoTool.status} · {seoTool.type}
               </p>
             </div>
             {resolvedSearchParams?.saved === "1" ? (
@@ -115,7 +107,7 @@ export default async function EditSeoPage({
           </div>
         </section>
 
-        <SeoPageEditor seoPage={seoPage} offers={offers} seoTools={seoTools} />
+        <SeoToolEditor seoTool={seoTool} />
       </div>
     </main>
   );

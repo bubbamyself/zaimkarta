@@ -1,6 +1,11 @@
 "use server";
 
-import type { SeoPageStatus, SeoPageType } from "@prisma/client";
+import type {
+  SeoPageIntent,
+  SeoPageStatus,
+  SeoPageType,
+  SeoToolVariant,
+} from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getAdminSession } from "@/lib/admin-auth";
@@ -13,6 +18,13 @@ const SEO_PAGE_STATUSES: SeoPageStatus[] = [
   "ARCHIVED",
 ];
 const SEO_PAGE_TYPES: SeoPageType[] = ["CATEGORY", "ARTICLE", "SERVICE"];
+const SEO_PAGE_INTENTS: SeoPageIntent[] = [
+  "COMMERCIAL",
+  "INFORMATIONAL",
+  "SERVICE",
+  "MIXED",
+];
+const SEO_TOOL_VARIANTS: SeoToolVariant[] = ["FULL", "COMPACT", "INLINE"];
 
 function readString(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
@@ -36,6 +48,24 @@ function readEnum<T extends string>(
 function readPositiveInt(formData: FormData, key: string, fallback: number) {
   const value = Number(readString(formData, key));
   return Number.isInteger(value) && value > 0 ? value : fallback;
+}
+
+function parseOptionalJsonObject(value: string, label: string) {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(value);
+
+    if (!parsed || typeof parsed !== "object") {
+      throw new Error();
+    }
+
+    return parsed;
+  } catch {
+    throw new Error(`${label}: нужен валидный JSON`);
+  }
 }
 
 function validateSlug(slug: string) {
@@ -67,18 +97,40 @@ function collectSeoPageData(formData: FormData) {
     slug,
     status,
     pageType: readEnum(formData, "pageType", SEO_PAGE_TYPES, "CATEGORY"),
+    intent: readOptionalString(formData, "intent")
+      ? readEnum(formData, "intent", SEO_PAGE_INTENTS, "MIXED")
+      : null,
     title: readString(formData, "title"),
     description: readString(formData, "description"),
     h1: readString(formData, "h1"),
     intro: readOptionalString(formData, "intro"),
     content: readOptionalString(formData, "content"),
+    contentBlocks: parseOptionalJsonObject(
+      readString(formData, "contentBlocks"),
+      "Content blocks",
+    ),
     riskNotice: readOptionalString(formData, "riskNotice"),
     editorNote: readOptionalString(formData, "editorNote"),
     updatedByUserAt: new Date(),
   };
 }
 
-function validateSeoPagePublication(data: ReturnType<typeof collectSeoPageData>) {
+function collectToolBlocks(contentBlocks: unknown) {
+  if (!Array.isArray(contentBlocks)) {
+    return [];
+  }
+
+  return contentBlocks
+    .filter((block) => block && typeof block === "object" && !Array.isArray(block))
+    .filter((block) => (block as { type?: string }).type === "tool")
+    .map((block) => String((block as { blockId?: unknown }).blockId ?? "").trim())
+    .filter(Boolean);
+}
+
+async function validateSeoPagePublication(
+  data: ReturnType<typeof collectSeoPageData>,
+  pageTools: ReturnType<typeof collectPageToolLinks>,
+) {
   if (data.status !== "PUBLISHED") {
     return;
   }
@@ -96,6 +148,47 @@ function validateSeoPagePublication(data: ReturnType<typeof collectSeoPageData>)
     throw new Error(
       `Нельзя опубликовать страницу. Заполни поля: ${missingFields.join(", ")}.`,
     );
+  }
+
+  const toolIds = pageTools.map((item) => item.toolId);
+  const activeTools = toolIds.length
+    ? await prisma.seoTool.findMany({
+        where: {
+          id: {
+            in: toolIds,
+          },
+        },
+        select: {
+          id: true,
+          status: true,
+        },
+      })
+    : [];
+  const activeToolIds = new Set(
+    activeTools.filter((tool) => tool.status === "ACTIVE").map((tool) => tool.id),
+  );
+
+  if (pageTools.some((item) => !activeToolIds.has(item.toolId))) {
+    throw new Error(
+      "Опубликованная страница не может использовать черновые, архивные или остановленные инструменты.",
+    );
+  }
+
+  const connectedBlockIds = new Set(
+    pageTools.map((item) => item.blockId).filter(Boolean),
+  );
+  const missingBlockLinks = collectToolBlocks(data.contentBlocks).filter(
+    (blockId) => !connectedBlockIds.has(blockId),
+  );
+
+  if (missingBlockLinks.length > 0) {
+    throw new Error(
+      `Для tool-блоков нет подключенных инструментов: ${missingBlockLinks.join(", ")}.`,
+    );
+  }
+
+  if (data.pageType === "SERVICE" && !pageTools.some((item) => activeToolIds.has(item.toolId))) {
+    throw new Error("SERVICE-страница должна иметь хотя бы один активный инструмент.");
   }
 }
 
@@ -132,9 +225,55 @@ function collectFaqItems(formData: FormData) {
     .sort((first, second) => first.position - second.position);
 }
 
+function collectPageToolLinks(formData: FormData) {
+  const toolIds = formData
+    .getAll("pageToolToolId")
+    .map((value) => String(value).trim());
+  const positions = formData
+    .getAll("pageToolPosition")
+    .map((value) => String(value).trim());
+  const variants = formData
+    .getAll("pageToolVariant")
+    .map((value) => String(value).trim());
+  const blockIds = formData
+    .getAll("pageToolBlockId")
+    .map((value) => String(value).trim());
+  const titles = formData
+    .getAll("pageToolTitle")
+    .map((value) => String(value).trim());
+  const intros = formData
+    .getAll("pageToolIntro")
+    .map((value) => String(value).trim());
+  const configs = formData
+    .getAll("pageToolConfig")
+    .map((value) => String(value).trim());
+
+  return toolIds
+    .map((toolId, index) => ({
+      toolId,
+      position:
+        Number.isInteger(Number(positions[index])) && Number(positions[index]) > 0
+          ? Number(positions[index])
+          : index + 1,
+      variant: SEO_TOOL_VARIANTS.includes(variants[index] as SeoToolVariant)
+        ? (variants[index] as SeoToolVariant)
+        : "FULL",
+      blockId: blockIds[index] || null,
+      title: titles[index] || null,
+      intro: intros[index] || null,
+      config: parseOptionalJsonObject(
+        configs[index] ?? "",
+        `Config override инструмента ${index + 1}`,
+      ),
+    }))
+    .filter((item) => item.toolId.length > 0)
+    .sort((first, second) => first.position - second.position);
+}
+
 async function replaceSeoPageRelations(seoPageId: string, formData: FormData) {
   const offerLinks = collectOfferLinks(formData);
   const faqItems = collectFaqItems(formData);
+  const pageToolLinks = collectPageToolLinks(formData);
 
   await prisma.$transaction([
     prisma.seoPageOffer.deleteMany({
@@ -145,6 +284,11 @@ async function replaceSeoPageRelations(seoPageId: string, formData: FormData) {
     prisma.seoPageFaqItem.deleteMany({
       where: {
         seoPageId,
+      },
+    }),
+    prisma.seoPageTool.deleteMany({
+      where: {
+        pageId: seoPageId,
       },
     }),
     ...(offerLinks.length > 0
@@ -170,6 +314,22 @@ async function replaceSeoPageRelations(seoPageId: string, formData: FormData) {
           }),
         ]
       : []),
+    ...(pageToolLinks.length > 0
+      ? [
+          prisma.seoPageTool.createMany({
+            data: pageToolLinks.map((item) => ({
+              pageId: seoPageId,
+              toolId: item.toolId,
+              position: item.position,
+              blockId: item.blockId,
+              variant: item.variant,
+              title: item.title,
+              intro: item.intro,
+              config: item.config,
+            })),
+          }),
+        ]
+      : []),
   ]);
 }
 
@@ -177,7 +337,8 @@ export async function createSeoPage(formData: FormData) {
   await requireSeoManager();
 
   const seoPageData = collectSeoPageData(formData);
-  validateSeoPagePublication(seoPageData);
+  const pageToolLinks = collectPageToolLinks(formData);
+  await validateSeoPagePublication(seoPageData, pageToolLinks);
 
   if (!seoPageData.title || !seoPageData.description || !seoPageData.h1) {
     throw new Error("Title, description и H1 обязательны");
@@ -203,7 +364,8 @@ export async function updateSeoPage(formData: FormData) {
 
   const seoPageId = readString(formData, "seoPageId");
   const seoPageData = collectSeoPageData(formData);
-  validateSeoPagePublication(seoPageData);
+  const pageToolLinks = collectPageToolLinks(formData);
+  await validateSeoPagePublication(seoPageData, pageToolLinks);
 
   if (!seoPageId) {
     throw new Error("Не найден ID SEO-страницы");

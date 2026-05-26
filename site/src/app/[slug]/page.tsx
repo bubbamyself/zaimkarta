@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { OfferCard } from "@/components/offer-card";
+import { SeoContentRenderer } from "@/components/seo-content-renderer";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { getActiveOffers, mapOfferToCardData } from "@/lib/offers";
@@ -61,6 +62,12 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
           offer: true,
         },
       },
+      tools: {
+        orderBy: [{ position: "asc" }, { createdAt: "asc" }],
+        include: {
+          tool: true,
+        },
+      },
     },
   });
 
@@ -101,30 +108,44 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
       </section>
 
       <section className="mx-auto max-w-6xl px-5 py-12">
-        <div className="mb-6">
-          <h2 className="text-2xl font-bold text-slate-950">
-            Предложения по теме
-          </h2>
-          <p className="mt-2 max-w-2xl text-slate-600">
-            Выбранные предложения для этой страницы. Позиции можно менять в
-            админке отдельно от общей витрины.
-          </p>
-        </div>
+        {seoPage.contentBlocks ? (
+          <SeoContentRenderer
+            blocks={seoPage.contentBlocks}
+            pageTools={seoPage.tools}
+            faqItems={seoPage.faqItems}
+            offers={offers}
+            pageType={seoPage.pageType.toLowerCase()}
+            categorySlug={slug}
+            riskNotice={seoPage.riskNotice}
+          />
+        ) : (
+          <>
+            <div className="mb-6">
+              <h2 className="text-2xl font-bold text-slate-950">
+                Предложения по теме
+              </h2>
+              <p className="mt-2 max-w-2xl text-slate-600">
+                Выбранные предложения для этой страницы. Позиции можно менять в
+                админке отдельно от общей витрины.
+              </p>
+            </div>
 
-        <div className="grid gap-4 md:grid-cols-3">
-          {offers.map((offer, index) => (
-            <OfferCard
-              key={offer.name}
-              offer={offer}
-              pageType={seoPage.pageType.toLowerCase()}
-              categorySlug={slug}
-              position={index + 1}
-            />
-          ))}
-        </div>
+            <div className="grid gap-4 md:grid-cols-3">
+              {offers.map((offer, index) => (
+                <OfferCard
+                  key={offer.name}
+                  offer={offer}
+                  pageType={seoPage.pageType.toLowerCase()}
+                  categorySlug={slug}
+                  position={index + 1}
+                />
+              ))}
+            </div>
+          </>
+        )}
       </section>
 
-      {contentBlocks && contentBlocks.length > 0 ? (
+      {!seoPage.contentBlocks && contentBlocks && contentBlocks.length > 0 ? (
         <section className="border-y border-slate-200 bg-white px-5 py-12">
           <div className="mx-auto max-w-3xl">
             <h2 className="text-2xl font-bold text-slate-950">Подробнее</h2>
@@ -137,6 +158,7 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
         </section>
       ) : null}
 
+      {!seoPage.contentBlocks ? (
       <section className="border-y border-slate-200 bg-white px-5 py-12">
         <div className="mx-auto max-w-6xl">
           <h2 className="text-2xl font-bold text-slate-950">
@@ -164,8 +186,9 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
           </div>
         </div>
       </section>
+      ) : null}
 
-      {seoPage.faqItems.length > 0 ? (
+      {!seoPage.contentBlocks && seoPage.faqItems.length > 0 ? (
         <section className="mx-auto max-w-3xl px-5 py-12">
           <h2 className="text-2xl font-bold text-slate-950">Вопросы и ответы</h2>
           <div className="mt-6 grid gap-3">
@@ -184,7 +207,7 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
         </section>
       ) : null}
 
-      {seoPage.riskNotice ? (
+      {!seoPage.contentBlocks && seoPage.riskNotice ? (
         <section className="mx-auto max-w-6xl px-5 pb-12">
           <p className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
             {seoPage.riskNotice}

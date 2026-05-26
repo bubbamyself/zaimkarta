@@ -12,6 +12,7 @@ import { logoutAdmin } from "./logout-action";
 import { OfferEditor } from "./offer-editor";
 import { OfferOrderTable, type OfferOrderRow } from "./offer-order-table";
 import { SeoPageEditor } from "./seo-page-editor";
+import { SeoToolEditor } from "./seo-tool-editor";
 import { getAdminSession } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 
@@ -140,7 +141,14 @@ function PermissionCheckbox({
   );
 }
 
-type AdminSection = "analytics" | "new-offer" | "offers" | "archive" | "access" | "seo";
+type AdminSection =
+  | "analytics"
+  | "new-offer"
+  | "offers"
+  | "archive"
+  | "access"
+  | "seo"
+  | "tools";
 type OfferFilter = "all" | "active" | "paused";
 type AdminPageProps = {
   searchParams?: Promise<{
@@ -157,6 +165,7 @@ const ADMIN_SECTIONS: { id: AdminSection; label: string }[] = [
   { id: "offers", label: "Управление офферами" },
   { id: "archive", label: "Архив" },
   { id: "seo", label: "SEO-контент" },
+  { id: "tools", label: "Интерактивные инструменты" },
 ];
 
 function readSection(value: string | undefined, canManageAdmins: boolean): AdminSection {
@@ -169,7 +178,8 @@ function readSection(value: string | undefined, canManageAdmins: boolean): Admin
     value === "new-offer" ||
     value === "offers" ||
     value === "archive" ||
-    value === "seo"
+    value === "seo" ||
+    value === "tools"
   ) {
     return value;
   }
@@ -278,6 +288,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     offerClickCounts,
     periodOfferClickCounts,
     seoPages,
+    seoTools,
   ] = await Promise.all([
     prisma.offer.findMany({
       orderBy: [{ displayPriority: "asc" }, { status: "asc" }, { brandName: "asc" }],
@@ -351,6 +362,23 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       include: {
         offers: true,
         faqItems: true,
+        tools: true,
+      },
+    }),
+    prisma.seoTool.findMany({
+      orderBy: [{ status: "asc" }, { type: "asc" }, { createdAt: "asc" }],
+      include: {
+        pageTools: {
+          include: {
+            page: {
+              select: {
+                h1: true,
+                slug: true,
+                status: true,
+              },
+            },
+          },
+        },
       },
     }),
   ]);
@@ -828,6 +856,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                       <th className="px-5 py-3 font-semibold">Тип</th>
                       <th className="px-5 py-3 font-semibold">Статус</th>
                       <th className="px-5 py-3 font-semibold">Офферы</th>
+                      <th className="px-5 py-3 font-semibold">Инструменты</th>
                       <th className="px-5 py-3 font-semibold">FAQ</th>
                       <th className="px-5 py-3 font-semibold">Правка</th>
                     </tr>
@@ -855,6 +884,9 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                           {page.offers.length}
                         </td>
                         <td className="px-5 py-4 text-slate-700">
+                          {page.tools.length}
+                        </td>
+                        <td className="px-5 py-4 text-slate-700">
                           {page.faqItems.length}
                         </td>
                         <td className="px-5 py-4">
@@ -880,7 +912,82 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                   </h2>
                 </div>
                 <div className="p-5">
-                  <SeoPageEditor offers={offers} />
+                  <SeoPageEditor offers={offers} seoTools={seoTools} />
+                </div>
+              </section>
+            ) : null}
+          </div>
+        ) : null}
+
+        {activeSection === "tools" ? (
+          <div className="grid gap-6">
+            <section className="rounded-lg border border-slate-200 bg-white">
+              <div className="border-b border-slate-200 p-5">
+                <h1 className="text-2xl font-bold text-slate-950">
+                  Интерактивные инструменты
+                </h1>
+                <p className="mt-2 text-sm text-slate-500">
+                  Переиспользуемые сервисы для SEO-страниц: калькуляторы,
+                  чек-листы и будущие интерактивные блоки.
+                </p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[980px] border-collapse text-left text-sm">
+                  <thead className="bg-slate-50 text-slate-500">
+                    <tr>
+                      <th className="px-5 py-3 font-semibold">Инструмент</th>
+                      <th className="px-5 py-3 font-semibold">Тип</th>
+                      <th className="px-5 py-3 font-semibold">Статус</th>
+                      <th className="px-5 py-3 font-semibold">Использований</th>
+                      <th className="px-5 py-3 font-semibold">Правка</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {seoTools.map((tool) => (
+                      <tr key={tool.id}>
+                        <td className="px-5 py-4">
+                          <p className="font-semibold text-slate-950">
+                            {tool.name}
+                          </p>
+                          <p className="mt-1 text-slate-500">/{tool.slug}</p>
+                        </td>
+                        <td className="px-5 py-4 text-slate-700">{tool.type}</td>
+                        <td className="px-5 py-4">
+                          <span
+                            className={`rounded-md px-2 py-1 text-xs font-semibold ${getSeoStatusClass(
+                              tool.status === "ACTIVE" ? "PUBLISHED" : tool.status,
+                            )}`}
+                          >
+                            {tool.status}
+                          </span>
+                        </td>
+                        <td className="px-5 py-4 text-slate-700">
+                          {tool.pageTools.length}
+                        </td>
+                        <td className="px-5 py-4">
+                          <Link
+                            href={`/admin/tools/${tool.id}`}
+                            className="font-semibold text-emerald-700 hover:text-emerald-800"
+                          >
+                            редактировать
+                          </Link>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            {canManageOffers ? (
+              <section className="rounded-lg border border-slate-200 bg-white">
+                <div className="border-b border-slate-200 p-5">
+                  <h2 className="text-xl font-bold text-slate-950">
+                    Создать инструмент
+                  </h2>
+                </div>
+                <div className="p-5">
+                  <SeoToolEditor />
                 </div>
               </section>
             ) : null}

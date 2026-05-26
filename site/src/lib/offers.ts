@@ -9,6 +9,10 @@ export type OfferCardData = {
   badge: string;
   rating: string;
   reviewsCount: number;
+  minAmount: number | null;
+  maxAmount: number | null;
+  minTermDays: number | null;
+  maxTermDays: number | null;
   amount: string;
   term: string;
   psk: string;
@@ -17,6 +21,9 @@ export type OfferCardData = {
   approval: string;
   approvalTone: "low" | "medium" | "high";
   payoutMethods: string[];
+  requirements: string[];
+  documents: string[];
+  advantages: string[];
   tags: string[];
 };
 
@@ -42,8 +49,10 @@ type OfferForCard = Pick<
   | "dailyRateFrom"
   | "dailyRateTo"
   | "decisionTime"
+  | "documents"
   | "logoText"
   | "logoUrl"
+  | "minAmount"
   | "maxAmount"
   | "maxTermDays"
   | "minTermDays"
@@ -51,6 +60,7 @@ type OfferForCard = Pick<
   | "pskFrom"
   | "pskTo"
   | "rating"
+  | "requirements"
   | "reviewsCount"
   | "slug"
 >;
@@ -101,6 +111,10 @@ export function mapOfferToCardData(offer: OfferForCard): OfferCardData {
     badge: offer.badge ?? "онлайн заем",
     rating: offer.rating?.toString() ?? "0",
     reviewsCount: offer.reviewsCount,
+    minAmount: offer.minAmount,
+    maxAmount: offer.maxAmount,
+    minTermDays: offer.minTermDays,
+    maxTermDays: offer.maxTermDays,
     amount: `до ${formatMoney(offer.maxAmount)}`,
     term:
       offer.minTermDays && offer.maxTermDays
@@ -112,6 +126,9 @@ export function mapOfferToCardData(offer: OfferForCard): OfferCardData {
     approval: offer.approvalLabel ?? "Индивидуально",
     approvalTone: mapApprovalTone(offer.approvalTone),
     payoutMethods: offer.payoutMethods,
+    requirements: offer.requirements,
+    documents: offer.documents,
+    advantages: offer.advantages,
     tags: offer.advantages.slice(0, 3),
   };
 }
@@ -149,6 +166,10 @@ export async function getOfferDetails(
     badge: offer.badge ?? "онлайн заем",
     rating: offer.rating?.toString() ?? "0",
     reviewsCount: offer.reviewsCount,
+    minAmount: offer.minAmount,
+    maxAmount: offer.maxAmount,
+    minTermDays: offer.minTermDays,
+    maxTermDays: offer.maxTermDays,
     amount: `до ${formatMoney(offer.maxAmount)}`,
     term:
       offer.minTermDays && offer.maxTermDays
@@ -160,14 +181,14 @@ export async function getOfferDetails(
     approval: offer.approvalLabel ?? "Индивидуально",
     approvalTone: mapApprovalTone(offer.approvalTone),
     payoutMethods: offer.payoutMethods,
+    requirements: offer.requirements,
+    documents: offer.documents,
+    advantages: offer.advantages,
     tags: offer.advantages.slice(0, 3),
     legalName: offer.legalName,
     officialSite: offer.officialSite,
     shortDescription: offer.shortDescription,
     repaymentMethods: offer.repaymentMethods,
-    requirements: offer.requirements,
-    documents: offer.documents,
-    advantages: offer.advantages,
     warnings: offer.warnings,
     legalDisclosure: offer.legalDisclosure,
   };
