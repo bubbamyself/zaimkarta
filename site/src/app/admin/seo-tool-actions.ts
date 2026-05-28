@@ -22,6 +22,61 @@ function readOptionalString(formData: FormData, key: string) {
   return value.length > 0 ? value : null;
 }
 
+function readOptionalNumber(formData: FormData, key: string) {
+  const rawValue = readString(formData, key);
+
+  if (!rawValue) {
+    return null;
+  }
+
+  const value = Number(rawValue);
+
+  return Number.isFinite(value) ? value : null;
+}
+
+function readOptionalBoolean(formData: FormData, key: string, fallback: boolean) {
+  const value = readString(formData, key);
+
+  if (!value) {
+    return fallback;
+  }
+
+  return value === "true";
+}
+
+function mergeJsonRecord(base: Record<string, unknown>, override: Record<string, unknown>) {
+  return {
+    ...base,
+    ...override,
+  };
+}
+
+function mergeNestedRecord(
+  base: Record<string, unknown>,
+  key: string,
+  override: Record<string, unknown>,
+) {
+  return {
+    ...((base[key] ?? {}) as Record<string, unknown>),
+    ...override,
+  };
+}
+
+function collectNumberFields(
+  formData: FormData,
+  fieldMap: Record<string, string>,
+) {
+  return Object.fromEntries(
+    Object.entries(fieldMap)
+      .map(([formKey, configKey]) => {
+        const value = readOptionalNumber(formData, formKey);
+
+        return value === null ? null : [configKey, value];
+      })
+      .filter((entry): entry is [string, number] => Array.isArray(entry)),
+  );
+}
+
 function readEnum<T extends string>(
   formData: FormData,
   key: string,
@@ -66,9 +121,110 @@ function collectSeoToolData(formData: FormData) {
     "DRAFT",
   );
   const rawConfig = readString(formData, "config");
-  const config = rawConfig
+  const advancedConfig = rawConfig
     ? parseJsonObject(rawConfig, "Config")
-    : defaultConfigForToolType(type);
+    : {};
+  const defaultConfig = defaultConfigForToolType(type);
+  const defaultAmount = readOptionalNumber(formData, "defaultAmount");
+  const defaultTermDays = readOptionalNumber(formData, "defaultTermDays");
+  const defaultDailyRate = readOptionalNumber(formData, "defaultDailyRate");
+  const ctaText = readOptionalString(formData, "ctaText");
+  const riskNoticeText = readOptionalString(formData, "riskNoticeText");
+  const defaultConfigRecord = defaultConfig as Record<string, unknown>;
+  const managedConfig: Record<string, unknown> = {
+    ...defaultConfig,
+    ...(type === "OVERPAYMENT_CALCULATOR"
+      ? {
+          defaults: {
+            ...((defaultConfigRecord.defaults ?? {}) as Record<string, unknown>),
+            ...(defaultAmount !== null ? { amount: defaultAmount } : {}),
+            ...(defaultTermDays !== null ? { termDays: defaultTermDays } : {}),
+            ...(defaultDailyRate !== null ? { dailyRate: defaultDailyRate } : {}),
+          },
+          limits: mergeNestedRecord(defaultConfigRecord, "limits", {
+            ...collectNumberFields(formData, {
+              amountMin: "amountMin",
+              amountMax: "amountMax",
+              termMinDays: "termMinDays",
+              termMaxDays: "termMaxDays",
+              dailyRateMin: "dailyRateMin",
+              dailyRateMax: "dailyRateMax",
+            }),
+          }),
+          steps: mergeNestedRecord(defaultConfigRecord, "steps", {
+            ...collectNumberFields(formData, {
+              amountStep: "amount",
+              termDaysStep: "termDays",
+              dailyRateStep: "dailyRate",
+            }),
+          }),
+          result: mergeNestedRecord(defaultConfigRecord, "result", {
+            ...(readOptionalString(formData, "resultTitle")
+              ? { title: readOptionalString(formData, "resultTitle") }
+              : {}),
+            ...(readOptionalString(formData, "formulaNote")
+              ? { formulaNote: readOptionalString(formData, "formulaNote") }
+              : {}),
+            showTotalReturn: readOptionalBoolean(
+              formData,
+              "showTotalReturn",
+              true,
+            ),
+            showOverpayment: readOptionalBoolean(formData, "showOverpayment", true),
+            showDailyCost: readOptionalBoolean(formData, "showDailyCost", true),
+          }),
+        }
+      : {}),
+    ...(type === "APPLICATION_CHECKLIST"
+      ? {
+          results: [
+            {
+              minPercent: 80,
+              title:
+                readOptionalString(formData, "checklistResultTitle0") ??
+                "Подберем предложения по вашим ответам",
+              text:
+                readOptionalString(formData, "checklistResultText0") ??
+                "Карточки ниже перестроятся с учетом способа получения и выбранного приоритета.",
+            },
+            {
+              minPercent: 40,
+              title:
+                readOptionalString(formData, "checklistResultTitle1") ??
+                "Есть что уточнить",
+              text:
+                readOptionalString(formData, "checklistResultText1") ??
+                "Ответьте на оставшиеся вопросы, чтобы подборка стала точнее.",
+            },
+            {
+              minPercent: 0,
+              title:
+                readOptionalString(formData, "checklistResultTitle2") ??
+                "Начните с базовых условий",
+              text:
+                readOptionalString(formData, "checklistResultText2") ??
+                "Проверим возраст, документ, способ получения и главный приоритет.",
+            },
+          ],
+        }
+      : {}),
+    ...(ctaText
+      ? {
+          cta: {
+            ...((defaultConfigRecord.cta ?? {}) as Record<string, unknown>),
+            text: ctaText,
+          },
+        }
+      : {}),
+    ...(riskNoticeText
+      ? {
+          riskNotice: {
+            text: riskNoticeText,
+          },
+        }
+      : {}),
+  };
+  const config = mergeJsonRecord(managedConfig, advancedConfig);
   const rawDefaultBlock = readString(formData, "defaultBlock");
 
   validateSlug(slug);

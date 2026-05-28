@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import type { Offer } from "@prisma/client";
+import type { Offer, SeoPageType, SeoTool } from "@prisma/client";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
@@ -147,13 +147,22 @@ type AdminSection =
   | "offers"
   | "archive"
   | "access"
+  | "create-seo"
   | "seo"
+  | "seo-archive"
   | "tools";
 type OfferFilter = "all" | "active" | "paused";
+type SeoStatusFilter = "all" | "published" | "draft" | "paused";
+type SeoTypeFilter = "all" | SeoPageType;
+type SeoToolFilter = "all" | "with-tools" | "without-tools";
 type AdminPageProps = {
   searchParams?: Promise<{
     section?: string;
     status?: string;
+    seoStatus?: string;
+    seoType?: string;
+    seoTool?: string;
+    type?: string;
     from?: string;
     to?: string;
   }>;
@@ -164,7 +173,9 @@ const ADMIN_SECTIONS: { id: AdminSection; label: string }[] = [
   { id: "new-offer", label: "Создать оффер" },
   { id: "offers", label: "Управление офферами" },
   { id: "archive", label: "Архив" },
-  { id: "seo", label: "SEO-контент" },
+  { id: "create-seo", label: "Создать SEO" },
+  { id: "seo", label: "Управление SEO" },
+  { id: "seo-archive", label: "Архив SEO" },
   { id: "tools", label: "Интерактивные инструменты" },
 ];
 
@@ -178,7 +189,9 @@ function readSection(value: string | undefined, canManageAdmins: boolean): Admin
     value === "new-offer" ||
     value === "offers" ||
     value === "archive" ||
+    value === "create-seo" ||
     value === "seo" ||
+    value === "seo-archive" ||
     value === "tools"
   ) {
     return value;
@@ -193,6 +206,109 @@ function readOfferFilter(value: string | undefined): OfferFilter {
   }
 
   return "all";
+}
+
+function readSeoStatusFilter(value: string | undefined): SeoStatusFilter {
+  if (value === "published" || value === "draft" || value === "paused") {
+    return value;
+  }
+
+  return "all";
+}
+
+function readSeoTypeFilter(value: string | undefined): SeoTypeFilter {
+  if (value === "CATEGORY" || value === "ARTICLE" || value === "SERVICE") {
+    return value;
+  }
+
+  return "all";
+}
+
+function readSeoToolFilter(value: string | undefined): SeoToolFilter {
+  if (value === "with-tools" || value === "without-tools") {
+    return value;
+  }
+
+  return "all";
+}
+
+function getSeoTypeLabel(type: string) {
+  if (type === "CATEGORY") {
+    return "Подборка";
+  }
+
+  if (type === "ARTICLE") {
+    return "Статья";
+  }
+
+  if (type === "SERVICE") {
+    return "Сервис";
+  }
+
+  return type;
+}
+
+function getSeoToolTypeLabel(type: string) {
+  if (type === "OVERPAYMENT_CALCULATOR") {
+    return "Калькулятор";
+  }
+
+  if (type === "APPLICATION_CHECKLIST") {
+    return "Чек-лист";
+  }
+
+  if (type === "MINI_OFFER_PICKER") {
+    return "Мини-подборщик";
+  }
+
+  if (type === "LOAN_TYPE_QUIZ") {
+    return "Квиз";
+  }
+
+  if (type === "COMPARISON") {
+    return "Сравнение";
+  }
+
+  return type;
+}
+
+function getSeoToolStatusLabel(status: SeoTool["status"]) {
+  if (status === "ACTIVE") {
+    return "Активен";
+  }
+
+  return getSeoStatusLabel(status);
+}
+
+function readCreateSeoType(value: string | undefined): SeoPageType | null {
+  if (value === "CATEGORY" || value === "ARTICLE" || value === "SERVICE") {
+    return value;
+  }
+
+  return null;
+}
+
+function FilterLink({
+  href,
+  active,
+  label,
+}: {
+  href: string;
+  active: boolean;
+  label: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className={`rounded-md px-3 py-2 text-sm font-semibold ${
+        active
+          ? "bg-slate-950 text-white"
+          : "border border-slate-300 text-slate-700"
+      }`}
+    >
+      {label}
+    </Link>
+  );
 }
 
 function toInputDate(value: Date) {
@@ -274,6 +390,10 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     session.role === "BOSS" || session.permissions.includes("analytics");
   const activeSection = readSection(resolvedSearchParams?.section, canManageAdmins);
   const offerFilter = readOfferFilter(resolvedSearchParams?.status);
+  const seoStatusFilter = readSeoStatusFilter(resolvedSearchParams?.seoStatus);
+  const seoTypeFilter = readSeoTypeFilter(resolvedSearchParams?.seoType);
+  const seoToolFilter = readSeoToolFilter(resolvedSearchParams?.seoTool);
+  const createSeoType = readCreateSeoType(resolvedSearchParams?.type);
   const analyticsPeriod = readPeriod(
     resolvedSearchParams?.from,
     resolvedSearchParams?.to,
@@ -288,6 +408,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     offerClickCounts,
     periodOfferClickCounts,
     seoPages,
+    seoCategoryClickCounts,
     seoTools,
   ] = await Promise.all([
     prisma.offer.findMany({
@@ -358,11 +479,22 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       },
     }),
     prisma.seoPage.findMany({
-      orderBy: [{ status: "asc" }, { pageType: "asc" }, { createdAt: "asc" }],
+      orderBy: [{ status: "asc" }, { pageType: "asc" }, { updatedAt: "desc" }],
       include: {
         offers: true,
         faqItems: true,
         tools: true,
+      },
+    }),
+    prisma.offerClick.groupBy({
+      by: ["categorySlug"],
+      where: {
+        categorySlug: {
+          not: null,
+        },
+      },
+      _count: {
+        id: true,
       },
     }),
     prisma.seoTool.findMany({
@@ -443,6 +575,60 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   const navSections = canManageAdmins
     ? [...ADMIN_SECTIONS, { id: "access" as const, label: "Доступы" }]
     : ADMIN_SECTIONS;
+  const seoClicksBySlug = new Map(
+    seoCategoryClickCounts
+      .filter((item) => item.categorySlug)
+      .map((item) => [item.categorySlug as string, item._count.id]),
+  );
+  const workingSeoPages = seoPages.filter((page) => {
+    if (page.status === "ARCHIVED") {
+      return false;
+    }
+
+    if (seoStatusFilter === "published" && page.status !== "PUBLISHED") {
+      return false;
+    }
+
+    if (seoStatusFilter === "draft" && page.status !== "DRAFT") {
+      return false;
+    }
+
+    if (seoStatusFilter === "paused" && page.status !== "PAUSED") {
+      return false;
+    }
+
+    if (seoTypeFilter !== "all" && page.pageType !== seoTypeFilter) {
+      return false;
+    }
+
+    if (seoToolFilter === "with-tools" && page.tools.length === 0) {
+      return false;
+    }
+
+    if (seoToolFilter === "without-tools" && page.tools.length > 0) {
+      return false;
+    }
+
+    return true;
+  });
+  const archivedSeoPages = seoPages.filter((page) => page.status === "ARCHIVED");
+  const getSeoFilterHref = ({
+    status = seoStatusFilter,
+    type = seoTypeFilter,
+    tool = seoToolFilter,
+  }: {
+    status?: SeoStatusFilter;
+    type?: SeoTypeFilter;
+    tool?: SeoToolFilter;
+  }) => {
+    const params = new URLSearchParams({ section: "seo" });
+
+    if (status !== "all") params.set("seoStatus", status);
+    if (type !== "all") params.set("seoType", type);
+    if (tool !== "all") params.set("seoTool", tool);
+
+    return `/admin?${params.toString()}`;
+  };
 
   return (
     <main className="min-h-screen bg-[#f6f8fb] text-slate-950">
@@ -836,87 +1022,303 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
               </section>
         ) : null}
 
-        {activeSection === "seo" ? (
+        {activeSection === "create-seo" ? (
           <div className="grid gap-6">
             <section className="rounded-lg border border-slate-200 bg-white">
               <div className="border-b border-slate-200 p-5">
                 <h1 className="text-2xl font-bold text-slate-950">
-                  SEO-страницы
+                  Создать SEO
                 </h1>
                 <p className="mt-2 text-sm text-slate-500">
-                  Управляемые подборки, статьи и сервисные страницы. Только
-                  опубликованные страницы доступны на сайте.
+                  Сначала выбери тип SEO-актива, потом заполни редактор под его
+                  рабочий сценарий.
                 </p>
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[980px] border-collapse text-left text-sm">
-                  <thead className="bg-slate-50 text-slate-500">
-                    <tr>
-                      <th className="px-5 py-3 font-semibold">Страница</th>
-                      <th className="px-5 py-3 font-semibold">Тип</th>
-                      <th className="px-5 py-3 font-semibold">Статус</th>
-                      <th className="px-5 py-3 font-semibold">Офферы</th>
-                      <th className="px-5 py-3 font-semibold">Инструменты</th>
-                      <th className="px-5 py-3 font-semibold">FAQ</th>
-                      <th className="px-5 py-3 font-semibold">Правка</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {seoPages.map((page) => (
-                      <tr key={page.id}>
-                        <td className="px-5 py-4">
-                          <p className="font-semibold text-slate-950">
-                            {page.h1}
-                          </p>
-                          <p className="mt-1 text-slate-500">/{page.slug}</p>
-                        </td>
-                        <td className="px-5 py-4 text-slate-700">
-                          {page.pageType}
-                        </td>
-                        <td className="px-5 py-4">
-                          <span
-                            className={`rounded-md px-2 py-1 text-xs font-semibold ${getSeoStatusClass(page.status)}`}
-                          >
-                            {getSeoStatusLabel(page.status)}
-                          </span>
-                        </td>
-                        <td className="px-5 py-4 text-slate-700">
-                          {page.offers.length}
-                        </td>
-                        <td className="px-5 py-4 text-slate-700">
-                          {page.tools.length}
-                        </td>
-                        <td className="px-5 py-4 text-slate-700">
-                          {page.faqItems.length}
-                        </td>
-                        <td className="px-5 py-4">
-                          <Link
-                            href={`/admin/seo/${page.id}`}
-                            className="font-semibold text-emerald-700 hover:text-emerald-800"
-                          >
-                            редактировать
-                          </Link>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="grid gap-4 p-5 md:grid-cols-3">
+                {[
+                  {
+                    type: "CATEGORY",
+                    title: "Создать подборку",
+                    text:
+                      "Коммерческая страница: офферы, порядок, критерии, CTA, FAQ, risk notice и опциональный инструмент.",
+                  },
+                  {
+                    type: "ARTICLE",
+                    title: "Создать статью",
+                    text:
+                      "Информационный материал: lead, структура текста, FAQ и связи с другими страницами.",
+                  },
+                  {
+                    type: "SERVICE",
+                    title: "Создать сервисную страницу",
+                    text:
+                      "Страница вокруг интерактива: активный инструмент, польза, CTA, FAQ и предупреждения.",
+                  },
+                ].map((item) => (
+                  <Link
+                    key={item.type}
+                    href={`/admin?section=create-seo&type=${item.type}`}
+                    className={`rounded-lg border p-5 transition hover:border-emerald-500 hover:bg-emerald-50 ${
+                      createSeoType === item.type
+                        ? "border-emerald-600 bg-emerald-50"
+                        : "border-slate-200 bg-white"
+                    }`}
+                  >
+                    <h2 className="text-lg font-bold text-slate-950">
+                      {item.title}
+                    </h2>
+                    <p className="mt-3 text-sm leading-6 text-slate-600">
+                      {item.text}
+                    </p>
+                  </Link>
+                ))}
               </div>
             </section>
 
-            {canManageOffers ? (
+            {canManageOffers && createSeoType ? (
               <section className="rounded-lg border border-slate-200 bg-white">
                 <div className="border-b border-slate-200 p-5">
                   <h2 className="text-xl font-bold text-slate-950">
-                    Создать SEO-страницу
+                    {getSeoTypeLabel(createSeoType)}: новый SEO-актив
                   </h2>
                 </div>
                 <div className="p-5">
-                  <SeoPageEditor offers={offers} seoTools={seoTools} />
+                  <SeoPageEditor
+                    initialPageType={createSeoType}
+                    offers={offers}
+                    seoTools={seoTools}
+                  />
                 </div>
               </section>
             ) : null}
           </div>
+        ) : null}
+
+        {activeSection === "seo" ? (
+          <section className="rounded-lg border border-slate-200 bg-white">
+            <div className="flex flex-col justify-between gap-4 border-b border-slate-200 p-5 lg:flex-row lg:items-end">
+              <div>
+                <h1 className="text-2xl font-bold text-slate-950">
+                  Управление SEO
+                </h1>
+                <p className="mt-2 text-sm text-slate-500">
+                  Рабочая зона для опубликованных страниц, черновиков и страниц
+                  на паузе. Архив сюда не попадает.
+                </p>
+              </div>
+              <Link
+                href="/admin?section=create-seo"
+                className="w-fit rounded-md bg-emerald-700 px-4 py-2 text-sm font-semibold text-white"
+              >
+                Создать SEO
+              </Link>
+            </div>
+            <div className="grid gap-3 border-b border-slate-100 p-5">
+              <div className="flex flex-wrap gap-2">
+                <FilterLink
+                  href={getSeoFilterHref({ status: "all" })}
+                  active={seoStatusFilter === "all"}
+                  label="Все в работе"
+                />
+                <FilterLink
+                  href={getSeoFilterHref({ status: "published" })}
+                  active={seoStatusFilter === "published"}
+                  label="Опубликовано"
+                />
+                <FilterLink
+                  href={getSeoFilterHref({ status: "draft" })}
+                  active={seoStatusFilter === "draft"}
+                  label="Черновики"
+                />
+                <FilterLink
+                  href={getSeoFilterHref({ status: "paused" })}
+                  active={seoStatusFilter === "paused"}
+                  label="На паузе"
+                />
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  ["all", "Все типы"],
+                  ["CATEGORY", "Подборки"],
+                  ["ARTICLE", "Статьи"],
+                  ["SERVICE", "Сервисы"],
+                ].map(([value, label]) => (
+                  <FilterLink
+                    key={value}
+                    href={getSeoFilterHref({ type: value as SeoTypeFilter })}
+                    active={seoTypeFilter === value}
+                    label={label}
+                  />
+                ))}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  ["all", "Все"],
+                  ["with-tools", "С инструментами"],
+                  ["without-tools", "Без инструментов"],
+                ].map(([value, label]) => (
+                  <FilterLink
+                    key={value}
+                    href={getSeoFilterHref({ tool: value as SeoToolFilter })}
+                    active={seoToolFilter === value}
+                    label={label}
+                  />
+                ))}
+                <Link
+                  href="/admin?section=seo-archive"
+                  className="rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700"
+                >
+                  Архив SEO
+                </Link>
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[1120px] border-collapse text-left text-sm">
+                <thead className="bg-slate-50 text-slate-500">
+                  <tr>
+                    <th className="px-5 py-3 font-semibold">Страница</th>
+                    <th className="px-5 py-3 font-semibold">Тип</th>
+                    <th className="px-5 py-3 font-semibold">Статус</th>
+                    <th className="px-5 py-3 font-semibold">Офферы</th>
+                    <th className="px-5 py-3 font-semibold">Инструменты</th>
+                    <th className="px-5 py-3 font-semibold">FAQ</th>
+                    <th className="px-5 py-3 font-semibold">Клики</th>
+                    <th className="px-5 py-3 font-semibold">Обновлено</th>
+                    <th className="px-5 py-3 font-semibold">Правка</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {workingSeoPages.map((page) => (
+                    <tr key={page.id}>
+                      <td className="px-5 py-4">
+                        <p className="font-semibold text-slate-950">{page.h1}</p>
+                        <p className="mt-1 text-slate-500">/{page.slug}</p>
+                      </td>
+                      <td className="px-5 py-4 text-slate-700">
+                        {getSeoTypeLabel(page.pageType)}
+                      </td>
+                      <td className="px-5 py-4">
+                        <span
+                          className={`rounded-md px-2 py-1 text-xs font-semibold ${getSeoStatusClass(page.status)}`}
+                        >
+                          {getSeoStatusLabel(page.status)}
+                        </span>
+                      </td>
+                      <td className="px-5 py-4 text-slate-700">
+                        {page.offers.length}
+                      </td>
+                      <td className="px-5 py-4 text-slate-700">
+                        {page.tools.length}
+                      </td>
+                      <td className="px-5 py-4 text-slate-700">
+                        {page.faqItems.length}
+                      </td>
+                      <td className="px-5 py-4 text-slate-700">
+                        {page.pageType === "CATEGORY"
+                          ? (seoClicksBySlug.get(page.slug) ?? 0)
+                          : "—"}
+                      </td>
+                      <td className="px-5 py-4 text-slate-700">
+                        {formatDate(page.updatedAt)}
+                      </td>
+                      <td className="px-5 py-4">
+                        <Link
+                          href={`/admin/seo/${page.id}`}
+                          className="font-semibold text-emerald-700 hover:text-emerald-800"
+                        >
+                          редактировать
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                  {workingSeoPages.length === 0 ? (
+                    <tr>
+                      <td className="px-5 py-8 text-center text-slate-500" colSpan={9}>
+                        По выбранным фильтрам страниц нет
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        ) : null}
+
+        {activeSection === "seo-archive" ? (
+          <section className="rounded-lg border border-slate-200 bg-white">
+            <div className="flex flex-col justify-between gap-4 border-b border-slate-200 p-5 lg:flex-row lg:items-center">
+              <div>
+                <h1 className="text-2xl font-bold text-slate-950">Архив SEO</h1>
+                <p className="mt-2 text-sm text-slate-500">
+                  Неактуальные SEO-страницы остаются в базе и могут быть
+                  возвращены через смену статуса в редакторе.
+                </p>
+              </div>
+              <Link
+                href="/admin?section=seo"
+                className="w-fit rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700"
+              >
+                К SEO в работе
+              </Link>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[980px] border-collapse text-left text-sm">
+                <thead className="bg-slate-50 text-slate-500">
+                  <tr>
+                    <th className="px-5 py-3 font-semibold">Страница</th>
+                    <th className="px-5 py-3 font-semibold">Тип</th>
+                    <th className="px-5 py-3 font-semibold">Статус</th>
+                    <th className="px-5 py-3 font-semibold">Клики</th>
+                    <th className="px-5 py-3 font-semibold">Обновлено</th>
+                    <th className="px-5 py-3 font-semibold">Правка</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {archivedSeoPages.map((page) => (
+                    <tr key={page.id}>
+                      <td className="px-5 py-4">
+                        <p className="font-semibold text-slate-950">{page.h1}</p>
+                        <p className="mt-1 text-slate-500">/{page.slug}</p>
+                      </td>
+                      <td className="px-5 py-4 text-slate-700">
+                        {getSeoTypeLabel(page.pageType)}
+                      </td>
+                      <td className="px-5 py-4">
+                        <span
+                          className={`rounded-md px-2 py-1 text-xs font-semibold ${getSeoStatusClass(page.status)}`}
+                        >
+                          {getSeoStatusLabel(page.status)}
+                        </span>
+                      </td>
+                      <td className="px-5 py-4 text-slate-700">
+                        {page.pageType === "CATEGORY"
+                          ? (seoClicksBySlug.get(page.slug) ?? 0)
+                          : "—"}
+                      </td>
+                      <td className="px-5 py-4 text-slate-700">
+                        {formatDate(page.updatedAt)}
+                      </td>
+                      <td className="px-5 py-4">
+                        <Link
+                          href={`/admin/seo/${page.id}`}
+                          className="font-semibold text-emerald-700 hover:text-emerald-800"
+                        >
+                          открыть
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                  {archivedSeoPages.length === 0 ? (
+                    <tr>
+                      <td className="px-5 py-8 text-center text-slate-500" colSpan={6}>
+                        В архиве SEO-страниц пока нет
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+          </section>
         ) : null}
 
         {activeSection === "tools" ? (
@@ -938,7 +1340,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                       <th className="px-5 py-3 font-semibold">Инструмент</th>
                       <th className="px-5 py-3 font-semibold">Тип</th>
                       <th className="px-5 py-3 font-semibold">Статус</th>
-                      <th className="px-5 py-3 font-semibold">Использований</th>
+                      <th className="px-5 py-3 font-semibold">Где используется</th>
                       <th className="px-5 py-3 font-semibold">Правка</th>
                     </tr>
                   </thead>
@@ -951,18 +1353,25 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                           </p>
                           <p className="mt-1 text-slate-500">/{tool.slug}</p>
                         </td>
-                        <td className="px-5 py-4 text-slate-700">{tool.type}</td>
+                        <td className="px-5 py-4 text-slate-700">
+                          {getSeoToolTypeLabel(tool.type)}
+                        </td>
                         <td className="px-5 py-4">
                           <span
                             className={`rounded-md px-2 py-1 text-xs font-semibold ${getSeoStatusClass(
                               tool.status === "ACTIVE" ? "PUBLISHED" : tool.status,
                             )}`}
                           >
-                            {tool.status}
+                            {getSeoToolStatusLabel(tool.status)}
                           </span>
                         </td>
                         <td className="px-5 py-4 text-slate-700">
-                          {tool.pageTools.length}
+                          {tool.pageTools.length > 0
+                            ? tool.pageTools
+                                .slice(0, 3)
+                                .map((usage) => `/${usage.page.slug}`)
+                                .join(", ")
+                            : "Не используется"}
                         </td>
                         <td className="px-5 py-4">
                           <Link

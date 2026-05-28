@@ -77,7 +77,26 @@ function getWarnings(answers: ChecklistAnswers) {
   return warnings;
 }
 
-function getResult(answers: ChecklistAnswers) {
+function getConfiguredResult(
+  config: ApplicationChecklistConfig,
+  percent: number,
+  fallback: {
+    title: string;
+    text: string;
+  },
+) {
+  const result = config.results
+    ?.slice()
+    .sort((first, second) => second.minPercent - first.minPercent)
+    .find((item) => percent >= item.minPercent);
+
+  return {
+    title: result?.title ?? fallback.title,
+    text: result?.text ?? fallback.text,
+  };
+}
+
+function getResult(answers: ChecklistAnswers, config: ApplicationChecklistConfig) {
   const warnings = getWarnings(answers);
   const percent = getCompletionPercent(answers);
 
@@ -90,16 +109,27 @@ function getResult(answers: ChecklistAnswers) {
   }
 
   if (percent === 100) {
-    return {
+    const configuredResult = getConfiguredResult(config, percent, {
       title: "Подберем предложения по вашим ответам",
-      text: "Карточки ниже будут перестроены с учетом способа получения и выбранного приоритета.",
+      text:
+        "Карточки ниже будут перестроены с учетом способа получения и выбранного приоритета.",
+    });
+
+    return {
+      title: configuredResult.title,
+      text: configuredResult.text,
       tone: "success" as const,
     };
   }
 
-  return {
+  const configuredResult = getConfiguredResult(config, percent, {
     title: "Ответьте на несколько вопросов",
     text: "После этого мы поднимем выше офферы, которые лучше совпадают с вашим сценарием.",
+  });
+
+  return {
+    title: configuredResult.title,
+    text: configuredResult.text,
     tone: "info" as const,
   };
 }
@@ -113,7 +143,7 @@ export function ApplicationChecklist({
   const selectedCount = Object.values(answers).filter(Boolean).length;
   const percent = getCompletionPercent(answers);
   const warnings = useMemo(() => getWarnings(answers), [answers]);
-  const result = useMemo(() => getResult(answers), [answers]);
+  const result = useMemo(() => getResult(answers, config), [answers, config]);
 
   useEffect(() => {
     if (selectedCount > 0) {

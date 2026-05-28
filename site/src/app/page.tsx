@@ -8,7 +8,7 @@ import { prisma } from "@/lib/prisma";
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const [offers, categories, articles] = await Promise.all([
+  const [offers, categories, services, articles] = await Promise.all([
     getActiveOffers(),
     prisma.seoPage.findMany({
       where: {
@@ -19,6 +19,19 @@ export default async function Home() {
       select: {
         slug: true,
         title: true,
+        h1: true,
+      },
+    }),
+    prisma.seoPage.findMany({
+      where: {
+        status: "PUBLISHED",
+        pageType: "SERVICE",
+      },
+      orderBy: [{ publishedAt: "desc" }, { createdAt: "desc" }],
+      select: {
+        slug: true,
+        title: true,
+        description: true,
         h1: true,
       },
     }),
@@ -137,6 +150,52 @@ export default async function Home() {
               position={index + 1}
             />
           ))}
+        </div>
+      </section>
+
+      <section id="services" className="mx-auto max-w-6xl px-5 py-12">
+        <div className="flex flex-col justify-between gap-3 md:flex-row md:items-end">
+          <div>
+            <h2 className="text-2xl font-bold text-slate-950">
+              Сервисы и калькуляторы
+            </h2>
+            <p className="mt-2 max-w-2xl text-slate-600">
+              Интерактивные инструменты помогают прикинуть переплату, проверить
+              базовые условия и перейти к более подходящим предложениям.
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-6 grid gap-4 md:grid-cols-2">
+          {services.length > 0 ? (
+            services.map((service) => (
+              <Link
+                key={service.slug}
+                href={`/${service.slug}`}
+                className="rounded-lg border border-slate-200 bg-white p-5 transition hover:border-emerald-700"
+              >
+                <p className="text-sm font-semibold uppercase text-emerald-700">
+                  Сервис
+                </p>
+                <h3 className="mt-2 text-lg font-bold leading-7 text-slate-950">
+                  {service.h1 || service.title}
+                </h3>
+                <p className="mt-3 text-sm leading-6 text-slate-600">
+                  {service.description}
+                </p>
+              </Link>
+            ))
+          ) : (
+            <article className="rounded-lg border border-slate-200 bg-white p-5">
+              <h3 className="text-lg font-bold leading-7 text-slate-950">
+                Сервисы появятся после публикации
+              </h3>
+              <p className="mt-3 text-sm leading-6 text-slate-600">
+                Создай SEO-страницу с типом “Сервис” и статусом
+                “Опубликована”.
+              </p>
+            </article>
+          )}
         </div>
       </section>
 

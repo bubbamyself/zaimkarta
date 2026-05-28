@@ -17,6 +17,16 @@ Purpose:
 - define the role of interactive tools;
 - prevent accidental WordPress-like CMS scope.
 
+### 1.1 Breadcrumbs MVP
+
+Status: completed.
+
+Purpose:
+
+- add visible breadcrumbs to public SEO pages;
+- generate `BreadcrumbList` JSON-LD;
+- keep the first version based on `SeoPage.pageType` without `parentId` or index pages.
+
 ### 2. Interactive Core / SeoTool MVP
 
 Status: next.

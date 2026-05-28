@@ -1,4 +1,5 @@
 import type {
+  AffiliateOffer,
   Offer,
   SeoPage,
   SeoPageFaqItem,
@@ -15,6 +16,12 @@ export type SeoPageWithRelations = SeoPage & {
     tool: SeoTool;
   })[];
 };
+
+type OfferForSeoEditor = Offer & {
+  affiliateOffers?: AffiliateOffer[];
+};
+
+type JsonRecord = Record<string, unknown>;
 
 function toFieldValue(value: unknown) {
   if (value === null || value === undefined) {
@@ -122,18 +129,117 @@ function createEmptyFaqRows(count: number) {
   }));
 }
 
+function formatDateInput(value?: Date | string | null) {
+  if (!value) {
+    return "";
+  }
+
+  return new Date(value).toISOString().slice(0, 10);
+}
+
+function isRecord(value: unknown): value is JsonRecord {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function findManagedTextBlock(blocks: unknown, id: string) {
+  if (!Array.isArray(blocks)) {
+    return "";
+  }
+
+  const block = blocks.find((item) => isRecord(item) && item.id === id);
+
+  if (!isRecord(block)) {
+    return "";
+  }
+
+  return String(block.text ?? block.ctaText ?? "");
+}
+
+function getAdvancedContentBlocks(blocks: unknown) {
+  if (!Array.isArray(blocks)) {
+    return "";
+  }
+
+  const managedBlockIds = new Set([
+    "category-criterion",
+    "category-main-cta",
+    "category-pre-offers",
+    "category-post-offers",
+  ]);
+  const advancedBlocks = blocks.filter((block) => {
+    if (!isRecord(block)) {
+      return false;
+    }
+
+    return !managedBlockIds.has(String(block.id ?? ""));
+  });
+
+  return advancedBlocks.length > 0 ? JSON.stringify(advancedBlocks, null, 2) : "";
+}
+
+function getRecordValue(value: unknown, key: string) {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  return value[key];
+}
+
+function getConfigText(config: unknown, group: string, key: string) {
+  const groupValue = getRecordValue(config, group);
+  const value = getRecordValue(groupValue, key);
+
+  return value === undefined || value === null ? "" : String(value);
+}
+
+function getAdvancedToolConfig(config: unknown) {
+  if (!isRecord(config)) {
+    return "";
+  }
+
+  const advancedEntries = Object.entries(config).filter(
+    ([key]) => key !== "defaults" && key !== "cta" && key !== "riskNotice",
+  );
+
+  return advancedEntries.length > 0
+    ? JSON.stringify(Object.fromEntries(advancedEntries), null, 2)
+    : "";
+}
+
 export function SeoPageEditor({
   offers,
   seoTools = [],
   seoPage,
+  initialPageType = "CATEGORY",
 }: {
-  offers: Offer[];
+  offers: OfferForSeoEditor[];
   seoTools?: SeoTool[];
   seoPage?: SeoPageWithRelations;
+  initialPageType?: "CATEGORY" | "ARTICLE" | "SERVICE";
 }) {
   const isEdit = Boolean(seoPage);
+  const currentPageType = seoPage?.pageType ?? initialPageType;
   const selectedOffers = new Map(
-    seoPage?.offers.map((item) => [item.offerId, item.position]) ?? [],
+    seoPage?.offers.map((item) => [item.offerId, item]) ?? [],
+  );
+  const isCategory = currentPageType === "CATEGORY";
+  const isArticle = currentPageType === "ARTICLE";
+  const isService = currentPageType === "SERVICE";
+  const categoryCriterion = findManagedTextBlock(
+    seoPage?.contentBlocks,
+    "category-criterion",
+  );
+  const categoryCtaText = findManagedTextBlock(
+    seoPage?.contentBlocks,
+    "category-main-cta",
+  );
+  const categoryPreOffersText = findManagedTextBlock(
+    seoPage?.contentBlocks,
+    "category-pre-offers",
+  );
+  const categoryPostOffersText = findManagedTextBlock(
+    seoPage?.contentBlocks,
+    "category-post-offers",
   );
   const faqRows = [
     ...(seoPage?.faqItems ?? []),
@@ -166,8 +272,9 @@ export function SeoPageEditor({
           {isEdit ? "Редактирование SEO-страницы" : "Новая SEO-страница"}
         </h3>
         <p className="mt-1 text-sm text-slate-500">
-          Черновик можно сохранить неполным. Для публикации нужны slug, title,
-          description, H1, intro и предупреждение о рисках.
+          Черновик можно сохранить неполным. Для публикации нужны title,
+          description, H1, статус, тип, предупреждение о рисках и проверки под
+          выбранный сценарий.
         </p>
       </div>
 
@@ -192,16 +299,26 @@ export function SeoPageEditor({
             { value: "ARCHIVED", label: "Архив" },
           ]}
         />
-        <SelectField
-          label="Тип страницы"
-          name="pageType"
-          defaultValue={seoPage?.pageType ?? "CATEGORY"}
-          options={[
-            { value: "CATEGORY", label: "Подборка" },
-            { value: "ARTICLE", label: "Статья" },
-            { value: "SERVICE", label: "Сервис" },
-          ]}
-        />
+        {isEdit ? (
+          <SelectField
+            label="Тип страницы"
+            name="pageType"
+            defaultValue={currentPageType}
+            options={[
+              { value: "CATEGORY", label: "Подборка" },
+              { value: "ARTICLE", label: "Статья" },
+              { value: "SERVICE", label: "Сервис" },
+            ]}
+          />
+        ) : (
+          <label className="grid gap-2">
+            <span className="text-sm font-medium text-slate-700">Тип страницы</span>
+            <input type="hidden" name="pageType" value={currentPageType} />
+            <span className="inline-flex h-11 items-center rounded-md border border-slate-300 bg-white px-3 text-slate-900">
+              {isCategory ? "Подборка" : isArticle ? "Статья" : "Сервис"}
+            </span>
+          </label>
+        )}
       </div>
 
       <SelectField
@@ -230,22 +347,114 @@ export function SeoPageEditor({
         required
       />
       <TextArea label="Intro" name="intro" defaultValue={seoPage?.intro} rows={4} />
+
+      {isCategory ? (
+        <section className="grid gap-4 rounded-lg border border-emerald-100 bg-white p-4">
+          <div>
+            <h4 className="font-bold text-slate-950">Коммерческий блок подборки</h4>
+            <p className="mt-1 text-sm text-slate-500">
+              Эти поля формируют offer-first layout без ручной сборки JSON.
+            </p>
+          </div>
+          <TextArea
+            label="Критерий подборки"
+            name="categoryCriterion"
+            defaultValue={categoryCriterion}
+            rows={3}
+          />
+          <TextArea
+            label="Текст перед офферами"
+            name="categoryPreOffersText"
+            defaultValue={categoryPreOffersText}
+            rows={3}
+          />
+          <Field
+            label="Главный CTA страницы"
+            name="categoryCtaText"
+            defaultValue={categoryCtaText || "Сравнить предложения"}
+            placeholder="Сравнить предложения"
+          />
+          <TextArea
+            label="Текст после офферов"
+            name="categoryPostOffersText"
+            defaultValue={categoryPostOffersText}
+            rows={4}
+          />
+          <Field
+            label="Дата обновления условий"
+            name="updatedByUserAt"
+            defaultValue={formatDateInput(seoPage?.updatedByUserAt)}
+            placeholder="2026-05-27"
+          />
+        </section>
+      ) : null}
+
+      {isArticle ? (
+        <section className="grid gap-4 rounded-lg border border-sky-100 bg-white p-4">
+          <div>
+            <h4 className="font-bold text-slate-950">Статья</h4>
+            <p className="mt-1 text-sm text-slate-500">
+              Основной фокус — текст, структура и FAQ. Офферы можно привязать
+              ниже как вспомогательный блок, но они не являются центром страницы.
+            </p>
+          </div>
+          <Field
+            label="Дата обновления материала"
+            name="updatedByUserAt"
+            defaultValue={formatDateInput(seoPage?.updatedByUserAt)}
+            placeholder="2026-05-27"
+          />
+        </section>
+      ) : null}
+
+      {isService ? (
+        <section className="grid gap-4 rounded-lg border border-amber-100 bg-white p-4">
+          <div>
+            <h4 className="font-bold text-slate-950">Сервисная страница</h4>
+            <p className="mt-1 text-sm text-slate-500">
+              Для публикации нужен активный основной инструмент. Если не
+              задавать contentBlocks вручную, страница соберет блок инструмента,
+              предложения, FAQ и предупреждение автоматически.
+            </p>
+          </div>
+          <Field
+            label="Дата обновления сервиса"
+            name="updatedByUserAt"
+            defaultValue={formatDateInput(seoPage?.updatedByUserAt)}
+            placeholder="2026-05-27"
+          />
+        </section>
+      ) : null}
+
       <TextArea
-        label="Content"
+        label={isCategory ? "Пояснительный текст: как выбирать и что проверить" : "Content"}
         name="content"
         defaultValue={seoPage?.content}
         rows={8}
       />
-      <TextArea
-        label="Content blocks JSON"
-        name="contentBlocks"
-        defaultValue={
-          seoPage?.contentBlocks
-            ? JSON.stringify(seoPage.contentBlocks, null, 2)
-            : ""
-        }
-        rows={10}
-      />
+      <details className="rounded-lg border border-slate-200 bg-white p-4">
+        <summary className="cursor-pointer font-semibold text-slate-950">
+          Расширенные contentBlocks JSON
+        </summary>
+        <p className="mt-2 text-sm text-slate-500">
+          Для подборок это fallback: коммерческие поля выше сохраняются отдельно
+          в безопасные блоки.
+        </p>
+        <div className="mt-4">
+          <TextArea
+            label="Content blocks JSON"
+            name="contentBlocks"
+            defaultValue={
+              isCategory
+                ? getAdvancedContentBlocks(seoPage?.contentBlocks)
+                : seoPage?.contentBlocks
+                  ? JSON.stringify(seoPage.contentBlocks, null, 2)
+                  : ""
+            }
+            rows={10}
+          />
+        </div>
+      </details>
       <TextArea
         label="Предупреждение о рисках"
         name="riskNotice"
@@ -260,56 +469,111 @@ export function SeoPageEditor({
       />
 
       <section className="rounded-lg border border-slate-200 bg-white p-4">
-        <h4 className="font-bold text-slate-950">Офферы на странице</h4>
+          <h4 className="font-bold text-slate-950">
+            {isCategory ? "Офферы в подборке" : "Связанные офферы"}
+          </h4>
         <p className="mt-1 text-sm text-slate-500">
-          Отметь офферы и задай позицию. Если ничего не выбрать, публичная
-          страница покажет активные офферы по общему приоритету.
+          {isCategory
+            ? "Отметь офферы, задай позицию и контекст для этой подборки. Для публикации подборки нужен хотя бы один ACTIVE-оффер с активной CPA-ссылкой."
+            : "Можно привязать офферы к статье или сервису, но они не являются главным редакторским блоком."}
         </p>
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           {offers.map((offer, index) => {
-            const position = selectedOffers.get(offer.id);
+            const selectedOffer = selectedOffers.get(offer.id);
+            const affiliateOffer = offer.affiliateOffers?.find((item) => item.isActive);
+            const hasActiveCpa = Boolean(affiliateOffer?.trackingBaseUrl);
 
             return (
-              <label
+              <div
                 key={offer.id}
-                className="grid gap-3 rounded-lg border border-slate-200 p-3 sm:grid-cols-[1fr_90px]"
+                className="grid gap-3 rounded-lg border border-slate-200 p-3"
               >
                 <span className="flex items-start gap-3">
                   <input
                     type="checkbox"
                     name="offerId"
                     value={offer.id}
-                    defaultChecked={position !== undefined}
+                    defaultChecked={selectedOffer !== undefined}
                     className="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-700"
                   />
-                  <span>
+                  <span className="min-w-0">
                     <span className="block font-semibold text-slate-950">
                       {offer.brandName}
                     </span>
-                    <span className="text-sm text-slate-500">
-                      {offer.slug} · {offer.status}
+                    <span className="block text-sm text-slate-500">
+                      {offer.slug} · {offer.status} · CPA{" "}
+                      {hasActiveCpa ? "активна" : "не подключена"}
                     </span>
                   </span>
                 </span>
-                <input
-                  name={`offerPosition:${offer.id}`}
-                  type="number"
-                  min="1"
-                  defaultValue={position ?? index + 1}
-                  aria-label={`Позиция ${offer.brandName}`}
-                  className="h-10 rounded-md border border-slate-300 bg-white px-3 text-slate-900"
-                />
-              </label>
+                <div className="grid gap-3 sm:grid-cols-[90px_1fr_1fr_auto]">
+                  <label className="grid gap-2">
+                    <span className="text-xs font-medium text-slate-500">
+                      Позиция
+                    </span>
+                    <input
+                      name={`offerPosition:${offer.id}`}
+                      type="number"
+                      min="1"
+                      defaultValue={selectedOffer?.position ?? index + 1}
+                      aria-label={`Позиция ${offer.brandName}`}
+                      className="h-10 rounded-md border border-slate-300 bg-white px-3 text-slate-900"
+                    />
+                  </label>
+                  <label className="grid gap-2">
+                    <span className="text-xs font-medium text-slate-500">
+                      Бейдж
+                    </span>
+                    <input
+                      name={`offerBadge:${offer.id}`}
+                      defaultValue={selectedOffer?.badge ?? ""}
+                      className="h-10 rounded-md border border-slate-300 bg-white px-3 text-slate-900"
+                    />
+                  </label>
+                  <label className="grid gap-2">
+                    <span className="text-xs font-medium text-slate-500">
+                      CTA
+                    </span>
+                    <input
+                      name={`offerCtaText:${offer.id}`}
+                      defaultValue={selectedOffer?.ctaText ?? ""}
+                      placeholder="Перейти к условиям"
+                      className="h-10 rounded-md border border-slate-300 bg-white px-3 text-slate-900"
+                    />
+                  </label>
+                  <label className="flex items-end gap-2 pb-2 text-sm font-medium text-slate-700">
+                    <input
+                      name={`offerHighlight:${offer.id}`}
+                      type="checkbox"
+                      defaultChecked={selectedOffer?.highlight ?? false}
+                      className="h-4 w-4 rounded border-slate-300 text-emerald-700"
+                    />
+                    Highlight
+                  </label>
+                </div>
+                <label className="grid gap-2">
+                  <span className="text-xs font-medium text-slate-500">
+                    Заметка к офферу в этой подборке
+                  </span>
+                  <textarea
+                    name={`offerNote:${offer.id}`}
+                    defaultValue={selectedOffer?.note ?? ""}
+                    rows={2}
+                    className="rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-900"
+                  />
+                </label>
+              </div>
             );
           })}
         </div>
       </section>
 
       <section className="rounded-lg border border-slate-200 bg-white p-4">
-        <h4 className="font-bold text-slate-950">Интерактивные сервисы</h4>
+        <h4 className="font-bold text-slate-950">Интерактивные инструменты</h4>
         <p className="mt-1 text-sm text-slate-500">
-          Подключи существующий инструмент. Если в contentBlocks есть блок tool,
-          его blockId должен совпадать с blockId подключения.
+          Подключи существующий инструмент и настрой локальное отображение без
+          ручной правки JSON. Для сервисной страницы первый активный инструмент
+          считается основным.
         </p>
         <div className="mt-4 grid gap-3">
           {toolRows.map((item, index) => (
@@ -385,19 +649,76 @@ export function SeoPageEditor({
                   className="h-10 rounded-md border border-slate-300 bg-white px-3"
                 />
               </label>
-              <label className="grid gap-2 lg:col-span-4">
-                <span className="text-xs font-medium text-slate-500">
-                  Локальный config override JSON
-                </span>
-                <textarea
-                  name="pageToolConfig"
-                  defaultValue={
-                    item.config ? JSON.stringify(item.config, null, 2) : ""
-                  }
-                  rows={3}
-                  className="rounded-md border border-slate-300 bg-white px-3 py-2 font-mono text-sm"
+              <label className="grid gap-2 lg:col-span-2">
+                <span className="text-xs font-medium text-slate-500">CTA text</span>
+                <input
+                  name="pageToolCtaText"
+                  defaultValue={getConfigText(item.config, "cta", "text")}
+                  placeholder="Посмотреть предложения"
+                  className="h-10 rounded-md border border-slate-300 bg-white px-3"
                 />
               </label>
+              <div className="grid gap-3 lg:col-span-2 lg:grid-cols-3">
+                <label className="grid gap-2">
+                  <span className="text-xs font-medium text-slate-500">
+                    Сумма по умолчанию
+                  </span>
+                  <input
+                    name="pageToolDefaultAmount"
+                    type="number"
+                    min="0"
+                    defaultValue={getConfigText(item.config, "defaults", "amount")}
+                    className="h-10 rounded-md border border-slate-300 bg-white px-3"
+                  />
+                </label>
+                <label className="grid gap-2">
+                  <span className="text-xs font-medium text-slate-500">
+                    Срок, дней
+                  </span>
+                  <input
+                    name="pageToolDefaultTermDays"
+                    type="number"
+                    min="0"
+                    defaultValue={getConfigText(item.config, "defaults", "termDays")}
+                    className="h-10 rounded-md border border-slate-300 bg-white px-3"
+                  />
+                </label>
+                <label className="grid gap-2">
+                  <span className="text-xs font-medium text-slate-500">
+                    Ставка в день
+                  </span>
+                  <input
+                    name="pageToolDefaultDailyRate"
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    defaultValue={getConfigText(item.config, "defaults", "dailyRate")}
+                    className="h-10 rounded-md border border-slate-300 bg-white px-3"
+                  />
+                </label>
+              </div>
+              <label className="grid gap-2 lg:col-span-4">
+                <span className="text-xs font-medium text-slate-500">
+                  Локальное предупреждение
+                </span>
+                <textarea
+                  name="pageToolRiskNotice"
+                  defaultValue={getConfigText(item.config, "riskNotice", "text")}
+                  rows={2}
+                  className="rounded-md border border-slate-300 bg-white px-3 py-2"
+                />
+              </label>
+              <details className="lg:col-span-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <summary className="cursor-pointer text-sm font-semibold text-slate-700">
+                  Технический config override JSON
+                </summary>
+                <textarea
+                  name="pageToolConfig"
+                  defaultValue={getAdvancedToolConfig(item.config)}
+                  rows={3}
+                  className="mt-3 w-full rounded-md border border-slate-300 bg-white px-3 py-2 font-mono text-sm"
+                />
+              </details>
             </div>
           ))}
         </div>

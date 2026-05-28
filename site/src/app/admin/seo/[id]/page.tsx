@@ -65,6 +65,14 @@ export default async function EditSeoPage({
     }),
     prisma.offer.findMany({
       orderBy: [{ displayPriority: "asc" }, { status: "asc" }, { brandName: "asc" }],
+      include: {
+        affiliateOffers: {
+          orderBy: {
+            createdAt: "desc",
+          },
+          take: 1,
+        },
+      },
     }),
     prisma.seoTool.findMany({
       orderBy: [{ status: "asc" }, { type: "asc" }, { name: "asc" }],

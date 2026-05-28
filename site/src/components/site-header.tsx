@@ -14,6 +14,9 @@ export function SiteHeader() {
           <Link href="/#categories" className="hover:text-slate-950">
             Категории
           </Link>
+          <Link href="/#services" className="hover:text-slate-950">
+            Сервисы
+          </Link>
           <Link href="/#articles" className="hover:text-slate-950">
             Статьи
           </Link>

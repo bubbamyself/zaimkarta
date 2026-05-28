@@ -345,6 +345,12 @@ Tool checks:
 4. Service pages: standalone pages centered around existing tools.
 5. Later: mini offer picker, quiz, comparison, analytics, preview improvements.
 
+## SEO Infrastructure
+
+- Breadcrumbs are rendered on public SEO pages from `SeoPage.pageType`: home, section anchor, current page.
+- MVP section levels are `Подборки`, `Статьи`, and `Сервисы`; they use homepage anchors instead of separate index pages.
+- Public SEO pages also emit `BreadcrumbList` JSON-LD with absolute URLs.
+
 ## Non-Goals
 
 Do not build now:

@@ -18,6 +18,8 @@ export function OfferCard({
 }: OfferCardProps) {
   const approvalClass =
     offer.approvalTone === "high" ? "text-emerald-700" : "text-amber-600";
+  const badge = offer.pageBadge ?? offer.badge;
+  const ctaText = offer.pageCtaText ?? "Оформить заем";
   const clickParams = new URLSearchParams({
     page_type: pageType,
   });
@@ -31,7 +33,11 @@ export function OfferCard({
   }
 
   return (
-    <article className="flex h-full flex-col rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+    <article
+      className={`flex h-full flex-col rounded-lg border bg-white p-5 shadow-sm ${
+        offer.pageHighlight ? "border-emerald-300 ring-2 ring-emerald-100" : "border-slate-200"
+      }`}
+    >
       <div className="flex min-h-16 items-start gap-4">
         <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-emerald-50 text-2xl font-black text-emerald-700">
           {offer.logoUrl ? (
@@ -48,8 +54,13 @@ export function OfferCard({
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-lg font-bold text-slate-950">{offer.name}</h3>
             <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">
-              {offer.badge}
+              {badge}
             </span>
+            {offer.pageHighlight ? (
+              <span className="rounded-md bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-800">
+                выделено
+              </span>
+            ) : null}
           </div>
           <p className="mt-2 text-sm text-slate-500">
             Рейтинг {offer.rating} · отзывов {offer.reviewsCount}
@@ -92,6 +103,12 @@ export function OfferCard({
         Получение: {offer.payoutMethods.join(", ")}
       </p>
 
+      {offer.pageNote ? (
+        <p className="mt-3 rounded-md bg-slate-50 p-3 text-sm leading-6 text-slate-700">
+          {offer.pageNote}
+        </p>
+      ) : null}
+
       <div className="mt-5 flex flex-wrap gap-2">
         {matchReasons.map((reason) => (
           <span
@@ -113,10 +130,10 @@ export function OfferCard({
 
       <div className="mt-auto grid gap-3 pt-6">
         <a
-          href={`/api/offers/${offer.slug}/click?${clickParams.toString()}`}
+          href={`/go/${offer.slug}?${clickParams.toString()}`}
           className="inline-flex min-h-11 w-full items-center justify-center rounded-md bg-emerald-700 px-4 font-semibold text-white transition hover:bg-emerald-800"
         >
-          Оформить заем
+          {ctaText}
         </a>
         <Link
           href={`/offers/${offer.slug}`}

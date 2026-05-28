@@ -25,6 +25,10 @@ export type OfferCardData = {
   documents: string[];
   advantages: string[];
   tags: string[];
+  pageBadge?: string | null;
+  pageNote?: string | null;
+  pageCtaText?: string | null;
+  pageHighlight?: boolean;
 };
 
 export type OfferDetailsData = OfferCardData & {
