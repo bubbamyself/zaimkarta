@@ -138,13 +138,21 @@ function hasForbiddenPromise(text: string) {
   ].some((pattern) => pattern.test(normalized));
 }
 
+function hasReadableText(value: string | null) {
+  if (!value) {
+    return false;
+  }
+
+  return value
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .trim().length > 0;
+}
+
 async function requireSeoManager() {
   const session = await getAdminSession();
 
-  if (
-    !session ||
-    (session.role !== "BOSS" && !session.permissions.includes("offers_write"))
-  ) {
+  if (!session) {
     throw new Error("Недостаточно прав для управления SEO-страницами");
   }
 
@@ -153,7 +161,10 @@ async function requireSeoManager() {
 
 function collectSeoPageData(formData: FormData) {
   const slug = readString(formData, "slug");
-  const status = readEnum(formData, "status", SEO_PAGE_STATUSES, "DRAFT");
+  const statusFromField = readEnum(formData, "status", SEO_PAGE_STATUSES, "DRAFT");
+  const status = readOptionalString(formData, "submitStatus")
+    ? readEnum(formData, "submitStatus", SEO_PAGE_STATUSES, statusFromField)
+    : statusFromField;
   const pageType = readEnum(formData, "pageType", SEO_PAGE_TYPES, "CATEGORY");
   const manualContentBlocks = parseOptionalJsonValue(
     readString(formData, "contentBlocks"),
@@ -280,6 +291,13 @@ async function validateSeoPagePublication(
   if (!data.h1) missingFields.push("H1");
   if (!data.intro) missingFields.push("Intro");
   if (!data.riskNotice) missingFields.push("Предупреждение о рисках");
+  if (
+    data.pageType === "ARTICLE" &&
+    !hasReadableText(data.content) &&
+    (!Array.isArray(data.contentBlocks) || data.contentBlocks.length === 0)
+  ) {
+    missingFields.push("Основной текст статьи");
+  }
 
   if (missingFields.length > 0) {
     throw new Error(
@@ -623,10 +641,6 @@ export async function createSeoPage(formData: FormData) {
     seoPageData.contentBlocks = buildServiceContentBlocks(pageToolLinks);
   }
   await validateSeoPagePublication(seoPageData, pageToolLinks, offerLinks);
-
-  if (!seoPageData.title || !seoPageData.description || !seoPageData.h1) {
-    throw new Error("Title, description и H1 обязательны");
-  }
 
   const seoPage = await prisma.seoPage.create({
     data: {

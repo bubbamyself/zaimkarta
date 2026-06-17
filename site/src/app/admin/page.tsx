@@ -386,6 +386,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   const canManageAdmins = session.role === "BOSS";
   const canManageOffers =
     session.role === "BOSS" || session.permissions.includes("offers_write");
+  const canManageSeo = Boolean(session);
   const canViewAnalytics =
     session.role === "BOSS" || session.permissions.includes("analytics");
   const activeSection = readSection(resolvedSearchParams?.section, canManageAdmins);
@@ -1075,7 +1076,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
               </div>
             </section>
 
-            {canManageOffers && createSeoType ? (
+            {canManageSeo && createSeoType ? (
               <section className="rounded-lg border border-slate-200 bg-white">
                 <div className="border-b border-slate-200 p-5">
                   <h2 className="text-xl font-bold text-slate-950">
@@ -1388,7 +1389,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
               </div>
             </section>
 
-            {canManageOffers ? (
+            {canManageSeo ? (
               <section className="rounded-lg border border-slate-200 bg-white">
                 <div className="border-b border-slate-200 p-5">
                   <h2 className="text-xl font-bold text-slate-950">

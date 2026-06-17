@@ -7,7 +7,9 @@ import type {
   SeoPageTool,
   SeoTool,
 } from "@prisma/client";
+import { ArticleRichTextEditor } from "./article-rich-text-editor";
 import { createSeoPage, updateSeoPage } from "./seo-actions";
+import { SeoPageEditorForm } from "./seo-page-editor-form";
 
 export type SeoPageWithRelations = SeoPage & {
   faqItems: SeoPageFaqItem[];
@@ -36,6 +38,7 @@ function Field({
   name,
   defaultValue,
   required,
+  publicationRequired,
   pattern,
   title,
   placeholder,
@@ -44,13 +47,20 @@ function Field({
   name: string;
   defaultValue?: unknown;
   required?: boolean;
+  publicationRequired?: boolean;
   pattern?: string;
   title?: string;
   placeholder?: string;
 }) {
   return (
-    <label className="grid gap-2">
-      <span className="text-sm font-medium text-slate-700">{label}</span>
+    <label
+      className="grid gap-2"
+      data-publication-field={publicationRequired ? name : undefined}
+    >
+      <span className="flex items-center gap-2 text-sm font-medium text-slate-700">
+        {label}
+        {publicationRequired ? <PublicationRequiredMark /> : null}
+      </span>
       <input
         name={name}
         defaultValue={toFieldValue(defaultValue)}
@@ -70,16 +80,24 @@ function TextArea({
   defaultValue,
   rows = 4,
   required,
+  publicationRequired,
 }: {
   label: string;
   name: string;
   defaultValue?: string | null;
   rows?: number;
   required?: boolean;
+  publicationRequired?: boolean;
 }) {
   return (
-    <label className="grid gap-2">
-      <span className="text-sm font-medium text-slate-700">{label}</span>
+    <label
+      className="grid gap-2"
+      data-publication-field={publicationRequired ? name : undefined}
+    >
+      <span className="flex items-center gap-2 text-sm font-medium text-slate-700">
+        {label}
+        {publicationRequired ? <PublicationRequiredMark /> : null}
+      </span>
       <textarea
         name={name}
         defaultValue={defaultValue ?? ""}
@@ -88,6 +106,17 @@ function TextArea({
         className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-900"
       />
     </label>
+  );
+}
+
+function PublicationRequiredMark() {
+  return (
+    <span
+      title="Обязательно для публикации"
+      className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-amber-100 text-xs font-bold text-amber-800"
+    >
+      !
+    </span>
   );
 }
 
@@ -177,6 +206,14 @@ function getAdvancedContentBlocks(blocks: unknown) {
   return advancedBlocks.length > 0 ? JSON.stringify(advancedBlocks, null, 2) : "";
 }
 
+function getArticleAdvancedContentBlocks(blocks: unknown) {
+  if (!Array.isArray(blocks)) {
+    return "";
+  }
+
+  return blocks.length > 0 ? JSON.stringify(blocks, null, 2) : "";
+}
+
 function getRecordValue(value: unknown, key: string) {
   if (!isRecord(value)) {
     return undefined;
@@ -261,9 +298,9 @@ export function SeoPageEditor({
   ];
 
   return (
-    <form
+    <SeoPageEditorForm
       action={isEdit ? updateSeoPage : createSeoPage}
-      className="grid gap-6 rounded-lg border border-slate-200 bg-slate-50 p-4"
+      isEdit={isEdit}
     >
       {seoPage ? <input type="hidden" name="seoPageId" value={seoPage.id} /> : null}
 
@@ -284,6 +321,7 @@ export function SeoPageEditor({
           name="slug"
           defaultValue={seoPage?.slug}
           required
+          publicationRequired
           pattern="[a-z0-9]+(-[a-z0-9]+)*"
           title="Латиница, цифры и дефисы, например zaimy-na-kartu"
           placeholder="zaimy-na-kartu"
@@ -335,8 +373,20 @@ export function SeoPageEditor({
       />
 
       <div className="grid gap-4 md:grid-cols-2">
-        <Field label="Title" name="title" defaultValue={seoPage?.title} required />
-        <Field label="H1" name="h1" defaultValue={seoPage?.h1} required />
+        <Field
+          label="Title"
+          name="title"
+          defaultValue={seoPage?.title}
+          required
+          publicationRequired
+        />
+        <Field
+          label="H1"
+          name="h1"
+          defaultValue={seoPage?.h1}
+          required
+          publicationRequired
+        />
       </div>
 
       <TextArea
@@ -345,8 +395,15 @@ export function SeoPageEditor({
         defaultValue={seoPage?.description}
         rows={3}
         required
+        publicationRequired
       />
-      <TextArea label="Intro" name="intro" defaultValue={seoPage?.intro} rows={4} />
+      <TextArea
+        label="Intro"
+        name="intro"
+        defaultValue={seoPage?.intro}
+        rows={4}
+        publicationRequired
+      />
 
       {isCategory ? (
         <section className="grid gap-4 rounded-lg border border-emerald-100 bg-white p-4">
@@ -392,10 +449,11 @@ export function SeoPageEditor({
       {isArticle ? (
         <section className="grid gap-4 rounded-lg border border-sky-100 bg-white p-4">
           <div>
-            <h4 className="font-bold text-slate-950">Статья</h4>
+            <h4 className="font-bold text-slate-950">Редактор статьи</h4>
             <p className="mt-1 text-sm text-slate-500">
-              Основной фокус — текст, структура и FAQ. Офферы можно привязать
-              ниже как вспомогательный блок, но они не являются центром страницы.
+              Основной фокус — информационный материал: структура, ясный ответ
+              на вопрос пользователя, FAQ и доверие. Офферы и инструменты ниже
+              подключаются как вспомогательные элементы.
             </p>
           </div>
           <Field
@@ -426,19 +484,30 @@ export function SeoPageEditor({
         </section>
       ) : null}
 
-      <TextArea
-        label={isCategory ? "Пояснительный текст: как выбирать и что проверить" : "Content"}
-        name="content"
-        defaultValue={seoPage?.content}
-        rows={8}
-      />
+      {isArticle ? (
+        <div data-publication-field="content">
+          <ArticleRichTextEditor name="content" defaultValue={seoPage?.content} />
+        </div>
+      ) : (
+        <TextArea
+          label={
+            isCategory
+              ? "Пояснительный текст: как выбирать и что проверить"
+              : "Content"
+          }
+          name="content"
+          defaultValue={seoPage?.content}
+          rows={8}
+        />
+      )}
       <details className="rounded-lg border border-slate-200 bg-white p-4">
         <summary className="cursor-pointer font-semibold text-slate-950">
           Расширенные contentBlocks JSON
         </summary>
         <p className="mt-2 text-sm text-slate-500">
-          Для подборок это fallback: коммерческие поля выше сохраняются отдельно
-          в безопасные блоки.
+          {isArticle
+            ? "Для статьи это технический режим: основной текст редактируется выше без JSON."
+            : "Для подборок это fallback: коммерческие поля выше сохраняются отдельно в безопасные блоки."}
         </p>
         <div className="mt-4">
           <TextArea
@@ -447,6 +516,8 @@ export function SeoPageEditor({
             defaultValue={
               isCategory
                 ? getAdvancedContentBlocks(seoPage?.contentBlocks)
+                : isArticle
+                  ? getArticleAdvancedContentBlocks(seoPage?.contentBlocks)
                 : seoPage?.contentBlocks
                   ? JSON.stringify(seoPage.contentBlocks, null, 2)
                   : ""
@@ -460,6 +531,7 @@ export function SeoPageEditor({
         name="riskNotice"
         defaultValue={seoPage?.riskNotice}
         rows={3}
+        publicationRequired
       />
       <TextArea
         label="Внутренняя заметка редактора"
@@ -468,14 +540,20 @@ export function SeoPageEditor({
         rows={3}
       />
 
-      <section className="rounded-lg border border-slate-200 bg-white p-4">
-          <h4 className="font-bold text-slate-950">
+      <section
+        className="rounded-lg border border-slate-200 bg-white p-4"
+        data-publication-field={isCategory ? "offerId" : undefined}
+      >
+          <h4 className="flex items-center gap-2 font-bold text-slate-950">
             {isCategory ? "Офферы в подборке" : "Связанные офферы"}
+            {isCategory ? <PublicationRequiredMark /> : null}
           </h4>
         <p className="mt-1 text-sm text-slate-500">
           {isCategory
             ? "Отметь офферы, задай позицию и контекст для этой подборки. Для публикации подборки нужен хотя бы один ACTIVE-оффер с активной CPA-ссылкой."
-            : "Можно привязать офферы к статье или сервису, но они не являются главным редакторским блоком."}
+            : isArticle
+              ? "Для статьи это вспомогательный блок после материала. Публикация статьи не требует офферов."
+              : "Можно привязать офферы к сервису, но они не являются главным редакторским блоком."}
         </p>
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           {offers.map((offer, index) => {
@@ -568,12 +646,18 @@ export function SeoPageEditor({
         </div>
       </section>
 
-      <section className="rounded-lg border border-slate-200 bg-white p-4">
-        <h4 className="font-bold text-slate-950">Интерактивные инструменты</h4>
+      <section
+        className="rounded-lg border border-slate-200 bg-white p-4"
+        data-publication-field={isService ? "pageToolToolId" : undefined}
+      >
+        <h4 className="flex items-center gap-2 font-bold text-slate-950">
+          Интерактивные инструменты
+          {isService ? <PublicationRequiredMark /> : null}
+        </h4>
         <p className="mt-1 text-sm text-slate-500">
-          Подключи существующий инструмент и настрой локальное отображение без
-          ручной правки JSON. Для сервисной страницы первый активный инструмент
-          считается основным.
+          {isArticle
+            ? "Подключи калькулятор, чек-лист или другой инструмент как дополнение к статье. Для публикации статьи инструмент не обязателен."
+            : "Подключи существующий инструмент и настрой локальное отображение без ручной правки JSON. Для сервисной страницы первый активный инструмент считается основным."}
         </p>
         <div className="mt-4 grid gap-3">
           {toolRows.map((item, index) => (
@@ -764,9 +848,6 @@ export function SeoPageEditor({
         </div>
       </section>
 
-      <button className="w-fit rounded-md bg-emerald-700 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-800">
-        {isEdit ? "Сохранить страницу" : "Создать страницу"}
-      </button>
-    </form>
+    </SeoPageEditorForm>
   );
 }

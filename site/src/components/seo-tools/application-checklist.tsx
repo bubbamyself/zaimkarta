@@ -14,6 +14,18 @@ type ChecklistAnswers = {
   priority?: "zero" | "fast" | "approval" | "long" | "any";
 };
 
+type ConfiguredChecklistAnswers = Record<string, number>;
+
+type ConfiguredChecklistQuestion = {
+  id: string;
+  text: string;
+  weakTip: string | undefined;
+  answers: {
+    label: string;
+    value: number;
+  }[];
+};
+
 const QUESTIONS = [
   {
     id: "age18",
@@ -53,6 +65,73 @@ const QUESTIONS = [
     ],
   },
 ] as const;
+
+const DEFAULT_CONFIGURED_ANSWERS = [
+  { label: "Да", value: 2 },
+  { label: "Не уверен", value: 1 },
+  { label: "Нет", value: 0 },
+];
+
+function getConfiguredQuestions(config: ApplicationChecklistConfig) {
+  if (!Array.isArray(config.questions) || config.questions.length === 0) {
+    return [];
+  }
+
+  return config.questions
+    .map((question) => {
+      if (!question.id || !question.text) {
+        return null;
+      }
+
+      const answers =
+        Array.isArray(question.answers) && question.answers.length > 0
+          ? question.answers
+          : Array.isArray(config.answers) && config.answers.length > 0
+            ? config.answers
+            : DEFAULT_CONFIGURED_ANSWERS;
+
+      return {
+        id: question.id,
+        text: question.text,
+        weakTip: question.weakTip,
+        answers: answers.filter(
+          (answer) =>
+            typeof answer.label === "string" &&
+            typeof answer.value === "number" &&
+            Number.isFinite(answer.value),
+        ),
+      };
+    })
+    .filter(
+      (question): question is ConfiguredChecklistQuestion =>
+        question !== null && question.answers.length > 0,
+    );
+}
+
+function getConfiguredCompletion({
+  answers,
+  questions,
+}: {
+  answers: ConfiguredChecklistAnswers;
+  questions: ConfiguredChecklistQuestion[];
+}) {
+  const selectedValues = questions
+    .map((question) => answers[question.id])
+    .filter((value) => typeof value === "number" && Number.isFinite(value));
+  const score = selectedValues.reduce((sum, value) => sum + value, 0);
+  const maxScore = questions.reduce((sum, question) => {
+    const maxQuestionScore = Math.max(
+      ...question.answers.map((answer) => answer.value),
+    );
+
+    return sum + Math.max(maxQuestionScore, 0);
+  }, 0);
+
+  return {
+    percent: maxScore > 0 ? Math.round((score / maxScore) * 100) : 0,
+    selectedCount: selectedValues.length,
+  };
+}
 
 function getCompletionPercent(answers: ChecklistAnswers) {
   const selectedCount = Object.values(answers).filter(Boolean).length;
@@ -94,6 +173,28 @@ function getConfiguredResult(
     title: result?.title ?? fallback.title,
     text: result?.text ?? fallback.text,
   };
+}
+
+function getConfiguredWeakTips({
+  answers,
+  questions,
+}: {
+  answers: ConfiguredChecklistAnswers;
+  questions: ConfiguredChecklistQuestion[];
+}) {
+  return questions.flatMap((question) => {
+    const selectedValue = answers[question.id];
+
+    if (selectedValue === undefined || !question.weakTip) {
+      return [];
+    }
+
+    const maxQuestionScore = Math.max(
+      ...question.answers.map((answer) => answer.value),
+    );
+
+    return selectedValue < maxQuestionScore ? [question.weakTip] : [];
+  });
 }
 
 function getResult(answers: ChecklistAnswers, config: ApplicationChecklistConfig) {
@@ -139,17 +240,60 @@ export function ApplicationChecklist({
   intro,
   config,
 }: SeoToolRenderProps<ApplicationChecklistConfig>) {
+  const configuredQuestions = useMemo(() => getConfiguredQuestions(config), [config]);
+  const usesConfiguredQuestions = configuredQuestions.length > 0;
+  const [configuredAnswers, setConfiguredAnswers] =
+    useState<ConfiguredChecklistAnswers>({});
   const [answers, setAnswers] = useState<ChecklistAnswers>({});
   const selectedCount = Object.values(answers).filter(Boolean).length;
   const percent = getCompletionPercent(answers);
+  const configuredCompletion = useMemo(
+    () =>
+      getConfiguredCompletion({
+        answers: configuredAnswers,
+        questions: configuredQuestions,
+      }),
+    [configuredAnswers, configuredQuestions],
+  );
+  const displayedSelectedCount = usesConfiguredQuestions
+    ? configuredCompletion.selectedCount
+    : selectedCount;
+  const displayedPercent = usesConfiguredQuestions
+    ? configuredCompletion.percent
+    : percent;
   const warnings = useMemo(() => getWarnings(answers), [answers]);
-  const result = useMemo(() => getResult(answers, config), [answers, config]);
+  const configuredWeakTips = useMemo(
+    () =>
+      getConfiguredWeakTips({
+        answers: configuredAnswers,
+        questions: configuredQuestions,
+      }),
+    [configuredAnswers, configuredQuestions],
+  );
+  const result = useMemo(
+    () =>
+      usesConfiguredQuestions
+        ? {
+            ...getConfiguredResult(config, displayedPercent, {
+              title: "Оцените готовность",
+              text: "Ответьте на вопросы, чтобы увидеть ориентировочный результат.",
+            }),
+            tone:
+              displayedPercent >= 80
+                ? ("success" as const)
+                : displayedPercent >= 40
+                  ? ("info" as const)
+                  : ("warning" as const),
+          }
+        : getResult(answers, config),
+    [answers, config, displayedPercent, usesConfiguredQuestions],
+  );
 
   useEffect(() => {
-    if (selectedCount > 0) {
+    if (!usesConfiguredQuestions && selectedCount > 0) {
       publishOfferChecklistFilter(answers);
     }
-  }, [answers, selectedCount]);
+  }, [answers, selectedCount, usesConfiguredQuestions]);
 
   function updateAnswer<Key extends keyof ChecklistAnswers>(
     key: Key,
@@ -164,7 +308,16 @@ export function ApplicationChecklist({
   }
 
   function handleOffersClick() {
-    publishOfferChecklistFilter(answers);
+    if (!usesConfiguredQuestions) {
+      publishOfferChecklistFilter(answers);
+    }
+  }
+
+  function updateConfiguredAnswer(questionId: string, value: number) {
+    setConfiguredAnswers((current) => ({
+      ...current,
+      [questionId]: value,
+    }));
   }
 
   const resultClass =
@@ -179,7 +332,7 @@ export function ApplicationChecklist({
       <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
         <div>
           <p className="text-sm font-semibold uppercase text-emerald-700">
-            Чек-лист подбора
+            Чек-лист
           </p>
           <h2 className="mt-2 text-2xl font-bold text-slate-950">{title}</h2>
           {intro ? (
@@ -188,12 +341,52 @@ export function ApplicationChecklist({
         </div>
         <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
           <p className="text-sm text-slate-500">Заполнено</p>
-          <p className="text-2xl font-bold text-slate-950">{percent}%</p>
+          <p className="text-2xl font-bold text-slate-950">{displayedPercent}%</p>
         </div>
       </div>
 
       <div className="mt-6 grid gap-3">
-        {QUESTIONS.map((question, index) => (
+        {usesConfiguredQuestions ? (
+          configuredQuestions.map((question, index) => (
+            <fieldset
+              key={question.id}
+              className="rounded-lg border border-slate-200 p-4"
+            >
+              <legend className="px-1 font-semibold text-slate-950">
+                {index + 1}. {question.text}
+              </legend>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {question.answers.map((answer) => {
+                  const isSelected = configuredAnswers[question.id] === answer.value;
+
+                  return (
+                    <label
+                      key={`${question.id}-${answer.value}`}
+                      className={`inline-flex min-h-10 cursor-pointer items-center rounded-md border px-3 text-sm font-semibold transition ${
+                        isSelected
+                          ? "border-emerald-700 bg-emerald-50 text-emerald-800"
+                          : "border-slate-300 bg-white text-slate-700 hover:border-slate-500"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name={question.id}
+                        value={answer.value}
+                        checked={isSelected}
+                        onChange={() =>
+                          updateConfiguredAnswer(question.id, answer.value)
+                        }
+                        className="sr-only"
+                      />
+                      {answer.label}
+                    </label>
+                  );
+                })}
+              </div>
+            </fieldset>
+          ))
+        ) : (
+          QUESTIONS.map((question, index) => (
           <fieldset
             key={question.id}
             className="rounded-lg border border-slate-200 p-4"
@@ -234,17 +427,21 @@ export function ApplicationChecklist({
               })}
             </div>
           </fieldset>
-        ))}
+          ))
+        )}
       </div>
 
-      {selectedCount > 0 ? (
+      {displayedSelectedCount > 0 ? (
         <div className={`mt-5 rounded-lg border p-5 ${resultClass}`}>
           <h3 className="text-lg font-bold text-slate-950">{result.title}</h3>
           <p className="mt-2 leading-7 text-slate-700">{result.text}</p>
-          {warnings.length > 0 ? (
+          {warnings.length > 0 || configuredWeakTips.length > 0 ? (
             <ul className="mt-4 grid gap-2 text-sm leading-6 text-slate-700">
               {warnings.map((warning) => (
                 <li key={warning}>• {warning}</li>
+              ))}
+              {configuredWeakTips.map((tip) => (
+                <li key={tip}>• {tip}</li>
               ))}
             </ul>
           ) : null}

@@ -43,6 +43,19 @@ export type OverpaymentCalculatorConfig = {
 };
 
 export type ApplicationChecklistConfig = {
+  answers?: {
+    label: string;
+    value: number;
+  }[];
+  questions?: {
+    id: string;
+    text: string;
+    weakTip?: string;
+    answers?: {
+      label: string;
+      value: number;
+    }[];
+  }[];
   results?: {
     minPercent: number;
     title: string;

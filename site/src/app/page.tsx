@@ -1,11 +1,22 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { OfferCard } from "@/components/offer-card";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { getActiveOffers } from "@/lib/offers";
 import { prisma } from "@/lib/prisma";
+import { getAbsoluteUrl } from "@/lib/site-url";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "ZaimKarta — подбор микрозаймов на карту онлайн",
+  description:
+    "Сравнение предложений МФО: займы на карту, срочные займы, первый заем под 0%, условия, сроки и ставки.",
+  alternates: {
+    canonical: getAbsoluteUrl("/"),
+  },
+};
 
 export default async function Home() {
   const [offers, categories, services, articles] = await Promise.all([

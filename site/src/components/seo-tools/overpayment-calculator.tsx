@@ -55,6 +55,7 @@ export function OverpaymentCalculator({
       totalReturn: amount + interest,
     };
   }, [amount, dailyRate, termDays]);
+  const hasOffers = offers.length > 0;
   const matchingOffers = offers.filter(
     (offer) => offer.maxAmount === null || offer.maxAmount >= amount,
   );
@@ -163,13 +164,15 @@ export function OverpaymentCalculator({
               {config.result.formulaNote}
             </p>
           ) : null}
-          <a
-            href="#offers"
-            onClick={handleOffersClick}
-            className="mt-5 inline-flex min-h-11 w-full items-center justify-center rounded-md bg-emerald-700 px-4 font-semibold text-white transition hover:bg-emerald-800"
-          >
-            {config.cta?.text ?? "Посмотреть предложения"}
-          </a>
+          {hasOffers ? (
+            <a
+              href="#offers"
+              onClick={handleOffersClick}
+              className="mt-5 inline-flex min-h-11 w-full items-center justify-center rounded-md bg-emerald-700 px-4 font-semibold text-white transition hover:bg-emerald-800"
+            >
+              {config.cta?.text ?? "Посмотреть предложения"}
+            </a>
+          ) : null}
         </aside>
       </div>
 
@@ -179,7 +182,7 @@ export function OverpaymentCalculator({
         </p>
       ) : null}
 
-      {matchingOffers.length === 0 ? (
+      {hasOffers && matchingOffers.length === 0 ? (
         <p className="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
           В этой подборке нет офферов с максимальной суммой от{" "}
           {amount.toLocaleString("ru-RU")} ₽.

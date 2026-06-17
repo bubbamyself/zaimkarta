@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { getOfferDetails } from "@/lib/offers";
+import { getAbsoluteUrl } from "@/lib/site-url";
 
 type OfferPageProps = {
   params: Promise<{
@@ -23,6 +24,9 @@ export async function generateMetadata({
   return {
     title: `${offer.name}: условия займа, сумма, срок и ставка — ZaimKarta`,
     description: `Подробные условия ${offer.name}: ${offer.amount}, срок ${offer.term}, ставка ${offer.rate}, рассмотрение ${offer.decisionTime}.`,
+    alternates: {
+      canonical: getAbsoluteUrl(`/offers/${slug}`),
+    },
   };
 }
 

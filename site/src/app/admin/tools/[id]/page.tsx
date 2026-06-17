@@ -34,13 +34,6 @@ export default async function EditSeoTool({
     redirect("/admin/login");
   }
 
-  const canManageSeo =
-    session.role === "BOSS" || session.permissions.includes("offers_write");
-
-  if (!canManageSeo) {
-    redirect("/admin?section=tools");
-  }
-
   const { id } = await params;
   const resolvedSearchParams = await searchParams;
   const seoTool = await prisma.seoTool.findUnique({

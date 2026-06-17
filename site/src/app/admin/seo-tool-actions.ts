@@ -96,10 +96,7 @@ function validateSlug(slug: string) {
 async function requireSeoManager() {
   const session = await getAdminSession();
 
-  if (
-    !session ||
-    (session.role !== "BOSS" && !session.permissions.includes("offers_write"))
-  ) {
+  if (!session) {
     throw new Error("Недостаточно прав для управления инструментами");
   }
 
