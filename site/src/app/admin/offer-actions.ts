@@ -64,6 +64,15 @@ function readReferenceDecimal(formData: FormData, key: string) {
 }
 
 function readList(formData: FormData, key: string) {
+  const values = formData
+    .getAll(key)
+    .map((item) => String(item).trim())
+    .filter(Boolean);
+
+  if (values.length > 1) {
+    return values;
+  }
+
   return readString(formData, key)
     .split(/\n|,/)
     .map((item) => item.trim())
@@ -269,11 +278,11 @@ function validateOfferPublication(
   const missingFields: string[] = [];
 
   const requiredOfferFields: [string, unknown][] = [
-    ["Название МФО", offerData.brandName],
+    ["Название кредитора", offerData.brandName],
     ["Slug", offerData.slug],
     ["Юр. название", offerData.legalName],
     ["Лого-текст", offerData.logoText],
-    ["Логотип МФО", offerData.logoUrl],
+    ["Логотип кредитора", offerData.logoUrl],
     ["Официальный сайт", offerData.officialSite],
     ["Короткое описание", offerData.shortDescription],
     ["Бейдж", offerData.badge],
@@ -406,7 +415,7 @@ export async function createOffer(formData: FormData) {
   validateOfferPublication(offerData, affiliateData);
 
   if (!offerData.brandName) {
-    throw new Error("Название МФО обязательно");
+    throw new Error("Название кредитора обязательно");
   }
 
   const offer = await prisma.offer.create({

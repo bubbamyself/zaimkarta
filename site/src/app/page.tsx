@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { OfferCard } from "@/components/offer-card";
+import { HomeOfferPicker } from "@/components/home-offer-picker";
+import { FilterableOffers } from "@/components/seo-tools/filterable-offers";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { getActiveOffers } from "@/lib/offers";
@@ -12,7 +13,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "ZaimKarta — подбор микрозаймов на карту онлайн",
   description:
-    "Сравнение предложений МФО: займы на карту, срочные займы, первый заем под 0%, условия, сроки и ставки.",
+    "Сравнение кредитных предложений: займы на карту, срочные займы, первый заем под 0%, условия, сроки и ставки.",
   alternates: {
     canonical: getAbsoluteUrl("/"),
   },
@@ -26,7 +27,7 @@ export default async function Home() {
         status: "PUBLISHED",
         pageType: "CATEGORY",
       },
-      orderBy: [{ createdAt: "asc" }],
+      orderBy: [{ displayPriority: "asc" }, { createdAt: "asc" }],
       select: {
         slug: true,
         title: true,
@@ -38,7 +39,8 @@ export default async function Home() {
         status: "PUBLISHED",
         pageType: "SERVICE",
       },
-      orderBy: [{ publishedAt: "desc" }, { createdAt: "desc" }],
+      orderBy: [{ displayPriority: "asc" }, { publishedAt: "desc" }, { createdAt: "desc" }],
+      take: 4,
       select: {
         slug: true,
         title: true,
@@ -51,7 +53,8 @@ export default async function Home() {
         status: "PUBLISHED",
         pageType: "ARTICLE",
       },
-      orderBy: [{ publishedAt: "desc" }, { createdAt: "desc" }],
+      orderBy: [{ displayPriority: "asc" }, { publishedAt: "desc" }, { createdAt: "desc" }],
+      take: 4,
       select: {
         slug: true,
         title: true,
@@ -75,7 +78,7 @@ export default async function Home() {
               Подбор микрозаймов на карту онлайн
             </h1>
             <p className="mt-5 max-w-2xl text-lg leading-8 text-slate-600">
-              Сравнивайте предложения МФО по сумме, сроку, ставке и условиям
+              Сравнивайте предложения кредиторов по сумме, сроку, ставке и условиям
               получения. Мы показываем параметры открыто и помогаем выбрать
               вариант без лишней спешки.
             </p>
@@ -95,73 +98,39 @@ export default async function Home() {
             </div>
           </div>
 
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-5">
-            <div className="grid gap-4">
-              <label className="grid gap-2">
-                <span className="text-sm font-medium text-slate-700">
-                  Сумма займа
-                </span>
-                <select className="h-12 rounded-md border border-slate-300 bg-white px-3 text-slate-900">
-                  <option>До 10 000 ₽</option>
-                  <option>До 30 000 ₽</option>
-                  <option>До 50 000 ₽</option>
-                  <option>Больше 50 000 ₽</option>
-                </select>
-              </label>
-              <label className="grid gap-2">
-                <span className="text-sm font-medium text-slate-700">Срок</span>
-                <select className="h-12 rounded-md border border-slate-300 bg-white px-3 text-slate-900">
-                  <option>До 7 дней</option>
-                  <option>До 30 дней</option>
-                  <option>До 90 дней</option>
-                  <option>Больше 90 дней</option>
-                </select>
-              </label>
-              <label className="grid gap-2">
-                <span className="text-sm font-medium text-slate-700">
-                  Что важно
-                </span>
-                <select className="h-12 rounded-md border border-slate-300 bg-white px-3 text-slate-900">
-                  <option>Минимальная ставка</option>
-                  <option>Быстрое решение</option>
-                  <option>Первый заем под 0%</option>
-                  <option>Высокая вероятность одобрения</option>
-                </select>
-              </label>
-              <a
-                href="#offers"
-                className="mt-2 inline-flex min-h-12 items-center justify-center rounded-md bg-slate-950 px-6 text-base font-semibold text-white transition hover:bg-slate-800"
+          <HomeOfferPicker />
+        </div>
+      </section>
+
+      <section
+        id="categories"
+        className="border-b border-slate-200 bg-white px-5 py-12"
+      >
+        <div className="mx-auto max-w-6xl">
+          <h2 className="text-2xl font-bold text-slate-950">
+            Категории займов
+          </h2>
+          <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {categories.map((category) => (
+              <Link
+                key={category.slug}
+                href={`/${category.slug}`}
+                className="flex min-h-20 items-center rounded-lg border border-slate-200 bg-white p-4 font-semibold leading-6 text-slate-800 transition hover:border-emerald-700 hover:text-emerald-800"
               >
-                Подобрать
-              </a>
-            </div>
+                {category.h1 || category.title}
+              </Link>
+            ))}
           </div>
         </div>
       </section>
 
-      <section id="offers" className="mx-auto max-w-6xl px-5 py-12">
-        <div className="mb-6 flex flex-col justify-between gap-3 md:flex-row md:items-end">
-          <div>
-            <h2 className="text-2xl font-bold text-slate-950">
-              Популярные предложения
-            </h2>
-            <p className="mt-2 max-w-2xl text-slate-600">
-              Пока это демонстрационные карточки. Позже здесь будут реальные
-              офферы из CPA-сетей с актуальными условиями.
-            </p>
-          </div>
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-3">
-          {offers.map((offer, index) => (
-            <OfferCard
-              key={offer.name}
-              offer={offer}
-              pageType="home"
-              position={index + 1}
-            />
-          ))}
-        </div>
+      <section className="py-12">
+        <FilterableOffers
+          title="Популярные предложения"
+          offers={offers}
+          pageType="home"
+          categorySlug="home"
+        />
       </section>
 
       <section id="services" className="mx-auto max-w-6xl px-5 py-12">
@@ -175,6 +144,12 @@ export default async function Home() {
               базовые условия и перейти к более подходящим предложениям.
             </p>
           </div>
+          <Link
+            href="/services"
+            className="inline-flex min-h-11 w-fit items-center justify-center rounded-md border border-slate-300 bg-white px-4 font-semibold text-slate-800 transition hover:border-slate-500"
+          >
+            Все сервисы
+          </Link>
         </div>
 
         <div className="mt-6 grid gap-4 md:grid-cols-2">
@@ -210,30 +185,16 @@ export default async function Home() {
         </div>
       </section>
 
-      <section
-        id="categories"
-        className="border-y border-slate-200 bg-white px-5 py-12"
-      >
-        <div className="mx-auto max-w-6xl">
-          <h2 className="text-2xl font-bold text-slate-950">
-            Категории займов
-          </h2>
-          <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {categories.map((category) => (
-              <Link
-                key={category.slug}
-                href={`/${category.slug}`}
-                className="rounded-lg border border-slate-200 bg-white p-4 font-semibold text-slate-800 transition hover:border-emerald-700 hover:text-emerald-800"
-              >
-                {category.h1 || category.title}
-              </Link>
-            ))}
-          </div>
-        </div>
-      </section>
-
       <section id="articles" className="mx-auto max-w-6xl px-5 py-12">
-        <h2 className="text-2xl font-bold text-slate-950">Полезные статьи</h2>
+        <div className="flex flex-col justify-between gap-3 md:flex-row md:items-end">
+          <h2 className="text-2xl font-bold text-slate-950">Полезные статьи</h2>
+          <Link
+            href="/blog"
+            className="inline-flex min-h-11 w-fit items-center justify-center rounded-md border border-slate-300 bg-white px-4 font-semibold text-slate-800 transition hover:border-slate-500"
+          >
+            Все статьи
+          </Link>
+        </div>
         <div className="mt-6 grid gap-4 md:grid-cols-3">
           {articles.length > 0 ? (
             articles.map((article) => (

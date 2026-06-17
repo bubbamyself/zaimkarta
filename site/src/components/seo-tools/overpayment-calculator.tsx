@@ -57,11 +57,20 @@ export function OverpaymentCalculator({
   }, [amount, dailyRate, termDays]);
   const hasOffers = offers.length > 0;
   const matchingOffers = offers.filter(
-    (offer) => offer.maxAmount === null || offer.maxAmount >= amount,
+    (offer) =>
+      (offer.maxAmount === null || offer.maxAmount >= amount) &&
+      (offer.minTermDays === null || offer.minTermDays <= termDays) &&
+      (offer.maxTermDays === null || offer.maxTermDays >= termDays) &&
+      (offer.dailyRateFrom === null || offer.dailyRateFrom <= dailyRate) &&
+      (offer.dailyRateTo === null || offer.dailyRateTo >= dailyRate),
   );
 
   function handleOffersClick() {
-    publishOfferAmountFilter(amount);
+    publishOfferAmountFilter({
+      amount,
+      termDays,
+      dailyRate,
+    });
   }
 
   return (
@@ -184,8 +193,7 @@ export function OverpaymentCalculator({
 
       {hasOffers && matchingOffers.length === 0 ? (
         <p className="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
-          В этой подборке нет офферов с максимальной суммой от{" "}
-          {amount.toLocaleString("ru-RU")} ₽.
+          В этой подборке нет офферов под выбранные сумму, срок и ставку.
         </p>
       ) : null}
     </section>

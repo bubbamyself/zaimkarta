@@ -184,6 +184,22 @@ function findManagedTextBlock(blocks: unknown, id: string) {
   return String(block.text ?? block.ctaText ?? "");
 }
 
+function findManagedHrefBlock(blocks: unknown, id: string) {
+  if (!Array.isArray(blocks)) {
+    return "";
+  }
+
+  const block = blocks.find((item) => isRecord(item) && item.id === id);
+
+  if (!isRecord(block)) {
+    return "";
+  }
+
+  const href = String(block.href ?? "");
+
+  return href === "#offers" ? "" : href;
+}
+
 function getAdvancedContentBlocks(blocks: unknown) {
   if (!Array.isArray(blocks)) {
     return "";
@@ -267,6 +283,10 @@ export function SeoPageEditor({
     "category-criterion",
   );
   const categoryCtaText = findManagedTextBlock(
+    seoPage?.contentBlocks,
+    "category-main-cta",
+  );
+  const categoryCtaUrl = findManagedHrefBlock(
     seoPage?.contentBlocks,
     "category-main-cta",
   );
@@ -372,6 +392,13 @@ export function SeoPageEditor({
         ]}
       />
 
+      <Field
+        label="Приоритет на главной"
+        name="displayPriority"
+        defaultValue={seoPage?.displayPriority ?? 100}
+        placeholder="100"
+      />
+
       <div className="grid gap-4 md:grid-cols-2">
         <Field
           label="Title"
@@ -428,9 +455,19 @@ export function SeoPageEditor({
           <Field
             label="Главный CTA страницы"
             name="categoryCtaText"
-            defaultValue={categoryCtaText || "Сравнить предложения"}
-            placeholder="Сравнить предложения"
+            defaultValue={categoryCtaText || "Проверить кредитную историю"}
+            placeholder="Проверить кредитную историю"
           />
+          <Field
+            label="Ссылка главного CTA"
+            name="categoryCtaUrl"
+            defaultValue={categoryCtaUrl}
+            placeholder="https://partner.example/credit-history"
+          />
+          <p className="-mt-3 text-xs leading-5 text-slate-500">
+            Откроется в новой вкладке. Можно оставить пустым, пока реферальной
+            ссылки нет.
+          </p>
           <TextArea
             label="Текст после офферов"
             name="categoryPostOffersText"
@@ -555,7 +592,7 @@ export function SeoPageEditor({
               ? "Для статьи это вспомогательный блок после материала. Публикация статьи не требует офферов."
               : "Можно привязать офферы к сервису, но они не являются главным редакторским блоком."}
         </p>
-        <div className="mt-4 grid gap-3 md:grid-cols-2">
+        <div className="mt-4 grid gap-4 xl:grid-cols-2">
           {offers.map((offer, index) => {
             const selectedOffer = selectedOffers.get(offer.id);
             const affiliateOffer = offer.affiliateOffers?.find((item) => item.isActive);
@@ -564,9 +601,9 @@ export function SeoPageEditor({
             return (
               <div
                 key={offer.id}
-                className="grid gap-3 rounded-lg border border-slate-200 p-3"
+                className="min-w-0 rounded-lg border border-slate-200 p-4"
               >
-                <span className="flex items-start gap-3">
+                <span className="flex min-w-0 items-start gap-3">
                   <input
                     type="checkbox"
                     name="offerId"
@@ -584,7 +621,7 @@ export function SeoPageEditor({
                     </span>
                   </span>
                 </span>
-                <div className="grid gap-3 sm:grid-cols-[90px_1fr_1fr_auto]">
+                <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-[90px_minmax(0,1fr)] xl:grid-cols-2">
                   <label className="grid gap-2">
                     <span className="text-xs font-medium text-slate-500">
                       Позиция
@@ -595,7 +632,7 @@ export function SeoPageEditor({
                       min="1"
                       defaultValue={selectedOffer?.position ?? index + 1}
                       aria-label={`Позиция ${offer.brandName}`}
-                      className="h-10 rounded-md border border-slate-300 bg-white px-3 text-slate-900"
+                      className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-slate-900"
                     />
                   </label>
                   <label className="grid gap-2">
@@ -605,10 +642,10 @@ export function SeoPageEditor({
                     <input
                       name={`offerBadge:${offer.id}`}
                       defaultValue={selectedOffer?.badge ?? ""}
-                      className="h-10 rounded-md border border-slate-300 bg-white px-3 text-slate-900"
+                      className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-slate-900"
                     />
                   </label>
-                  <label className="grid gap-2">
+                  <label className="grid gap-2 sm:col-span-2 xl:col-span-1">
                     <span className="text-xs font-medium text-slate-500">
                       CTA
                     </span>
@@ -616,10 +653,10 @@ export function SeoPageEditor({
                       name={`offerCtaText:${offer.id}`}
                       defaultValue={selectedOffer?.ctaText ?? ""}
                       placeholder="Перейти к условиям"
-                      className="h-10 rounded-md border border-slate-300 bg-white px-3 text-slate-900"
+                      className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-slate-900"
                     />
                   </label>
-                  <label className="flex items-end gap-2 pb-2 text-sm font-medium text-slate-700">
+                  <label className="flex min-h-10 items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 text-sm font-medium text-slate-700">
                     <input
                       name={`offerHighlight:${offer.id}`}
                       type="checkbox"
@@ -629,7 +666,7 @@ export function SeoPageEditor({
                     Highlight
                   </label>
                 </div>
-                <label className="grid gap-2">
+                <label className="mt-3 grid gap-2">
                   <span className="text-xs font-medium text-slate-500">
                     Заметка к офферу в этой подборке
                   </span>
@@ -637,7 +674,7 @@ export function SeoPageEditor({
                     name={`offerNote:${offer.id}`}
                     defaultValue={selectedOffer?.note ?? ""}
                     rows={2}
-                    className="rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-900"
+                    className="w-full resize-y rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-900"
                   />
                 </label>
               </div>

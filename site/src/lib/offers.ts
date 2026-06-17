@@ -13,6 +13,8 @@ export type OfferCardData = {
   maxAmount: number | null;
   minTermDays: number | null;
   maxTermDays: number | null;
+  dailyRateFrom: number | null;
+  dailyRateTo: number | null;
   amount: string;
   term: string;
   psk: string;
@@ -106,6 +108,10 @@ function mapApprovalTone(tone: ApprovalTone): "low" | "medium" | "high" {
   return "medium";
 }
 
+function decimalToNumber(value: { toString(): string } | null) {
+  return value ? Number(value.toString()) : null;
+}
+
 export function mapOfferToCardData(offer: OfferForCard): OfferCardData {
   return {
     name: offer.brandName,
@@ -119,6 +125,8 @@ export function mapOfferToCardData(offer: OfferForCard): OfferCardData {
     maxAmount: offer.maxAmount,
     minTermDays: offer.minTermDays,
     maxTermDays: offer.maxTermDays,
+    dailyRateFrom: decimalToNumber(offer.dailyRateFrom),
+    dailyRateTo: decimalToNumber(offer.dailyRateTo),
     amount: `до ${formatMoney(offer.maxAmount)}`,
     term:
       offer.minTermDays && offer.maxTermDays
@@ -174,6 +182,8 @@ export async function getOfferDetails(
     maxAmount: offer.maxAmount,
     minTermDays: offer.minTermDays,
     maxTermDays: offer.maxTermDays,
+    dailyRateFrom: decimalToNumber(offer.dailyRateFrom),
+    dailyRateTo: decimalToNumber(offer.dailyRateTo),
     amount: `до ${formatMoney(offer.maxAmount)}`,
     term:
       offer.minTermDays && offer.maxTermDays

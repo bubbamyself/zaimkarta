@@ -191,6 +191,7 @@ function collectSeoPageData(formData: FormData) {
         : manualContentBlocks,
     riskNotice: readOptionalString(formData, "riskNotice"),
     editorNote: readOptionalString(formData, "editorNote"),
+    displayPriority: readPositiveInt(formData, "displayPriority", 100),
     updatedByUserAt: readOptionalDate(formData, "updatedByUserAt") ?? new Date(),
   };
 }
@@ -215,6 +216,7 @@ function buildCategoryContentBlocks(formData: FormData, manualContentBlocks: unk
     : [];
   const criterion = readOptionalString(formData, "categoryCriterion");
   const ctaText = readOptionalString(formData, "categoryCtaText");
+  const ctaUrl = readOptionalString(formData, "categoryCtaUrl");
   const preOffersText = readOptionalString(formData, "categoryPreOffersText");
   const postOffersText = readOptionalString(formData, "categoryPostOffersText");
 
@@ -235,7 +237,7 @@ function buildCategoryContentBlocks(formData: FormData, manualContentBlocks: unk
           {
             id: "category-main-cta",
             type: "cta",
-            href: "#offers",
+            href: ctaUrl ?? "",
             ctaText,
           },
         ]
@@ -704,4 +706,41 @@ export async function updateSeoPage(formData: FormData) {
   revalidatePath("/admin");
   revalidatePath(`/admin/seo/${seoPageId}`);
   redirect(`/admin/seo/${seoPageId}?saved=1`);
+}
+
+export async function updateSeoPageDisplayOrder(
+  pageType: SeoPageType,
+  seoPageIds: string[],
+) {
+  await requireSeoManager();
+
+  if (!SEO_PAGE_TYPES.includes(pageType)) {
+    throw new Error("Некорректный тип SEO-страницы");
+  }
+
+  const uniqueSeoPageIds = Array.from(new Set(seoPageIds)).filter(Boolean);
+
+  if (uniqueSeoPageIds.length === 0) {
+    return;
+  }
+
+  await prisma.$transaction(
+    uniqueSeoPageIds.map((seoPageId, index) =>
+      prisma.seoPage.update({
+        where: {
+          id: seoPageId,
+          pageType,
+        },
+        data: {
+          displayPriority: index + 1,
+          updatedByUserAt: new Date(),
+        },
+      }),
+    ),
+  );
+
+  revalidatePath("/");
+  revalidatePath("/blog");
+  revalidatePath("/services");
+  revalidatePath("/admin");
 }

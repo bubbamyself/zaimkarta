@@ -42,6 +42,22 @@ function findManagedTextBlock(blocks: unknown, id: string) {
   return String(block.text ?? block.ctaText ?? "");
 }
 
+function findManagedHrefBlock(blocks: unknown, id: string) {
+  if (!Array.isArray(blocks)) {
+    return "";
+  }
+
+  const block = blocks.find((item) => isRecord(item) && item.id === id);
+
+  if (!isRecord(block)) {
+    return "";
+  }
+
+  const href = String(block.href ?? "");
+
+  return href === "#offers" ? "" : href;
+}
+
 function getAdvancedBlocks(blocks: unknown) {
   if (!Array.isArray(blocks)) {
     return [];
@@ -365,9 +381,18 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
     seoPage.contentBlocks,
     "category-criterion",
   );
+  const rawCategoryCtaText = findManagedTextBlock(
+    seoPage.contentBlocks,
+    "category-main-cta",
+  );
   const categoryCtaText =
-    findManagedTextBlock(seoPage.contentBlocks, "category-main-cta") ||
-    "Сравнить предложения";
+    rawCategoryCtaText && rawCategoryCtaText !== "Сравнить предложения"
+      ? rawCategoryCtaText
+      : "Проверить кредитную историю";
+  const categoryCtaUrl = findManagedHrefBlock(
+    seoPage.contentBlocks,
+    "category-main-cta",
+  );
   const categoryPreOffersText = findManagedTextBlock(
     seoPage.contentBlocks,
     "category-pre-offers",
@@ -435,7 +460,7 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
                 </span>
               ) : null}
               <span className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-amber-900">
-                Решение принимает МФО после проверки заявки
+                Решение принимает кредитор после проверки заявки
               </span>
             </div>
           </div>
@@ -468,12 +493,16 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
                 {categoryPostOffersText}
               </p>
             ) : null}
-            <a
-              href="#offers"
-              className="mt-5 inline-flex min-h-11 items-center justify-center rounded-md bg-emerald-700 px-5 font-semibold text-white transition hover:bg-emerald-800"
-            >
-              {categoryCtaText}
-            </a>
+            {categoryCtaUrl ? (
+              <a
+                href={categoryCtaUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-5 inline-flex min-h-11 items-center justify-center rounded-md bg-emerald-700 px-5 font-semibold text-white transition hover:bg-emerald-800"
+              >
+                {categoryCtaText}
+              </a>
+            ) : null}
           </div>
         </section>
 
@@ -658,7 +687,7 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
               </h2>
               <p className="mt-2 leading-7 text-slate-600">
                 Эти офферы могут быть полезны по теме статьи, но перед заявкой
-                проверьте условия на стороне МФО.
+                проверьте условия на стороне кредитора.
               </p>
             </div>
             <div className="grid gap-4 md:grid-cols-3">
@@ -803,9 +832,9 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
               </p>
             </article>
             <article className="rounded-lg border border-slate-200 p-5">
-              <h3 className="font-bold text-slate-950">Требования МФО</h3>
+              <h3 className="font-bold text-slate-950">Требования кредитора</h3>
               <p className="mt-2 text-sm leading-6 text-slate-600">
-                Решение о выдаче принимает МФО после проверки заявки.
+                Решение о выдаче принимает кредитор после проверки заявки.
               </p>
             </article>
           </div>

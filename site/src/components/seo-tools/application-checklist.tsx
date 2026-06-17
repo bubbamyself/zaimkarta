@@ -8,10 +8,11 @@ import type {
 } from "./types";
 
 type ChecklistAnswers = {
-  age18?: "yes" | "no";
-  rfPassport?: "yes" | "no";
-  payout?: "card" | "cash" | "online" | "any";
-  priority?: "zero" | "fast" | "approval" | "long" | "any";
+  passportReady?: "yes" | "no";
+  namedCard?: "yes" | "no";
+  repaymentPlan?: "yes" | "no";
+  overpaymentCalculated?: "yes" | "no";
+  contractReady?: "yes" | "no";
 };
 
 type ConfiguredChecklistAnswers = Record<string, number>;
@@ -28,84 +29,55 @@ type ConfiguredChecklistQuestion = {
 
 const QUESTIONS = [
   {
-    id: "age18",
-    text: "Вам уже есть 18 лет?",
+    id: "passportReady",
+    text: "Паспорт под рукой?",
     answers: [
       { label: "Да", value: "yes" },
       { label: "Нет", value: "no" },
     ],
   },
   {
-    id: "rfPassport",
-    text: "У вас есть паспорт гражданина РФ?",
+    id: "namedCard",
+    text: "Есть именная банковская карта?",
     answers: [
       { label: "Да", value: "yes" },
-      { label: "Нет / другой документ", value: "no" },
+      { label: "Нет", value: "no" },
     ],
   },
   {
-    id: "payout",
-    text: "Как удобнее получить деньги?",
+    id: "repaymentPlan",
+    text: "Понимаете, из каких средств будете гасить заем?",
     answers: [
-      { label: "На карту", value: "card" },
-      { label: "Наличными", value: "cash" },
-      { label: "Онлайн", value: "online" },
-      { label: "Не важно", value: "any" },
+      { label: "Да", value: "yes" },
+      { label: "Нет", value: "no" },
     ],
   },
   {
-    id: "priority",
-    text: "Что для вас важнее?",
+    id: "overpaymentCalculated",
+    text: "Рассчитали примерную переплату?",
     answers: [
-      { label: "Первый заем под 0%", value: "zero" },
-      { label: "Быстрое решение", value: "fast" },
-      { label: "Высокая вероятность", value: "approval" },
-      { label: "Длинный срок", value: "long" },
-      { label: "Не важно", value: "any" },
+      { label: "Да", value: "yes" },
+      { label: "Нет", value: "no" },
+    ],
+  },
+  {
+    id: "contractReady",
+    text: "Готовы внимательно читать договор перед подписанием?",
+    answers: [
+      { label: "Да", value: "yes" },
+      { label: "Нет", value: "no" },
     ],
   },
 ] as const;
 
-const DEFAULT_CONFIGURED_ANSWERS = [
-  { label: "Да", value: 2 },
-  { label: "Не уверен", value: 1 },
-  { label: "Нет", value: 0 },
-];
+function getConfiguredQuestions(
+  config: ApplicationChecklistConfig,
+): ConfiguredChecklistQuestion[] {
+  void config;
 
-function getConfiguredQuestions(config: ApplicationChecklistConfig) {
-  if (!Array.isArray(config.questions) || config.questions.length === 0) {
-    return [];
-  }
-
-  return config.questions
-    .map((question) => {
-      if (!question.id || !question.text) {
-        return null;
-      }
-
-      const answers =
-        Array.isArray(question.answers) && question.answers.length > 0
-          ? question.answers
-          : Array.isArray(config.answers) && config.answers.length > 0
-            ? config.answers
-            : DEFAULT_CONFIGURED_ANSWERS;
-
-      return {
-        id: question.id,
-        text: question.text,
-        weakTip: question.weakTip,
-        answers: answers.filter(
-          (answer) =>
-            typeof answer.label === "string" &&
-            typeof answer.value === "number" &&
-            Number.isFinite(answer.value),
-        ),
-      };
-    })
-    .filter(
-      (question): question is ConfiguredChecklistQuestion =>
-        question !== null && question.answers.length > 0,
-    );
+  // В текущем MVP вопросы чек-листа намеренно фиксированные: только "Да" и "Нет".
+  // Конфиг оставляем для текстов результата, но не даем ему вернуть старую балльную анкету.
+  return [];
 }
 
 function getConfiguredCompletion({
@@ -141,15 +113,15 @@ function getCompletionPercent(answers: ChecklistAnswers) {
 function getWarnings(answers: ChecklistAnswers) {
   const warnings: string[] = [];
 
-  if (answers.age18 === "no") {
+  if (answers.passportReady === "no") {
     warnings.push(
-      "Большинство МФО выдают займы только совершеннолетним заемщикам. Не переходите к заявке, если требование по возрасту не выполнено.",
+      "Без паспорта часть предложений может не подойти. Мы покажем только варианты, где паспорт не указан как обязательный документ.",
     );
   }
 
-  if (answers.rfPassport === "no") {
+  if (answers.namedCard === "no") {
     warnings.push(
-      "Большинство офферов рассчитаны на заемщиков с паспортом гражданина РФ. Если у вас другой документ, внимательно проверяйте требования МФО.",
+      "Если именной карты нет, мы уберем варианты, где получение завязано только на карту или СБП.",
     );
   }
 
@@ -204,7 +176,7 @@ function getResult(answers: ChecklistAnswers, config: ApplicationChecklistConfig
   if (warnings.length > 0) {
     return {
       title: "Нужно проверить требования",
-      text: "Мы покажем предложения аккуратно, но перед заявкой важно сверить возраст, документы и условия конкретной МФО.",
+      text: "Мы покажем предложения аккуратно, но перед заявкой важно сверить документы, способ получения и условия конкретного кредитора.",
       tone: "warning" as const,
     };
   }
@@ -213,7 +185,7 @@ function getResult(answers: ChecklistAnswers, config: ApplicationChecklistConfig
     const configuredResult = getConfiguredResult(config, percent, {
       title: "Подберем предложения по вашим ответам",
       text:
-        "Карточки ниже будут перестроены с учетом способа получения и выбранного приоритета.",
+        "Карточки ниже будут отфильтрованы с учетом документов, карты и готовности к заявке.",
     });
 
     return {
@@ -225,7 +197,7 @@ function getResult(answers: ChecklistAnswers, config: ApplicationChecklistConfig
 
   const configuredResult = getConfiguredResult(config, percent, {
     title: "Ответьте на несколько вопросов",
-    text: "После этого мы поднимем выше офферы, которые лучше совпадают с вашим сценарием.",
+    text: "После этого мы отфильтруем офферы, которые не подходят под ваши ответы.",
   });
 
   return {

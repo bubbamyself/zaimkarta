@@ -218,6 +218,7 @@ model SeoPage {
   contentBlocks   Json?
   riskNotice      String?
   editorNote      String?
+  displayPriority Int              @default(100)
   publishedAt     DateTime?
   updatedByUserAt DateTime?
   createdAt       DateTime         @default(now())

@@ -12,6 +12,10 @@ import { logoutAdmin } from "./logout-action";
 import { OfferEditor } from "./offer-editor";
 import { OfferOrderTable, type OfferOrderRow } from "./offer-order-table";
 import { SeoPageEditor } from "./seo-page-editor";
+import {
+  SeoPageOrderTable,
+  type SeoPageOrderRow,
+} from "./seo-page-order-table";
 import { SeoToolEditor } from "./seo-tool-editor";
 import { getAdminSession } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
@@ -480,7 +484,12 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       },
     }),
     prisma.seoPage.findMany({
-      orderBy: [{ status: "asc" }, { pageType: "asc" }, { updatedAt: "desc" }],
+      orderBy: [
+        { pageType: "asc" },
+        { displayPriority: "asc" },
+        { publishedAt: "desc" },
+        { updatedAt: "desc" },
+      ],
       include: {
         offers: true,
         faqItems: true,
@@ -612,6 +621,23 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
 
     return true;
   });
+  const workingSeoPageOrderRows: SeoPageOrderRow[] = workingSeoPages.map((page) => ({
+    id: page.id,
+    h1: page.h1,
+    slug: page.slug,
+    pageType: page.pageType,
+    statusLabel: getSeoStatusLabel(page.status),
+    statusClassName: getSeoStatusClass(page.status),
+    displayPriority: page.displayPriority,
+    offersCount: page.offers.length,
+    toolsCount: page.tools.length,
+    faqCount: page.faqItems.length,
+    clicks:
+      page.pageType === "CATEGORY"
+        ? (seoClicksBySlug.get(page.slug) ?? 0)
+        : null,
+    updatedAtLabel: formatDate(page.updatedAt),
+  }));
   const archivedSeoPages = seoPages.filter((page) => page.status === "ARCHIVED");
   const getSeoFilterHref = ({
     status = seoStatusFilter,
@@ -1146,7 +1172,10 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                 ].map(([value, label]) => (
                   <FilterLink
                     key={value}
-                    href={getSeoFilterHref({ type: value as SeoTypeFilter })}
+                    href={getSeoFilterHref({
+                      type: value as SeoTypeFilter,
+                      tool: "all",
+                    })}
                     active={seoTypeFilter === value}
                     label={label}
                   />
@@ -1173,75 +1202,84 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                 </Link>
               </div>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[1120px] border-collapse text-left text-sm">
-                <thead className="bg-slate-50 text-slate-500">
-                  <tr>
-                    <th className="px-5 py-3 font-semibold">Страница</th>
-                    <th className="px-5 py-3 font-semibold">Тип</th>
-                    <th className="px-5 py-3 font-semibold">Статус</th>
-                    <th className="px-5 py-3 font-semibold">Офферы</th>
-                    <th className="px-5 py-3 font-semibold">Инструменты</th>
-                    <th className="px-5 py-3 font-semibold">FAQ</th>
-                    <th className="px-5 py-3 font-semibold">Клики</th>
-                    <th className="px-5 py-3 font-semibold">Обновлено</th>
-                    <th className="px-5 py-3 font-semibold">Правка</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {workingSeoPages.map((page) => (
-                    <tr key={page.id}>
-                      <td className="px-5 py-4">
-                        <p className="font-semibold text-slate-950">{page.h1}</p>
-                        <p className="mt-1 text-slate-500">/{page.slug}</p>
-                      </td>
-                      <td className="px-5 py-4 text-slate-700">
-                        {getSeoTypeLabel(page.pageType)}
-                      </td>
-                      <td className="px-5 py-4">
-                        <span
-                          className={`rounded-md px-2 py-1 text-xs font-semibold ${getSeoStatusClass(page.status)}`}
-                        >
-                          {getSeoStatusLabel(page.status)}
-                        </span>
-                      </td>
-                      <td className="px-5 py-4 text-slate-700">
-                        {page.offers.length}
-                      </td>
-                      <td className="px-5 py-4 text-slate-700">
-                        {page.tools.length}
-                      </td>
-                      <td className="px-5 py-4 text-slate-700">
-                        {page.faqItems.length}
-                      </td>
-                      <td className="px-5 py-4 text-slate-700">
-                        {page.pageType === "CATEGORY"
-                          ? (seoClicksBySlug.get(page.slug) ?? 0)
-                          : "—"}
-                      </td>
-                      <td className="px-5 py-4 text-slate-700">
-                        {formatDate(page.updatedAt)}
-                      </td>
-                      <td className="px-5 py-4">
-                        <Link
-                          href={`/admin/seo/${page.id}`}
-                          className="font-semibold text-emerald-700 hover:text-emerald-800"
-                        >
-                          редактировать
-                        </Link>
-                      </td>
-                    </tr>
-                  ))}
-                  {workingSeoPages.length === 0 ? (
+            {seoTypeFilter !== "all" ? (
+              <SeoPageOrderTable
+                key={`${seoTypeFilter}-${seoStatusFilter}-${seoToolFilter}`}
+                canManageSeo={canManageSeo}
+                pages={workingSeoPageOrderRows}
+                pageType={seoTypeFilter}
+              />
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[1120px] border-collapse text-left text-sm">
+                  <thead className="bg-slate-50 text-slate-500">
                     <tr>
-                      <td className="px-5 py-8 text-center text-slate-500" colSpan={9}>
-                        По выбранным фильтрам страниц нет
-                      </td>
+                      <th className="px-5 py-3 font-semibold">Страница</th>
+                      <th className="px-5 py-3 font-semibold">Тип</th>
+                      <th className="px-5 py-3 font-semibold">Статус</th>
+                      <th className="px-5 py-3 font-semibold">Офферы</th>
+                      <th className="px-5 py-3 font-semibold">Инструменты</th>
+                      <th className="px-5 py-3 font-semibold">FAQ</th>
+                      <th className="px-5 py-3 font-semibold">Клики</th>
+                      <th className="px-5 py-3 font-semibold">Обновлено</th>
+                      <th className="px-5 py-3 font-semibold">Правка</th>
                     </tr>
-                  ) : null}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {workingSeoPages.map((page) => (
+                      <tr key={page.id}>
+                        <td className="px-5 py-4">
+                          <p className="font-semibold text-slate-950">{page.h1}</p>
+                          <p className="mt-1 text-slate-500">/{page.slug}</p>
+                        </td>
+                        <td className="px-5 py-4 text-slate-700">
+                          {getSeoTypeLabel(page.pageType)}
+                        </td>
+                        <td className="px-5 py-4">
+                          <span
+                            className={`rounded-md px-2 py-1 text-xs font-semibold ${getSeoStatusClass(page.status)}`}
+                          >
+                            {getSeoStatusLabel(page.status)}
+                          </span>
+                        </td>
+                        <td className="px-5 py-4 text-slate-700">
+                          {page.offers.length}
+                        </td>
+                        <td className="px-5 py-4 text-slate-700">
+                          {page.tools.length}
+                        </td>
+                        <td className="px-5 py-4 text-slate-700">
+                          {page.faqItems.length}
+                        </td>
+                        <td className="px-5 py-4 text-slate-700">
+                          {page.pageType === "CATEGORY"
+                            ? (seoClicksBySlug.get(page.slug) ?? 0)
+                            : "—"}
+                        </td>
+                        <td className="px-5 py-4 text-slate-700">
+                          {formatDate(page.updatedAt)}
+                        </td>
+                        <td className="px-5 py-4">
+                          <Link
+                            href={`/admin/seo/${page.id}`}
+                            className="font-semibold text-emerald-700 hover:text-emerald-800"
+                          >
+                            редактировать
+                          </Link>
+                        </td>
+                      </tr>
+                    ))}
+                    {workingSeoPages.length === 0 ? (
+                      <tr>
+                        <td className="px-5 py-8 text-center text-slate-500" colSpan={9}>
+                          По выбранным фильтрам страниц нет
+                        </td>
+                      </tr>
+                    ) : null}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </section>
         ) : null}
 
