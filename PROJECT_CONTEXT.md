@@ -84,6 +84,12 @@ site/
 docker-compose.yml
 ```
 
+Локальный запуск на Windows зафиксирован в:
+
+```text
+docs/local-windows-setup.md
+```
+
 Важные команды из `site/package.json`:
 
 ```bash
@@ -465,6 +471,7 @@ Google Doc может быть человекочитаемой версией, 
 - `tech-stack.md` — стек и инфраструктура;
 - `domain-research.md` — доменный и нишевый контекст;
 - `offer-card-model.md` — модель оффера и карточки;
+- `docs/local-windows-setup.md` — локальный запуск проекта на Windows;
 - `PROJECT_CONTEXT.md` — текущая накопительная память.
 
 SEO tools:
