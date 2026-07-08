@@ -1,5 +1,6 @@
 import type { ApprovalTone, Offer } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { isRussianRegionCode } from "@/lib/russian-regions";
 
 export type OfferCardData = {
   name: string;
@@ -146,9 +147,27 @@ export function mapOfferToCardData(offer: OfferForCard): OfferCardData {
 }
 
 export async function getActiveOffers(): Promise<OfferCardData[]> {
+  return getActiveOffersForRegion(null);
+}
+
+export async function getActiveOffersForRegion(
+  regionCode: string | null,
+): Promise<OfferCardData[]> {
+  const selectedRegionCode = regionCode && isRussianRegionCode(regionCode)
+    ? regionCode
+    : null;
   const offers = await prisma.offer.findMany({
     where: {
       status: "ACTIVE",
+      ...(selectedRegionCode
+        ? {
+            NOT: {
+              restrictedRegionCodes: {
+                has: selectedRegionCode,
+              },
+            },
+          }
+        : {}),
     },
     orderBy: [{ displayPriority: "asc" }, { rating: "desc" }, { brandName: "asc" }],
   });
@@ -158,11 +177,24 @@ export async function getActiveOffers(): Promise<OfferCardData[]> {
 
 export async function getOfferDetails(
   slug: string,
+  regionCode?: string | null,
 ): Promise<OfferDetailsData | null> {
+  const selectedRegionCode = regionCode && isRussianRegionCode(regionCode)
+    ? regionCode
+    : null;
   const offer = await prisma.offer.findFirst({
     where: {
       slug,
       status: "ACTIVE",
+      ...(selectedRegionCode
+        ? {
+            NOT: {
+              restrictedRegionCodes: {
+                has: selectedRegionCode,
+              },
+            },
+          }
+        : {}),
     },
   });
 

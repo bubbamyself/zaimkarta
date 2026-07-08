@@ -1,4 +1,48 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ZaimKarta Site
+
+This is the Next.js application for ZaimKarta — an owner-operated SEO showcase for microloan and financial CPA offers.
+
+## Current Product Notes
+
+Implemented foundation:
+
+- public offer showcase;
+- admin offer management;
+- CPA redirect flow through `/go/[slug]`;
+- `lead_id`, `click_id`, and click tracking;
+- SEO pages and SEO tools foundation;
+- admin analytics and report export;
+- offer ordering and status management;
+- region-based offer filtering MVP.
+
+## Region-Based Offer Filtering
+
+Implemented on 2026-07-09.
+
+The site can filter offers by the user's registration region:
+
+- public users choose a registration region;
+- the choice is stored in cookie `zk_region_code`;
+- admins can set offer-level regional restrictions;
+- restrictions are stored in `Offer.restrictedRegionCodes`;
+- homepage and SEO pages hide offers restricted for the selected region;
+- `/go/[slug]` protects CPA redirects server-side and does not send users to restricted offers.
+
+Main files:
+
+- `src/lib/russian-regions.ts`;
+- `src/lib/region-cookie.ts`;
+- `src/components/region-registration-control.tsx`;
+- `src/app/admin/region-restrictions-field.tsx`;
+- `src/lib/offers.ts`;
+- `src/lib/cpa-click.ts`;
+- `prisma/migrations/20260630090000_offer_restricted_region_codes/migration.sql`.
+
+Full product/technical note:
+
+```text
+../docs/region-registration-offer-filter.md
+```
 
 ## Getting Started
 

@@ -104,6 +104,7 @@ model Offer {
   warnings        String[]          @default([])
   legalDisclosure String?
   displayPriority Int               @default(100)
+  restrictedRegionCodes String[]     @default([])
   conditionsCheckedAt DateTime?
   updatedByUserAt DateTime?
   createdAt       DateTime          @default(now())

@@ -210,6 +210,9 @@ Expected result:
 - Treat ad slots as optional inventory, not as required content.
 - Keep commercial SEO pages offer-first; advertising must not hide the main comparison experience.
 - Support internal promos before external ad networks so slots can be useful even without RYA/GDN integration.
+- Since 2026-07-09, all offer-rendering SEO tools must respect region-based offer filtering.
+- Use `Offer.restrictedRegionCodes` and selected `zk_region_code` region when building future mini offer pickers, recommendations, and comparison blocks.
+- Do not treat UI filtering as the only protection: `/go/[slug]` also checks regional restrictions server-side.
 
 ## Current Prompts
 

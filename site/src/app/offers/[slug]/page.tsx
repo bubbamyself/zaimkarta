@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { getOfferDetails } from "@/lib/offers";
+import { getSelectedRegionCode } from "@/lib/region-cookie";
 import { getAbsoluteUrl } from "@/lib/site-url";
 
 type OfferPageProps = {
@@ -67,7 +68,8 @@ function TextList({ title, items }: { title: string; items: string[] }) {
 
 export default async function OfferPage({ params }: OfferPageProps) {
   const { slug } = await params;
-  const offer = await getOfferDetails(slug);
+  const selectedRegionCode = await getSelectedRegionCode();
+  const offer = await getOfferDetails(slug, selectedRegionCode);
 
   if (!offer) {
     notFound();

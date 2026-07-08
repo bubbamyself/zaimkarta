@@ -1,6 +1,8 @@
 import type { AffiliateOffer, Offer } from "@prisma/client";
 import { createOffer, updateOffer } from "./offer-actions";
+import { OfferFormShell } from "./offer-form-shell";
 import { LogoFileField } from "./logo-file-field";
+import { RegionRestrictionsField } from "./region-restrictions-field";
 
 export type OfferWithAffiliate = Offer & {
   affiliateOffers: AffiliateOffer[];
@@ -286,9 +288,9 @@ export function OfferEditor({ offer }: { offer?: OfferWithAffiliate }) {
   const missingItems = publicationChecklist.filter((item) => !item.ready);
 
   return (
-    <form
+    <OfferFormShell
       action={isEdit ? updateOffer : createOffer}
-      className="grid gap-6 rounded-lg border border-slate-200 bg-slate-50 p-4"
+      submitLabel={isEdit ? "Сохранить оффер" : "Создать оффер"}
     >
       {offer ? <input type="hidden" name="offerId" value={offer.id} /> : null}
       {affiliateOffer ? (
@@ -498,9 +500,11 @@ export function OfferEditor({ offer }: { offer?: OfferWithAffiliate }) {
         </details>
       </div>
 
-      <button className="w-fit rounded-md bg-emerald-700 px-5 py-3 text-sm font-semibold text-white hover:bg-emerald-800">
-        {isEdit ? "Сохранить оффер" : "Создать оффер"}
-      </button>
-    </form>
+      <RegionRestrictionsField
+        name="restrictedRegionCodes"
+        defaultValue={offer?.restrictedRegionCodes}
+      />
+
+    </OfferFormShell>
   );
 }

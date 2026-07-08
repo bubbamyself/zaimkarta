@@ -59,6 +59,7 @@ async function main() {
       documents: ["паспорт РФ"],
       advantages: ["первый заем под 0%", "быстрое решение", "полностью онлайн"],
       warnings: ["решение о выдаче принимает кредитор"],
+      restrictedRegionCodes: [],
       trackingBaseUrl: "https://example.com/zaymer",
     },
     {
@@ -86,6 +87,7 @@ async function main() {
       documents: ["паспорт РФ"],
       advantages: ["наличные или карта", "срочное рассмотрение"],
       warnings: ["перед оформлением проверьте полную стоимость займа"],
+      restrictedRegionCodes: [],
       trackingBaseUrl: "https://example.com/bistrodengi",
     },
     {
@@ -113,6 +115,7 @@ async function main() {
       documents: ["паспорт РФ"],
       advantages: ["длинный срок", "онлайн оформление"],
       warnings: ["одобрение не гарантируется"],
+      restrictedRegionCodes: ["55"],
       trackingBaseUrl: "https://example.com/moneyman",
     },
   ];

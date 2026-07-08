@@ -1,9 +1,10 @@
 import Link from "next/link";
+import { RegionRegistrationControl } from "@/components/region-registration-control";
 
 export function SiteHeader() {
   return (
     <header className="border-b border-slate-200 bg-white">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-4">
+      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-5 py-4">
         <Link href="/" className="text-xl font-bold tracking-normal">
           ZaimKarta
         </Link>
@@ -21,6 +22,7 @@ export function SiteHeader() {
             Статьи
           </Link>
         </nav>
+        <RegionRegistrationControl />
       </div>
     </header>
   );

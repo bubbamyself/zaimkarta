@@ -351,6 +351,20 @@ Tool checks:
 - MVP section levels are `Подборки`, `Статьи`, and `Сервисы`; they use homepage anchors instead of separate index pages.
 - Public SEO pages also emit `BreadcrumbList` JSON-LD with absolute URLs.
 
+## Update 2026-07-09: Region-Based Offer Filtering
+
+The project now has an MVP region-based offer filter.
+
+Any SEO page or SEO tool that renders offers must respect the selected registration region:
+
+- the public region is stored in cookie `zk_region_code`;
+- offer restrictions are stored in `Offer.restrictedRegionCodes`;
+- public offer lists should use the same filtering logic as the homepage;
+- future mini offer pickers and recommendation blocks must not show offers restricted for the selected region;
+- `/go/[slug]` still performs server-side protection, so filtering in UI is not the only safety layer.
+
+Product wording should use `регион регистрации` and `региональные ограничения`, not unsafe language like `бан`, `черный список`, or `вам откажут`.
+
 ## Non-Goals
 
 Do not build now:

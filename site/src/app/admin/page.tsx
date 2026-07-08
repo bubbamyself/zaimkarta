@@ -576,6 +576,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       amountLabel: `${offer.minAmount?.toLocaleString("ru-RU") ?? "—"}-${
         offer.maxAmount?.toLocaleString("ru-RU") ?? "—"
       } ₽`,
+      restrictedRegionCodes: offer.restrictedRegionCodes,
       conditionsCheckedAtLabel: offer.conditionsCheckedAt
         ? formatDate(offer.conditionsCheckedAt)
         : "—",

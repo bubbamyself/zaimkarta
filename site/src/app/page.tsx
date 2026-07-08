@@ -4,8 +4,9 @@ import { HomeOfferPicker } from "@/components/home-offer-picker";
 import { FilterableOffers } from "@/components/seo-tools/filterable-offers";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
-import { getActiveOffers } from "@/lib/offers";
+import { getActiveOffersForRegion } from "@/lib/offers";
 import { prisma } from "@/lib/prisma";
+import { getSelectedRegionCode } from "@/lib/region-cookie";
 import { getAbsoluteUrl } from "@/lib/site-url";
 
 export const dynamic = "force-dynamic";
@@ -20,8 +21,9 @@ export const metadata: Metadata = {
 };
 
 export default async function Home() {
+  const selectedRegionCode = await getSelectedRegionCode();
   const [offers, categories, services, articles] = await Promise.all([
-    getActiveOffers(),
+    getActiveOffersForRegion(selectedRegionCode),
     prisma.seoPage.findMany({
       where: {
         status: "PUBLISHED",

@@ -6,8 +6,9 @@ import { SeoContentRenderer } from "@/components/seo-content-renderer";
 import { FilterableOffers } from "@/components/seo-tools/filterable-offers";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
-import { getActiveOffers, mapOfferToCardData } from "@/lib/offers";
+import { getActiveOffersForRegion, mapOfferToCardData } from "@/lib/offers";
 import { prisma } from "@/lib/prisma";
+import { getSelectedRegionCode } from "@/lib/region-cookie";
 import {
   getBreadcrumbListJsonLd,
   getSeoPageBreadcrumbs,
@@ -325,6 +326,7 @@ export async function generateMetadata({
 
 export default async function CategoryPage({ params }: CategoryPageProps) {
   const { slug } = await params;
+  const selectedRegionCode = await getSelectedRegionCode();
   const seoPage = await prisma.seoPage.findFirst({
     where: {
       slug,
@@ -358,7 +360,12 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
     notFound();
   }
 
-  const selectedOffers = seoPage.offers.map((item) =>
+  const availableSeoPageOffers = selectedRegionCode
+    ? seoPage.offers.filter(
+        (item) => !item.offer.restrictedRegionCodes.includes(selectedRegionCode),
+      )
+    : seoPage.offers;
+  const selectedOffers = availableSeoPageOffers.map((item) =>
     ({
       ...mapOfferToCardData(item.offer),
       pageBadge: item.badge,
@@ -368,7 +375,9 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
     }),
   );
   const offers =
-    selectedOffers.length > 0 ? selectedOffers : await getActiveOffers();
+    seoPage.offers.length > 0
+      ? selectedOffers
+      : await getActiveOffersForRegion(selectedRegionCode);
   const contentBlocks = seoPage.content
     ?.split(/\n{2,}/)
     .map((block) => block.trim())

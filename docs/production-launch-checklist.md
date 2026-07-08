@@ -21,6 +21,7 @@ Use this checklist before deploying ZaimKarta to production.
 ## Database
 
 - [ ] Prisma migrations are applied.
+- [ ] Migration `20260630090000_offer_restricted_region_codes` is applied.
 - [ ] Admin users are created intentionally.
 - [ ] Seed/demo data is reviewed before publication.
 - [ ] Demo CPA links such as `example.com` are removed or paused.
@@ -46,7 +47,10 @@ Use this checklist before deploying ZaimKarta to production.
 ## Public Site
 
 - [ ] Public pages open on `https://zaimkarta.ru`.
+- [ ] Region selector is visible and saves `zk_region_code`.
+- [ ] Offers restricted by `Offer.restrictedRegionCodes` are hidden for the selected registration region.
 - [ ] CPA redirects use `/go/[slug]` and record clicks.
+- [ ] `/go/[slug]` does not redirect to CPA if the offer is restricted for the selected region.
 - [ ] Old `/api/offers/[slug]/click` redirects to `/go/[slug]` only as compatibility.
 - [ ] Legal and risk notices are visible where needed.
 - [ ] SEO pages have title, description, H1, canonical URL, and breadcrumbs where applicable.
@@ -62,5 +66,8 @@ Use this checklist before deploying ZaimKarta to production.
 - [ ] Open one article page.
 - [ ] Open one service page.
 - [ ] Open one offer page, for example `/offers/zaymer`.
+- [ ] Choose one registration region and confirm the region button reflects the choice.
+- [ ] Add a test regional restriction to one offer in admin and confirm it disappears from public listings for that region.
 - [ ] Click one offer CTA and confirm it goes through `/go/[slug]`.
+- [ ] Confirm restricted offer CTA falls back safely instead of sending the user to CPA.
 - [ ] Confirm a click appears in admin analytics.
