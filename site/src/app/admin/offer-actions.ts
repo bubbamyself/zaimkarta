@@ -8,6 +8,7 @@ import { redirect } from "next/navigation";
 import path from "path";
 import { getAdminSession } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
+import { normalizeRegionCodes } from "@/lib/russian-regions";
 
 const LOGO_UPLOAD_DIR = path.join(process.cwd(), "public", "uploads", "logos");
 const LOGO_PUBLIC_PATH = "/uploads/logos";
@@ -15,12 +16,56 @@ const MAX_LOGO_BYTES = 400 * 1024;
 const OFFER_STATUSES: OfferStatus[] = ["DRAFT", "ACTIVE", "PAUSED", "ARCHIVED"];
 const APPROVAL_TONES: ApprovalTone[] = ["LOW", "MEDIUM", "HIGH"];
 
+export type OfferActionState = {
+  error?: string;
+  missingFieldNames?: string[];
+};
+
+class OfferFormError extends Error {
+  missingFieldNames: string[];
+
+  constructor(message: string, missingFieldNames: string[] = []) {
+    super(message);
+    this.name = "OfferFormError";
+    this.missingFieldNames = missingFieldNames;
+  }
+}
+
 function readString(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
 }
 
-function actionError(message: string) {
-  return new Error(message);
+function actionError(message: string, missingFieldNames: string[] = []) {
+  return new OfferFormError(message, missingFieldNames);
+}
+
+function isRedirectError(error: unknown) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "digest" in error &&
+    typeof error.digest === "string" &&
+    error.digest.startsWith("NEXT_REDIRECT")
+  );
+}
+
+function toOfferActionState(error: unknown): OfferActionState {
+  if (error instanceof OfferFormError) {
+    return {
+      error: error.message,
+      missingFieldNames: error.missingFieldNames,
+    };
+  }
+
+  if (error instanceof Error) {
+    return {
+      error: error.message,
+    };
+  }
+
+  return {
+    error: "Не удалось сохранить оффер. Проверь поля и попробуй еще раз.",
+  };
 }
 
 function readOptionalString(formData: FormData, key: string) {
@@ -64,6 +109,15 @@ function readReferenceDecimal(formData: FormData, key: string) {
 }
 
 function readList(formData: FormData, key: string) {
+  const values = formData
+    .getAll(key)
+    .map((item) => String(item).trim())
+    .filter(Boolean);
+
+  if (values.length > 1) {
+    return values;
+  }
+
   return readString(formData, key)
     .split(/\n|,/)
     .map((item) => item.trim())
@@ -208,6 +262,9 @@ async function collectOfferData(formData: FormData) {
     warnings: readList(formData, "warnings"),
     legalDisclosure: readOptionalString(formData, "legalDisclosure"),
     displayPriority: readInt(formData, "displayPriority") ?? 100,
+    restrictedRegionCodes: normalizeRegionCodes(
+      readList(formData, "restrictedRegionCodes"),
+    ),
     conditionsCheckedAt: readDate(formData, "conditionsCheckedAt"),
     updatedByUserAt: new Date(),
   };
@@ -266,70 +323,82 @@ function validateOfferPublication(
     return;
   }
 
-  const missingFields: string[] = [];
+  const missingFields: { label: string; name: string }[] = [];
 
-  const requiredOfferFields: [string, unknown][] = [
-    ["Название МФО", offerData.brandName],
-    ["Slug", offerData.slug],
-    ["Юр. название", offerData.legalName],
-    ["Лого-текст", offerData.logoText],
-    ["Логотип МФО", offerData.logoUrl],
-    ["Официальный сайт", offerData.officialSite],
-    ["Короткое описание", offerData.shortDescription],
-    ["Бейдж", offerData.badge],
-    ["Приоритет показа", offerData.displayPriority],
-    ["Дата проверки условий", offerData.conditionsCheckedAt],
-    ["Мин. сумма", offerData.minAmount],
-    ["Макс. сумма", offerData.maxAmount],
-    ["Мин. срок, дней", offerData.minTermDays],
-    ["Макс. срок, дней", offerData.maxTermDays],
-    ["Ставка от", offerData.dailyRateFrom],
-    ["Ставка до", offerData.dailyRateTo],
-    ["ПСК от", offerData.pskFrom],
-    ["ПСК до", offerData.pskTo],
-    ["Рейтинг", offerData.rating],
-    ["Отзывы", offerData.reviewsCount],
-    ["Одобрение", offerData.approvalLabel],
-    ["Тон одобрения", offerData.approvalTone],
-    ["Время решения", offerData.decisionTime],
-    ["Способы получения", offerData.payoutMethods],
-    ["Способы погашения", offerData.repaymentMethods],
-    ["Требования", offerData.requirements],
-    ["Документы", offerData.documents],
-    ["Плюсы/теги", offerData.advantages],
-    ["Предупреждения", offerData.warnings],
-    ["Юридическая/рекламная сноска", offerData.legalDisclosure],
+  const requiredOfferFields: [string, string, unknown][] = [
+    ["Название кредитора", "brandName", offerData.brandName],
+    ["Slug", "slug", offerData.slug],
+    ["Юр. название", "legalName", offerData.legalName],
+    ["Лого-текст", "logoText", offerData.logoText],
+    ["Логотип кредитора", "logoFile", offerData.logoUrl],
+    ["Официальный сайт", "officialSite", offerData.officialSite],
+    ["Короткое описание", "shortDescription", offerData.shortDescription],
+    ["Бейдж", "badge", offerData.badge],
+    ["Приоритет показа", "displayPriority", offerData.displayPriority],
+    ["Дата проверки условий", "conditionsCheckedAt", offerData.conditionsCheckedAt],
+    ["Мин. сумма", "minAmount", offerData.minAmount],
+    ["Макс. сумма", "maxAmount", offerData.maxAmount],
+    ["Мин. срок, дней", "minTermDays", offerData.minTermDays],
+    ["Макс. срок, дней", "maxTermDays", offerData.maxTermDays],
+    ["Ставка от", "dailyRateFrom", offerData.dailyRateFrom],
+    ["Ставка до", "dailyRateTo", offerData.dailyRateTo],
+    ["ПСК от", "pskFrom", offerData.pskFrom],
+    ["ПСК до", "pskTo", offerData.pskTo],
+    ["Рейтинг", "rating", offerData.rating],
+    ["Отзывы", "reviewsCount", offerData.reviewsCount],
+    ["Одобрение", "approvalLabel", offerData.approvalLabel],
+    ["Тон одобрения", "approvalTone", offerData.approvalTone],
+    ["Время решения", "decisionTime", offerData.decisionTime],
+    ["Способы получения", "payoutMethods", offerData.payoutMethods],
+    ["Способы погашения", "repaymentMethods", offerData.repaymentMethods],
+    ["Требования", "requirements", offerData.requirements],
+    ["Документы", "documents", offerData.documents],
+    ["Плюсы/теги", "advantages", offerData.advantages],
+    ["Предупреждения", "warnings", offerData.warnings],
+    ["Юридическая/рекламная сноска", "legalDisclosure", offerData.legalDisclosure],
   ];
 
-  for (const [label, value] of requiredOfferFields) {
+  for (const [label, name, value] of requiredOfferFields) {
     if (!hasValue(value)) {
-      missingFields.push(label);
+      missingFields.push({ label, name });
     }
   }
 
   if (!affiliateData) {
-    missingFields.push("Партнерская ссылка");
+    missingFields.push({
+      label: "Партнерская ссылка",
+      name: "trackingBaseUrl",
+    });
   } else {
-    const requiredAffiliateFields: [string, unknown][] = [
-      ["CPA-сеть", affiliateData.networkName],
-      ["Offer ID в сети", affiliateData.networkOfferId],
-      ["Партнерская ссылка", affiliateData.trackingBaseUrl],
+    const requiredAffiliateFields: [string, string, unknown][] = [
+      ["CPA-сеть", "networkName", affiliateData.networkName],
+      ["Offer ID в сети", "networkOfferId", affiliateData.networkOfferId],
+      ["Партнерская ссылка", "trackingBaseUrl", affiliateData.trackingBaseUrl],
     ];
 
-    for (const [label, value] of requiredAffiliateFields) {
+    for (const [label, name, value] of requiredAffiliateFields) {
       if (!hasValue(value)) {
-        missingFields.push(label);
+        missingFields.push({ label, name });
       }
     }
 
     if (!affiliateData.isActive) {
-      missingFields.push("Ссылка активна");
+      missingFields.push({
+        label: "Ссылка активна",
+        name: "affiliateIsActive",
+      });
     }
   }
 
   if (missingFields.length > 0) {
+    const missingLabels = missingFields.map((field) => field.label);
+    const missingFieldNames = Array.from(
+      new Set(missingFields.map((field) => field.name)),
+    );
+
     throw actionError(
-      `Нельзя активировать оффер. Заполни поля: ${missingFields.join(", ")}.`,
+      `Нельзя активировать оффер. Заполни поля: ${missingLabels.join(", ")}.`,
+      missingFieldNames,
     );
   }
 }
@@ -398,72 +467,94 @@ async function createAffiliateOffer(
   }
 }
 
-export async function createOffer(formData: FormData) {
-  await requireOfferManager();
+export async function createOffer(
+  _state: OfferActionState,
+  formData: FormData,
+): Promise<OfferActionState> {
+  try {
+    await requireOfferManager();
 
-  const offerData = await collectOfferData(formData);
-  const affiliateData = collectAffiliateData(formData);
-  validateOfferPublication(offerData, affiliateData);
+    const offerData = await collectOfferData(formData);
+    const affiliateData = collectAffiliateData(formData);
+    validateOfferPublication(offerData, affiliateData);
 
-  if (!offerData.brandName) {
-    throw new Error("Название МФО обязательно");
-  }
+    if (!offerData.brandName) {
+      throw actionError("Название кредитора обязательно", ["brandName"]);
+    }
 
-  const offer = await prisma.offer.create({
-    data: {
-      ...offerData,
-    },
-  });
-
-  if (affiliateData) {
-    await createAffiliateOffer(offer.id, affiliateData);
-  }
-
-  revalidatePath("/");
-  revalidatePath("/admin");
-  redirect(`/admin?section=offers&created=${offerData.slug}`);
-}
-
-export async function updateOffer(formData: FormData) {
-  await requireOfferManager();
-
-  const offerId = readString(formData, "offerId");
-  const affiliateOfferId = readOptionalString(formData, "affiliateOfferId");
-  const offerData = await collectOfferData(formData);
-  const affiliateData = collectAffiliateData(formData);
-  validateOfferPublication(offerData, affiliateData);
-
-  if (!offerId) {
-    throw new Error("Не найден ID оффера");
-  }
-
-  await prisma.offer.update({
-    where: {
-      id: offerId,
-    },
-    data: offerData,
-  });
-
-  if (affiliateData && affiliateOfferId) {
-    await updateAffiliateOffer(affiliateOfferId, affiliateData);
-  } else if (affiliateData) {
-    await createAffiliateOffer(offerId, affiliateData);
-  } else if (affiliateOfferId) {
-    await prisma.affiliateOffer.update({
-      where: {
-        id: affiliateOfferId,
-      },
+    const offer = await prisma.offer.create({
       data: {
-        isActive: false,
+        ...offerData,
       },
     });
-  }
 
-  revalidatePath("/");
-  revalidatePath("/admin");
-  revalidatePath(`/admin/offers/${offerId}`);
-  revalidatePath(`/offers/${offerData.slug}`);
-  redirect(`/admin/offers/${offerId}?saved=1`);
+    if (affiliateData) {
+      await createAffiliateOffer(offer.id, affiliateData);
+    }
+
+    revalidatePath("/");
+    revalidatePath("/admin");
+    redirect(`/admin?section=offers&created=${offerData.slug}`);
+  } catch (error) {
+    if (isRedirectError(error)) {
+      throw error;
+    }
+
+    return toOfferActionState(error);
+  }
+}
+
+export async function updateOffer(
+  _state: OfferActionState,
+  formData: FormData,
+): Promise<OfferActionState> {
+  try {
+    await requireOfferManager();
+
+    const offerId = readString(formData, "offerId");
+    const affiliateOfferId = readOptionalString(formData, "affiliateOfferId");
+    const offerData = await collectOfferData(formData);
+    const affiliateData = collectAffiliateData(formData);
+    validateOfferPublication(offerData, affiliateData);
+
+    if (!offerId) {
+      throw actionError("Не найден ID оффера");
+    }
+
+    await prisma.offer.update({
+      where: {
+        id: offerId,
+      },
+      data: offerData,
+    });
+
+    if (affiliateData && affiliateOfferId) {
+      await updateAffiliateOffer(affiliateOfferId, affiliateData);
+    } else if (affiliateData) {
+      await createAffiliateOffer(offerId, affiliateData);
+    } else if (affiliateOfferId) {
+      await prisma.affiliateOffer.update({
+        where: {
+          id: affiliateOfferId,
+        },
+        data: {
+          isActive: false,
+        },
+      });
+    }
+
+    revalidatePath("/");
+    revalidatePath("/admin");
+    revalidatePath(`/admin/offers/${offerId}`);
+    revalidatePath(`/offers/${offerData.slug}`);
+    redirect(`/admin/offers/${offerId}?saved=1`);
+  } catch (error) {
+    if (isRedirectError(error)) {
+      throw error;
+    }
+
+    return toOfferActionState(error);
+  }
 }
 
 export async function updateOfferDisplayOrder(offerIds: string[]) {

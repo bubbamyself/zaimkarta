@@ -1,9 +1,12 @@
 import { createHash, randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getRussianRegionByCode } from "@/lib/russian-regions";
 
 const LEAD_COOKIE_NAME = "zk_lead_id";
+const REGION_COOKIE_NAME = "zk_region_code";
 const OFFER_FALLBACK_PATH = "/?offer_unavailable=1";
+const REGION_FALLBACK_PATH = "/?offer_unavailable_region=1";
 
 function readSearchParam(request: NextRequest, key: string) {
   const value = request.nextUrl.searchParams.get(key);
@@ -21,8 +24,8 @@ function hashIp(value: string | null) {
     .digest("hex");
 }
 
-function getFallbackResponse(request: NextRequest) {
-  return NextResponse.redirect(new URL(OFFER_FALLBACK_PATH, request.url), 302);
+function getFallbackResponse(request: NextRequest, path = OFFER_FALLBACK_PATH) {
+  return NextResponse.redirect(new URL(path, request.url), 302);
 }
 
 function buildRedirectUrl({
@@ -83,9 +86,19 @@ export async function redirectToAffiliateOffer({
   });
 
   const affiliateOffer = offer?.affiliateOffers.at(0);
+  const selectedRegionCode = getRussianRegionByCode(
+    request.cookies.get(REGION_COOKIE_NAME)?.value,
+  )?.code;
 
   if (!offer || !affiliateOffer) {
     return getFallbackResponse(request);
+  }
+
+  if (
+    selectedRegionCode &&
+    offer.restrictedRegionCodes.includes(selectedRegionCode)
+  ) {
+    return getFallbackResponse(request, REGION_FALLBACK_PATH);
   }
 
   const publicLeadId =

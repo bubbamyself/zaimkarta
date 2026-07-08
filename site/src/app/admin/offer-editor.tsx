@@ -1,6 +1,8 @@
 import type { AffiliateOffer, Offer } from "@prisma/client";
 import { createOffer, updateOffer } from "./offer-actions";
+import { OfferFormShell } from "./offer-form-shell";
 import { LogoFileField } from "./logo-file-field";
+import { RegionRestrictionsField } from "./region-restrictions-field";
 
 export type OfferWithAffiliate = Offer & {
   affiliateOffers: AffiliateOffer[];
@@ -43,11 +45,11 @@ function getPublicationChecklist(
   affiliateOffer: AffiliateOffer | undefined,
 ) {
   return [
-    ["Название МФО", offer?.brandName],
+    ["Название кредитора", offer?.brandName],
     ["Slug", offer?.slug],
     ["Юр. название", offer?.legalName],
     ["Лого-текст", offer?.logoText],
-    ["Логотип МФО", offer?.logoUrl],
+    ["Логотип кредитора", offer?.logoUrl],
     ["Официальный сайт", offer?.officialSite],
     ["Короткое описание", offer?.shortDescription],
     ["Бейдж", offer?.badge],
@@ -151,6 +153,99 @@ function TextArea({
   );
 }
 
+const PAYOUT_METHOD_OPTIONS = [
+  { value: "онлайн", label: "Онлайн" },
+  { value: "карта", label: "На карту" },
+  { value: "сбп", label: "СБП" },
+  { value: "наличные", label: "Наличные" },
+  { value: "банковский счет", label: "Банковский счет" },
+  { value: "электронный кошелек", label: "Электронный кошелек" },
+];
+
+const REPAYMENT_METHOD_OPTIONS = [
+  { value: "карта", label: "Банковская карта" },
+  { value: "сбп", label: "СБП" },
+  { value: "перевод", label: "Банковский перевод" },
+  { value: "наличные", label: "Наличные" },
+  { value: "личный кабинет", label: "Личный кабинет" },
+  { value: "терминал", label: "Терминал" },
+];
+
+const REQUIREMENT_OPTIONS = [
+  { value: "гражданство РФ", label: "Гражданство РФ" },
+  { value: "возраст от 18 лет", label: "Возраст от 18 лет" },
+  { value: "именная банковская карта", label: "Именная банковская карта" },
+  { value: "постоянная регистрация", label: "Постоянная регистрация" },
+  { value: "мобильный телефон", label: "Мобильный телефон" },
+  { value: "доход или источник погашения", label: "Доход или источник погашения" },
+];
+
+const DOCUMENT_OPTIONS = [
+  { value: "паспорт РФ", label: "Паспорт РФ" },
+  { value: "СНИЛС", label: "СНИЛС" },
+  { value: "ИНН", label: "ИНН" },
+  { value: "банковская карта", label: "Банковская карта" },
+  { value: "селфи с паспортом", label: "Селфи с паспортом" },
+  { value: "справка о доходах", label: "Справка о доходах" },
+  { value: "документ на залог", label: "Документ на залог" },
+];
+
+function withSelectedOptions(
+  options: { value: string; label: string }[],
+  selected: string[],
+) {
+  const optionValues = new Set(options.map((option) => option.value));
+  const extraOptions = selected
+    .filter((value) => !optionValues.has(value))
+    .map((value) => ({
+      value,
+      label: `Текущее значение: ${value}`,
+    }));
+
+  return [...options, ...extraOptions];
+}
+
+function CheckboxGroup({
+  label,
+  name,
+  defaultValue,
+  options,
+  hint,
+}: {
+  label: string;
+  name: string;
+  defaultValue?: string[] | null;
+  options: { value: string; label: string }[];
+  hint?: string;
+}) {
+  const selected = new Set(defaultValue ?? []);
+  const allOptions = withSelectedOptions(options, defaultValue ?? []);
+
+  return (
+    <fieldset className="grid content-start gap-2 rounded-lg border border-slate-200 bg-white p-3">
+      <legend className="px-1 text-sm font-medium text-slate-700">{label}</legend>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {allOptions.map((option) => (
+          <label
+            key={option.value}
+            className="flex min-h-9 items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700"
+          >
+            <input
+              type="checkbox"
+              name={name}
+              value={option.value}
+              defaultChecked={selected.has(option.value)}
+              className="h-4 w-4 rounded border-slate-300"
+            />
+            {option.label}
+          </label>
+        ))}
+      </div>
+      {hint ? <p className="text-xs leading-5 text-slate-500">{hint}</p> : null}
+    </fieldset>
+  );
+}
+
 function SelectField({
   label,
   name,
@@ -193,9 +288,9 @@ export function OfferEditor({ offer }: { offer?: OfferWithAffiliate }) {
   const missingItems = publicationChecklist.filter((item) => !item.ready);
 
   return (
-    <form
+    <OfferFormShell
       action={isEdit ? updateOffer : createOffer}
-      className="grid gap-6 rounded-lg border border-slate-200 bg-slate-50 p-4"
+      submitLabel={isEdit ? "Сохранить оффер" : "Создать оффер"}
     >
       {offer ? <input type="hidden" name="offerId" value={offer.id} /> : null}
       {affiliateOffer ? (
@@ -248,7 +343,7 @@ export function OfferEditor({ offer }: { offer?: OfferWithAffiliate }) {
       </details>
 
       <div className="grid gap-4 md:grid-cols-3">
-        <Field label="Название МФО" name="brandName" defaultValue={offer?.brandName} required />
+        <Field label="Название кредитора" name="brandName" defaultValue={offer?.brandName} required />
         <Field
           label="Slug"
           name="slug"
@@ -274,7 +369,7 @@ export function OfferEditor({ offer }: { offer?: OfferWithAffiliate }) {
         <Field label="Официальный сайт" name="officialSite" defaultValue={offer?.officialSite} />
         <Field label="Лого-текст" name="logoText" defaultValue={offer?.logoText} />
         <LogoFileField
-          label="Логотип МФО"
+          label="Логотип кредитора"
           name="logoFile"
           currentUrl={offer?.logoUrl}
           hint="Только SVG. Лучше использовать прозрачный или белый фон."
@@ -316,10 +411,33 @@ export function OfferEditor({ offer }: { offer?: OfferWithAffiliate }) {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <TextArea label="Способы получения" name="payoutMethods" defaultValue={offer?.payoutMethods} />
-        <TextArea label="Способы погашения" name="repaymentMethods" defaultValue={offer?.repaymentMethods} />
-        <TextArea label="Требования" name="requirements" defaultValue={offer?.requirements} />
-        <TextArea label="Документы" name="documents" defaultValue={offer?.documents} />
+        <CheckboxGroup
+          label="Способы получения"
+          name="payoutMethods"
+          defaultValue={offer?.payoutMethods}
+          options={PAYOUT_METHOD_OPTIONS}
+          hint="Используется в фильтрах и SEO-инструментах."
+        />
+        <CheckboxGroup
+          label="Способы погашения"
+          name="repaymentMethods"
+          defaultValue={offer?.repaymentMethods}
+          options={REPAYMENT_METHOD_OPTIONS}
+        />
+        <CheckboxGroup
+          label="Требования"
+          name="requirements"
+          defaultValue={offer?.requirements}
+          options={REQUIREMENT_OPTIONS}
+          hint="Выбирай стандартные признаки, чтобы фильтры работали предсказуемо."
+        />
+        <CheckboxGroup
+          label="Документы"
+          name="documents"
+          defaultValue={offer?.documents}
+          options={DOCUMENT_OPTIONS}
+          hint="Поле участвует в чек-листе перед заявкой."
+        />
         <TextArea label="Плюсы/теги" name="advantages" defaultValue={offer?.advantages} />
         <TextArea label="Предупреждения" name="warnings" defaultValue={offer?.warnings} />
       </div>
@@ -382,9 +500,11 @@ export function OfferEditor({ offer }: { offer?: OfferWithAffiliate }) {
         </details>
       </div>
 
-      <button className="w-fit rounded-md bg-emerald-700 px-5 py-3 text-sm font-semibold text-white hover:bg-emerald-800">
-        {isEdit ? "Сохранить оффер" : "Создать оффер"}
-      </button>
-    </form>
+      <RegionRestrictionsField
+        name="restrictedRegionCodes"
+        defaultValue={offer?.restrictedRegionCodes}
+      />
+
+    </OfferFormShell>
   );
 }

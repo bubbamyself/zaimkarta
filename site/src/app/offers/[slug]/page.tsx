@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { getOfferDetails } from "@/lib/offers";
+import { getSelectedRegionCode } from "@/lib/region-cookie";
+import { getAbsoluteUrl } from "@/lib/site-url";
 
 type OfferPageProps = {
   params: Promise<{
@@ -23,6 +25,9 @@ export async function generateMetadata({
   return {
     title: `${offer.name}: условия займа, сумма, срок и ставка — ZaimKarta`,
     description: `Подробные условия ${offer.name}: ${offer.amount}, срок ${offer.term}, ставка ${offer.rate}, рассмотрение ${offer.decisionTime}.`,
+    alternates: {
+      canonical: getAbsoluteUrl(`/offers/${slug}`),
+    },
   };
 }
 
@@ -63,7 +68,8 @@ function TextList({ title, items }: { title: string; items: string[] }) {
 
 export default async function OfferPage({ params }: OfferPageProps) {
   const { slug } = await params;
-  const offer = await getOfferDetails(slug);
+  const selectedRegionCode = await getSelectedRegionCode();
+  const offer = await getOfferDetails(slug, selectedRegionCode);
 
   if (!offer) {
     notFound();
@@ -115,7 +121,7 @@ export default async function OfferPage({ params }: OfferPageProps) {
               Переход к заявке
             </p>
             <p className="mt-3 text-sm leading-6 text-slate-600">
-              Кнопка ниже откроет страницу заявки на сайте МФО.
+              Кнопка ниже откроет страницу заявки на сайте партнера.
             </p>
             <a
               href={`/go/${offer.slug}?page_type=offer&position=1`}
@@ -151,7 +157,7 @@ export default async function OfferPage({ params }: OfferPageProps) {
               Оценивайте свои финансовые возможности и риски
             </h2>
             <p className="mt-4 leading-7 text-slate-700">
-              Решение о выдаче займа принимает МФО. Просрочка может привести к
+              Решение о выдаче займа принимает кредитор. Просрочка может привести к
               начислению процентов, штрафов и ухудшению кредитной истории.
               Перед оформлением внимательно изучите договор и полную стоимость
               займа.

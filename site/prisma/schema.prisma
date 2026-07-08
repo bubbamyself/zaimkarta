@@ -31,6 +31,47 @@ enum AdminRole {
   ADMIN
 }
 
+enum SeoPageStatus {
+  DRAFT
+  PUBLISHED
+  PAUSED
+  ARCHIVED
+}
+
+enum SeoPageType {
+  CATEGORY
+  ARTICLE
+  SERVICE
+}
+
+enum SeoToolStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+
+enum SeoToolType {
+  OVERPAYMENT_CALCULATOR
+  APPLICATION_CHECKLIST
+  MINI_OFFER_PICKER
+  LOAN_TYPE_QUIZ
+  COMPARISON
+}
+
+enum SeoToolVariant {
+  FULL
+  COMPACT
+  INLINE
+}
+
+enum SeoPageIntent {
+  COMMERCIAL
+  INFORMATIONAL
+  SERVICE
+  MIXED
+}
+
 model Offer {
   id              String            @id @default(cuid())
   slug            String            @unique
@@ -63,6 +104,7 @@ model Offer {
   warnings        String[]          @default([])
   legalDisclosure String?
   displayPriority Int               @default(100)
+  restrictedRegionCodes String[]     @default([])
   conditionsCheckedAt DateTime?
   updatedByUserAt DateTime?
   createdAt       DateTime          @default(now())
@@ -70,6 +112,7 @@ model Offer {
 
   affiliateOffers AffiliateOffer[]
   offerClicks     OfferClick[]
+  seoPageOffers   SeoPageOffer[]
 }
 
 model AffiliateOffer {
@@ -160,4 +203,106 @@ model AdminUser {
 
   @@index([role])
   @@index([isActive])
+}
+
+model SeoPage {
+  id              String           @id @default(cuid())
+  slug            String           @unique
+  status          SeoPageStatus    @default(DRAFT)
+  pageType        SeoPageType      @default(CATEGORY)
+  intent          SeoPageIntent?
+  title           String
+  description     String
+  h1              String
+  intro           String?
+  content         String?
+  contentBlocks   Json?
+  riskNotice      String?
+  editorNote      String?
+  displayPriority Int              @default(100)
+  publishedAt     DateTime?
+  updatedByUserAt DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  offers          SeoPageOffer[]
+  faqItems        SeoPageFaqItem[]
+  tools           SeoPageTool[]
+
+  @@index([status])
+  @@index([pageType])
+}
+
+model SeoPageOffer {
+  id        String   @id @default(cuid())
+  seoPageId String
+  offerId   String
+  position  Int      @default(100)
+  badge     String?
+  note      String?
+  ctaText   String?
+  highlight Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  seoPage   SeoPage  @relation(fields: [seoPageId], references: [id], onDelete: Cascade)
+  offer     Offer    @relation(fields: [offerId], references: [id], onDelete: Cascade)
+
+  @@unique([seoPageId, offerId])
+  @@index([seoPageId, position])
+  @@index([offerId])
+}
+
+model SeoPageFaqItem {
+  id        String   @id @default(cuid())
+  seoPageId String
+  question  String
+  answer    String
+  position  Int      @default(100)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  seoPage   SeoPage  @relation(fields: [seoPageId], references: [id], onDelete: Cascade)
+
+  @@index([seoPageId, position])
+}
+
+model SeoTool {
+  id           String        @id @default(cuid())
+  slug         String        @unique
+  type         SeoToolType
+  status       SeoToolStatus @default(DRAFT)
+  name         String
+  title        String
+  description  String?
+  config       Json
+  defaultBlock Json?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  pageTools    SeoPageTool[]
+
+  @@index([type])
+  @@index([status])
+}
+
+model SeoPageTool {
+  id        String         @id @default(cuid())
+  pageId    String
+  toolId    String
+  position  Int            @default(100)
+  blockId   String?
+  variant   SeoToolVariant @default(FULL)
+  title     String?
+  intro     String?
+  config    Json?
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  page      SeoPage        @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  tool      SeoTool        @relation(fields: [toolId], references: [id], onDelete: Restrict)
+
+  @@index([pageId, position])
+  @@index([toolId])
+  @@unique([pageId, blockId])
 }

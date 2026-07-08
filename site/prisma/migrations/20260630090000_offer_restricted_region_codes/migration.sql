@@ -1,0 +1,1 @@
+ALTER TABLE "Offer" ADD COLUMN "restrictedRegionCodes" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];

@@ -16,6 +16,7 @@ export type OfferOrderRow = {
   displayPriority: number;
   amountLabel: string;
   conditionsCheckedAtLabel: string;
+  restrictedRegionCodes: string[];
   clicks: number;
 };
 
@@ -89,6 +90,7 @@ export function OfferOrderTable({
             <th className="px-5 py-3 font-semibold">Статус</th>
             <th className="px-5 py-3 font-semibold">Приоритет</th>
             <th className="px-5 py-3 font-semibold">Сумма</th>
+            <th className="px-5 py-3 font-semibold">Регионы</th>
             <th className="px-5 py-3 font-semibold">Проверено</th>
             <th className="px-5 py-3 font-semibold">Клики</th>
             <th className="px-5 py-3 font-semibold">Страница</th>
@@ -155,6 +157,11 @@ export function OfferOrderTable({
                   {isPending ? "сохраняю" : index + 1}
                 </td>
                 <td className="px-5 py-4 text-slate-700">{offer.amountLabel}</td>
+                <td className="px-5 py-4 text-slate-700">
+                  {offer.restrictedRegionCodes.length > 0
+                    ? `Стоп-регионы: ${offer.restrictedRegionCodes.join(", ")}`
+                    : "без ограничений"}
+                </td>
                 <td className="px-5 py-4 text-slate-700">
                   {offer.conditionsCheckedAtLabel}
                 </td>
