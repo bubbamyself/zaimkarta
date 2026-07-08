@@ -91,11 +91,19 @@ export function RegionRegistrationControl() {
 
       {isOpen ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 px-4 py-6">
-          <section className="max-h-[90vh] w-full max-w-xl overflow-hidden rounded-lg bg-white shadow-xl">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="region-registration-title"
+            className="max-h-[90vh] w-full max-w-xl overflow-hidden rounded-lg bg-white shadow-xl"
+          >
             <div className="border-b border-slate-200 p-5">
-              <h2 className="text-xl font-bold text-slate-950">
+              <p
+                id="region-registration-title"
+                className="text-xl font-bold text-slate-950"
+              >
                 Регион регистрации
-              </h2>
+              </p>
               <p className="mt-3 text-sm leading-6 text-slate-600">
                 Здравствуйте! Выберите регион вашей регистрации — так мы покажем
                 предложения, которые с большей вероятностью подходят вам по
