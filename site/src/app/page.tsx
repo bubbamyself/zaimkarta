@@ -73,9 +73,6 @@ export default async function Home() {
       <section className="border-b border-slate-200 bg-white">
         <div className="mx-auto grid max-w-6xl gap-10 px-5 py-10 md:grid-cols-[1.1fr_0.9fr] md:py-14">
           <div className="flex flex-col justify-center">
-            <p className="mb-4 text-sm font-semibold uppercase text-emerald-700">
-              zaimkarta.ru
-            </p>
             <h1 className="max-w-3xl text-4xl font-bold leading-tight text-slate-950 md:text-5xl">
               Подбор микрозаймов на карту онлайн
             </h1>

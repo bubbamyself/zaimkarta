@@ -4,6 +4,7 @@ import type { AdminRole } from "@prisma/client";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { verifyPassword } from "@/lib/password";
+import { getProductionSecret } from "@/lib/production-secret";
 
 const ADMIN_COOKIE_NAME = "zk_admin_session";
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 12;
@@ -21,7 +22,10 @@ type SessionPayload = {
 };
 
 function getSessionSecret() {
-  return process.env.ADMIN_SESSION_SECRET;
+  return getProductionSecret({
+    name: "ADMIN_SESSION_SECRET",
+    value: process.env.ADMIN_SESSION_SECRET,
+  });
 }
 
 function encodePayload(payload: SessionPayload) {

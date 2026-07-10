@@ -12,5 +12,8 @@ export async function GET(request: NextRequest, context: ClickRouteContext) {
 
   goUrl.search = request.nextUrl.search;
 
-  return NextResponse.redirect(goUrl, 302);
+  const response = NextResponse.redirect(goUrl, 302);
+  response.headers.set("X-Robots-Tag", "noindex, nofollow");
+
+  return response;
 }

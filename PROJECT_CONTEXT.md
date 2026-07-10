@@ -1,6 +1,6 @@
 # ZaimKarta — накопительная память проекта
 
-Обновлено: 2026-05-29
+Обновлено: 2026-07-11
 
 Этот файл нужен как долговременная память проекта. Его нужно открывать в начале нового диалога с Codex, чтобы восстановить контекст без пересказа всей истории.
 
@@ -546,7 +546,128 @@ MVP реализован:
 docs/region-registration-offer-filter.md
 ```
 
-## 15. Текущие важные документы
+## 15. Безопасность перед production
+
+Перед первым production-запуском ZaimKarta безопасность ведется как отдельный управленческий поток.
+
+Цель:
+
+- не строить идеальную корпоративную безопасность;
+- закрыть очевидные риски перед выпуском сайта в интернет;
+- защитить админку, CPA-переходы, базу, загрузки логотипов, секреты, VPS, бэкапы и мониторинг;
+- делать изменения поэтапно, чтобы не утонуть в инфраструктурном болоте.
+
+Главный документ:
+
+```text
+docs/prod-security-mvp-checklist.md
+```
+
+В нем зафиксированы:
+
+- краткий вердикт по готовности к запуску;
+- обязательный MVP-набор мер;
+- что можно отложить;
+- checklist перед релизом;
+- checklist настройки VPS;
+- защита приложения;
+- защита админки;
+- защита `/go/[slug]`;
+- защита загрузки логотипов;
+- минимальный план DDoS/бот-защиты;
+- бэкапы;
+- мониторинг;
+- аварийная реакция;
+- задачи до релиза, после релиза и при появлении трафика.
+
+Кодовые security-правки уже начаты:
+
+- добавлен простой rate limit helper;
+- добавлен rate limit на `/admin/login`;
+- добавлен rate limit на `/go/[slug]`;
+- `/go/[slug]` начал отсекать явных ботов/crawlers;
+- `/go`, `/api`, `/admin` закрыты от индексации через `X-Robots-Tag`;
+- добавлен `robots.txt`, запрещающий `/admin/`, `/api/`, `/go/`;
+- добавлены базовые security headers в `next.config.ts`;
+- добавлена обязательность `LEAD_IP_HASH_SALT`;
+- добавлена проверка production-секретов;
+- `.env.example` дополнен `LEAD_IP_HASH_SALT`.
+
+Затронутые файлы:
+
+```text
+site/src/lib/rate-limit.ts
+site/src/lib/production-secret.ts
+site/src/lib/cpa-click.ts
+site/src/lib/admin-auth.ts
+site/src/app/admin/login/actions.ts
+site/src/app/api/offers/[slug]/click/route.ts
+site/src/app/robots.ts
+site/next.config.ts
+site/.env.example
+docs/prod-security-mvp-checklist.md
+```
+
+Секреты проекта:
+
+- `ADMIN_SESSION_SECRET`;
+- `LEAD_IP_HASH_SALT`;
+- `POSTGRES_PASSWORD`;
+- пароль администратора.
+
+Решение по MVP:
+
+- не делать автоматическую ротацию секретов сейчас;
+- сгенерировать длинные уникальные значения;
+- хранить их в менеджере паролей;
+- не класть реальные секреты в GitHub;
+- менять вручную при подозрении на утечку, смене подрядчика, взломе или переезде.
+
+2FA для админки:
+
+- полезна и желательна;
+- не первый шаг;
+- сначала закрывается базовая защита;
+- затем отдельным этапом можно добавить TOTP через Google Authenticator, Яндекс Ключ, 1Password или Bitwarden.
+
+Принятый порядок security-работ:
+
+1. Production env и секреты.
+2. Базовая защита админки.
+3. Защита `/go/[slug]`.
+4. 2FA для админки.
+5. Загрузка логотипов.
+6. VPS-защита.
+7. Бэкапы.
+8. Мониторинг и аварийная реакция.
+
+Следующий рекомендуемый отдельный рабочий диалог:
+
+```text
+Этап 1: production env и секреты ZaimKarta
+```
+
+Задачи для него:
+
+- подготовить безопасный `production.env.example`;
+- проверить `.gitignore`;
+- описать владельцу, какие значения сгенерировать;
+- не записывать реальные секреты в репозиторий;
+- проверить сборку с тестовыми production-переменными.
+
+Проверки, которые уже использовались:
+
+```bash
+cd site
+npm run lint
+NEXT_PUBLIC_SITE_URL=https://zaimkarta.ru ADMIN_SESSION_SECRET=local-build-admin-secret-1234567890abcdef LEAD_IP_HASH_SALT=local-build-ip-hash-salt-1234567890abcdef npm run build
+```
+
+Локально можно проверять кодовую часть безопасности: секреты, вход в админку, rate limit, `/robots.txt`, headers/noindex, `/go/[slug]`, загрузку логотипов, Prisma/PostgreSQL, миграции и production build.
+
+Только на VPS полноценно проверяются HTTPS, firewall, fail2ban, закрытие портов, DNS, DDoS-защита провайдера, внешние uptime-алерты и бэкапы вне сервера.
+
+## 16. Текущие важные документы
 
 Общие:
 
@@ -558,6 +679,7 @@ docs/region-registration-offer-filter.md
 - `PROJECT_CONTEXT.md` — текущая накопительная память.
 - `docs/region-registration-offer-filter.md` — ТЗ на фильтр офферов по региону регистрации.
 - `docs/zaimkarta-external-ai-brief.md` — полный бриф проекта для внешней критики.
+- `docs/prod-security-mvp-checklist.md` — MVP-чеклист безопасности перед production.
 
 SEO tools:
 
@@ -571,7 +693,7 @@ SEO tools:
 - `Редактор для SEO-страниц-2.docx`;
 - `Интерактивные инструменты для SEO-2.docx`.
 
-## 16. Как обновлять этот файл
+## 17. Как обновлять этот файл
 
 Этот файл нужно обновлять после каждого смыслового решения:
 
@@ -596,7 +718,7 @@ SEO tools:
 
 Не нужно записывать сюда каждую мелкую правку CSS. Нужно записывать то, что помогает восстановить мышление проекта.
 
-## 17. Как начинать новый диалог
+## 18. Как начинать новый диалог
 
 Лучший старт:
 
@@ -632,4 +754,10 @@ SEO tools:
 
 ```text
 Открой docs/region-registration-offer-filter.md, PROJECT_CONTEXT.md, site/prisma/schema.prisma, site/src/lib/offers.ts, site/src/lib/cpa-click.ts и редактор оффера в админке.
+```
+
+Если задача про безопасность перед production:
+
+```text
+Открой PROJECT_CONTEXT.md, docs/prod-security-mvp-checklist.md, docs/production-launch-checklist.md, zaimkarta-prod-infra-security-research.md, site/src/lib/cpa-click.ts, site/src/lib/admin-auth.ts, site/src/app/admin/login/actions.ts и site/next.config.ts.
 ```

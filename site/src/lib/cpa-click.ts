@@ -1,16 +1,30 @@
 import { createHash, randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getProductionSecret } from "@/lib/production-secret";
+import { checkRateLimit } from "@/lib/rate-limit";
 import { getRussianRegionByCode } from "@/lib/russian-regions";
 
 const LEAD_COOKIE_NAME = "zk_lead_id";
 const REGION_COOKIE_NAME = "zk_region_code";
 const OFFER_FALLBACK_PATH = "/?offer_unavailable=1";
 const REGION_FALLBACK_PATH = "/?offer_unavailable_region=1";
+const NOINDEX_HEADER_VALUE = "noindex, nofollow";
+
+const BOT_USER_AGENT_PATTERN =
+  /bot|crawler|spider|slurp|bingpreview|facebookexternalhit|vkshare|telegrambot|whatsapp|preview|parser/i;
 
 function readSearchParam(request: NextRequest, key: string) {
   const value = request.nextUrl.searchParams.get(key);
   return value && value.trim().length > 0 ? value.trim() : null;
+}
+
+function getLeadIpHashSalt() {
+  return getProductionSecret({
+    name: "LEAD_IP_HASH_SALT",
+    value: process.env.LEAD_IP_HASH_SALT,
+    localFallback: "zaimkarta-local",
+  });
 }
 
 function hashIp(value: string | null) {
@@ -20,12 +34,36 @@ function hashIp(value: string | null) {
 
   return createHash("sha256")
     .update(value)
-    .update(process.env.LEAD_IP_HASH_SALT ?? "zaimkarta-local")
+    .update(getLeadIpHashSalt())
     .digest("hex");
 }
 
 function getFallbackResponse(request: NextRequest, path = OFFER_FALLBACK_PATH) {
-  return NextResponse.redirect(new URL(path, request.url), 302);
+  const response = NextResponse.redirect(new URL(path, request.url), 302);
+  response.headers.set("X-Robots-Tag", NOINDEX_HEADER_VALUE);
+
+  return response;
+}
+
+function getTooManyRequestsResponse(retryAfterSeconds: number) {
+  return new NextResponse("Too many requests", {
+    status: 429,
+    headers: {
+      "Retry-After": String(retryAfterSeconds),
+      "X-Robots-Tag": NOINDEX_HEADER_VALUE,
+    },
+  });
+}
+
+function getClientIp(request: NextRequest) {
+  const forwardedFor = request.headers.get("x-forwarded-for");
+  const realIp = request.headers.get("x-real-ip");
+
+  return forwardedFor?.split(",").at(0)?.trim() || realIp?.trim() || null;
+}
+
+function isKnownBot(userAgent: string | null) {
+  return !userAgent || BOT_USER_AGENT_PATTERN.test(userAgent);
 }
 
 function buildRedirectUrl({
@@ -67,6 +105,27 @@ export async function redirectToAffiliateOffer({
   request: NextRequest;
   slug: string;
 }) {
+  const userAgent = request.headers.get("user-agent");
+  const clientIp = getClientIp(request);
+  getLeadIpHashSalt();
+  const ipHash = hashIp(clientIp);
+  const publicLeadId =
+    request.cookies.get(LEAD_COOKIE_NAME)?.value?.trim() || randomUUID();
+
+  if (isKnownBot(userAgent)) {
+    return getFallbackResponse(request);
+  }
+
+  const rateLimit = checkRateLimit({
+    key: `go:${slug}:${ipHash ?? publicLeadId}`,
+    limit: 30,
+    windowMs: 60 * 1000,
+  });
+
+  if (!rateLimit.allowed) {
+    return getTooManyRequestsResponse(rateLimit.retryAfterSeconds);
+  }
+
   const offer = await prisma.offer.findFirst({
     where: {
       slug,
@@ -101,8 +160,6 @@ export async function redirectToAffiliateOffer({
     return getFallbackResponse(request, REGION_FALLBACK_PATH);
   }
 
-  const publicLeadId =
-    request.cookies.get(LEAD_COOKIE_NAME)?.value?.trim() || randomUUID();
   const clickId = randomUUID();
   const redirectUrl = buildRedirectUrl({
     trackingBaseUrl: affiliateOffer.trackingBaseUrl,
@@ -121,9 +178,6 @@ export async function redirectToAffiliateOffer({
   const cardPositionValue = readSearchParam(request, "position");
   const cardPosition = cardPositionValue ? Number(cardPositionValue) : null;
   const referrer = request.headers.get("referer");
-  const userAgent = request.headers.get("user-agent");
-  const forwardedFor = request.headers.get("x-forwarded-for");
-  const ipHash = hashIp(forwardedFor?.split(",").at(0)?.trim() ?? null);
   const landingPageUrl = pageUrl ?? referrer;
   const leadTrackingData = {
     landingPageUrl,
@@ -166,6 +220,7 @@ export async function redirectToAffiliateOffer({
   });
 
   const response = NextResponse.redirect(redirectUrl, 302);
+  response.headers.set("X-Robots-Tag", NOINDEX_HEADER_VALUE);
   response.cookies.set(LEAD_COOKIE_NAME, publicLeadId, {
     httpOnly: true,
     sameSite: "lax",
