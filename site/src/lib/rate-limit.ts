@@ -48,3 +48,7 @@ export function checkRateLimit({ key, limit, windowMs }: RateLimitOptions) {
     retryAfterSeconds: Math.max(1, Math.ceil((bucket.resetAt - now) / 1000)),
   };
 }
+
+export function resetRateLimit(key: string) {
+  buckets.delete(key);
+}

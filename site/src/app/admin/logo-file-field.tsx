@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 
+const MAX_LOGO_BYTES = 400 * 1024;
+
 type LogoFileFieldProps = {
   label: string;
   name: string;
@@ -11,6 +13,11 @@ type LogoFileFieldProps = {
 
 function validateSvgFile(file: File) {
   return new Promise<string | null>((resolve) => {
+    if (file.size > MAX_LOGO_BYTES) {
+      resolve("Файл слишком большой. Максимум — 400 КБ");
+      return;
+    }
+
     if (file.type !== "image/svg+xml") {
       resolve("Загрузите логотип в формате SVG");
       return;
@@ -26,8 +33,15 @@ function validateSvgFile(file: File) {
         return;
       }
 
-      if (/<script|on\w+=|javascript:/i.test(svg)) {
-        resolve("SVG не должен содержать скрипты или inline-обработчики");
+      if (
+        /<\s*script\b|\son[a-z]+\s*=|javascript\s*:|<\s*foreignObject\b|<\s*!DOCTYPE\b|<\s*!ENTITY\b/i.test(
+          svg,
+        ) ||
+        /https?:\/\/|(?:href|src)\s*=\s*["']?\s*\/\/|data\s*:\s*text\/html|&#(?:x[0-9a-f]+|\d+);?/i.test(
+          svg,
+        )
+      ) {
+        resolve("SVG содержит небезопасные элементы или внешние ссылки");
         return;
       }
 

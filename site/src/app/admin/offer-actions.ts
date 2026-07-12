@@ -13,6 +13,8 @@ import { normalizeRegionCodes } from "@/lib/russian-regions";
 const LOGO_UPLOAD_DIR = path.join(process.cwd(), "public", "uploads", "logos");
 const LOGO_PUBLIC_PATH = "/uploads/logos";
 const MAX_LOGO_BYTES = 400 * 1024;
+const SAFE_LOGO_PATH_PATTERN =
+  /^\/uploads\/logos\/[a-z0-9]+(?:-[a-z0-9]+)*-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.svg$/;
 const OFFER_STATUSES: OfferStatus[] = ["DRAFT", "ACTIVE", "PAUSED", "ARCHIVED"];
 const APPROVAL_TONES: ApprovalTone[] = ["LOW", "MEDIUM", "HIGH"];
 
@@ -172,28 +174,59 @@ function validateHttpsUrl(value: string | null, label: string) {
 function validateSvgLogo(buffer: Buffer) {
   const svg = buffer.toString("utf8");
 
-  if (!/<svg[\s>]/i.test(svg)) {
-    throw new Error("Файл логотипа должен быть корректным SVG");
+  if (svg.includes("\uFFFD") || !/<svg[\s>]/i.test(svg)) {
+    throw actionError("Файл логотипа должен быть корректным SVG в кодировке UTF-8");
   }
 
-  if (/<script|on\w+=|javascript:/i.test(svg)) {
-    throw new Error("SVG не должен содержать скрипты или inline-обработчики");
+  const forbiddenSvgContent = [
+    /<\s*script\b/i,
+    /\son[a-z]+\s*=/i,
+    /javascript\s*:/i,
+    /<\s*foreignObject\b/i,
+    /<\s*!DOCTYPE\b/i,
+    /<\s*!ENTITY\b/i,
+    /https?:\/\//i,
+    /(?:href|src)\s*=\s*["']?\s*\/\//i,
+    /data\s*:\s*text\/html/i,
+    /&#(?:x[0-9a-f]+|\d+);?/i,
+  ];
+
+  if (forbiddenSvgContent.some((pattern) => pattern.test(svg))) {
+    throw actionError(
+      "SVG содержит небезопасные скрипты, обработчики или внешние ссылки",
+    );
   }
+}
+
+function readSafeCurrentLogoPath(formData: FormData) {
+  const currentLogoUrl = readOptionalString(formData, "currentLogoUrl");
+
+  if (!currentLogoUrl) {
+    return null;
+  }
+
+  if (!SAFE_LOGO_PATH_PATTERN.test(currentLogoUrl)) {
+    throw actionError(
+      "Текущий логотип имеет недопустимый путь. Загрузите логотип заново",
+    );
+  }
+
+  return currentLogoUrl;
 }
 
 async function saveLogoUpload(formData: FormData, slug: string) {
   const file = formData.get("logoFile");
 
   if (!(file instanceof File) || file.size === 0) {
-    return readOptionalString(formData, "currentLogoUrl");
+    return readSafeCurrentLogoPath(formData);
   }
 
   if (file.type !== "image/svg+xml") {
-    throw new Error("Логотип должен быть в формате SVG");
+    throw actionError("Логотип должен быть SVG-файлом типа image/svg+xml");
   }
 
   if (file.size > MAX_LOGO_BYTES) {
-    throw new Error("Файл логотипа слишком большой. Достаточно до 400 КБ");
+    throw actionError("Файл логотипа слишком большой. Максимум — 400 КБ");
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
@@ -205,7 +238,13 @@ async function saveLogoUpload(formData: FormData, slug: string) {
 
   const safeSlug = slug.replace(/[^a-z0-9-]/g, "");
   const fileName = `${safeSlug}-${randomUUID()}.svg`;
-  await writeFile(path.join(LOGO_UPLOAD_DIR, fileName), buffer);
+  const filePath = path.resolve(LOGO_UPLOAD_DIR, fileName);
+
+  if (!filePath.startsWith(`${path.resolve(LOGO_UPLOAD_DIR)}${path.sep}`)) {
+    throw actionError("Не удалось безопасно определить путь для логотипа");
+  }
+
+  await writeFile(filePath, buffer, { flag: "wx" });
 
   return `${LOGO_PUBLIC_PATH}/${fileName}`;
 }

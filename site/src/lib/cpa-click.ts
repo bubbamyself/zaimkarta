@@ -10,9 +10,14 @@ const REGION_COOKIE_NAME = "zk_region_code";
 const OFFER_FALLBACK_PATH = "/?offer_unavailable=1";
 const REGION_FALLBACK_PATH = "/?offer_unavailable_region=1";
 const NOINDEX_HEADER_VALUE = "noindex, nofollow";
+const GO_RATE_LIMIT_WINDOW_MS = 60 * 1000;
+const GO_IP_RATE_LIMIT = 30;
+const GO_LEAD_RATE_LIMIT = 12;
 
 const BOT_USER_AGENT_PATTERN =
   /bot|crawler|spider|slurp|bingpreview|facebookexternalhit|vkshare|telegrambot|whatsapp|preview|parser/i;
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function readSearchParam(request: NextRequest, key: string) {
   const value = request.nextUrl.searchParams.get(key);
@@ -66,6 +71,32 @@ function isKnownBot(userAgent: string | null) {
   return !userAgent || BOT_USER_AGENT_PATTERN.test(userAgent);
 }
 
+function getPublicLeadId(request: NextRequest) {
+  const cookieLeadId = request.cookies.get(LEAD_COOKIE_NAME)?.value?.trim();
+
+  return cookieLeadId && UUID_PATTERN.test(cookieLeadId)
+    ? cookieLeadId
+    : randomUUID();
+}
+
+function warnBlockedClick(reason: string, slug: string, retryAfterSeconds?: number) {
+  const warningLimit = checkRateLimit({
+    key: `go:warning:${reason}:${slug}`,
+    limit: 1,
+    windowMs: GO_RATE_LIMIT_WINDOW_MS,
+  });
+
+  if (!warningLimit.allowed) {
+    return;
+  }
+
+  console.warn("CPA redirect blocked", {
+    reason,
+    slug,
+    ...(retryAfterSeconds ? { retryAfterSeconds } : {}),
+  });
+}
+
 function buildRedirectUrl({
   trackingBaseUrl,
   leadId,
@@ -109,21 +140,33 @@ export async function redirectToAffiliateOffer({
   const clientIp = getClientIp(request);
   getLeadIpHashSalt();
   const ipHash = hashIp(clientIp);
-  const publicLeadId =
-    request.cookies.get(LEAD_COOKIE_NAME)?.value?.trim() || randomUUID();
+  const publicLeadId = getPublicLeadId(request);
 
   if (isKnownBot(userAgent)) {
+    warnBlockedClick("bot", slug);
     return getFallbackResponse(request);
   }
 
-  const rateLimit = checkRateLimit({
-    key: `go:${slug}:${ipHash ?? publicLeadId}`,
-    limit: 30,
-    windowMs: 60 * 1000,
+  const ipRateLimit = ipHash
+    ? checkRateLimit({
+        key: `go:ip:${slug}:${ipHash}`,
+        limit: GO_IP_RATE_LIMIT,
+        windowMs: GO_RATE_LIMIT_WINDOW_MS,
+      })
+    : { allowed: true, retryAfterSeconds: 0 };
+  const leadRateLimit = checkRateLimit({
+    key: `go:lead:${slug}:${publicLeadId}`,
+    limit: GO_LEAD_RATE_LIMIT,
+    windowMs: GO_RATE_LIMIT_WINDOW_MS,
   });
 
-  if (!rateLimit.allowed) {
-    return getTooManyRequestsResponse(rateLimit.retryAfterSeconds);
+  if (!ipRateLimit.allowed || !leadRateLimit.allowed) {
+    const retryAfterSeconds = Math.max(
+      ipRateLimit.retryAfterSeconds,
+      leadRateLimit.retryAfterSeconds,
+    );
+    warnBlockedClick("rate_limit", slug, retryAfterSeconds);
+    return getTooManyRequestsResponse(retryAfterSeconds);
   }
 
   const offer = await prisma.offer.findFirst({
@@ -150,6 +193,7 @@ export async function redirectToAffiliateOffer({
   )?.code;
 
   if (!offer || !affiliateOffer) {
+    warnBlockedClick("offer_unavailable", slug);
     return getFallbackResponse(request);
   }
 
@@ -157,6 +201,7 @@ export async function redirectToAffiliateOffer({
     selectedRegionCode &&
     offer.restrictedRegionCodes.includes(selectedRegionCode)
   ) {
+    warnBlockedClick("region_restricted", slug);
     return getFallbackResponse(request, REGION_FALLBACK_PATH);
   }
 
@@ -169,6 +214,7 @@ export async function redirectToAffiliateOffer({
   });
 
   if (!redirectUrl) {
+    warnBlockedClick("invalid_cpa_url", slug);
     return getFallbackResponse(request);
   }
 

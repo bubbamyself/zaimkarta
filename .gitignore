@@ -11,4 +11,12 @@ coverage/
 
 .env
 .env.*
+*.env
+*.env.local
+production.env
+site/.env
+site/.env.*
+site/production.env
 !.env.example
+!site/.env.example
+!site/production.env.example
