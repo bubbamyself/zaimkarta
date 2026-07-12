@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getProductionSecret } from "@/lib/production-secret";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getRussianRegionByCode } from "@/lib/russian-regions";
+import { getAbsoluteUrl } from "@/lib/site-url";
 
 const LEAD_COOKIE_NAME = "zk_lead_id";
 const REGION_COOKIE_NAME = "zk_region_code";
@@ -43,8 +44,8 @@ function hashIp(value: string | null) {
     .digest("hex");
 }
 
-function getFallbackResponse(request: NextRequest, path = OFFER_FALLBACK_PATH) {
-  const response = NextResponse.redirect(new URL(path, request.url), 302);
+function getFallbackResponse(path = OFFER_FALLBACK_PATH) {
+  const response = NextResponse.redirect(getAbsoluteUrl(path), 302);
   response.headers.set("X-Robots-Tag", NOINDEX_HEADER_VALUE);
 
   return response;
@@ -144,7 +145,7 @@ export async function redirectToAffiliateOffer({
 
   if (isKnownBot(userAgent)) {
     warnBlockedClick("bot", slug);
-    return getFallbackResponse(request);
+    return getFallbackResponse();
   }
 
   const ipRateLimit = ipHash
@@ -194,7 +195,7 @@ export async function redirectToAffiliateOffer({
 
   if (!offer || !affiliateOffer) {
     warnBlockedClick("offer_unavailable", slug);
-    return getFallbackResponse(request);
+    return getFallbackResponse();
   }
 
   if (
@@ -202,7 +203,7 @@ export async function redirectToAffiliateOffer({
     offer.restrictedRegionCodes.includes(selectedRegionCode)
   ) {
     warnBlockedClick("region_restricted", slug);
-    return getFallbackResponse(request, REGION_FALLBACK_PATH);
+    return getFallbackResponse(REGION_FALLBACK_PATH);
   }
 
   const clickId = randomUUID();
@@ -215,7 +216,7 @@ export async function redirectToAffiliateOffer({
 
   if (!redirectUrl) {
     warnBlockedClick("invalid_cpa_url", slug);
-    return getFallbackResponse(request);
+    return getFallbackResponse();
   }
 
   const pageUrl = readSearchParam(request, "page_url");
