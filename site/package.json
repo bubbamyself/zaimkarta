@@ -10,6 +10,7 @@
     "check": "npm run lint && npm run build",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
+    "db:admin:create": "tsx scripts/create-production-admin.ts",
     "db:seed": "prisma db seed"
   },
   "prisma": {
