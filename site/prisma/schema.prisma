@@ -205,6 +205,12 @@ model AdminUser {
   @@index([isActive])
 }
 
+model SystemSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
 model SeoPage {
   id              String           @id @default(cuid())
   slug            String           @unique

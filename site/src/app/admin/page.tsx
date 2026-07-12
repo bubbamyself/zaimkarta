@@ -9,6 +9,7 @@ import {
   updateAdminUser,
 } from "./admin-users-actions";
 import { logoutAdmin } from "./logout-action";
+import { MaintenanceToggle } from "./maintenance-toggle";
 import { OfferEditor } from "./offer-editor";
 import { OfferOrderTable, type OfferOrderRow } from "./offer-order-table";
 import { SeoPageEditor } from "./seo-page-editor";
@@ -18,6 +19,7 @@ import {
 } from "./seo-page-order-table";
 import { SeoToolEditor } from "./seo-tool-editor";
 import { getAdminSession } from "@/lib/admin-auth";
+import { isMaintenanceModeEnabled } from "@/lib/maintenance-mode";
 import { prisma } from "@/lib/prisma";
 
 export const metadata: Metadata = {
@@ -403,6 +405,9 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     resolvedSearchParams?.from,
     resolvedSearchParams?.to,
   );
+  const maintenanceModeEnabled = canManageAdmins
+    ? await isMaintenanceModeEnabled()
+    : false;
 
   const [
     offers,
@@ -672,6 +677,9 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
             </p>
           </div>
           <div className="flex items-center gap-3">
+            {canManageAdmins ? (
+              <MaintenanceToggle enabled={maintenanceModeEnabled} />
+            ) : null}
             <Link
               href="/"
               className="inline-flex min-h-10 items-center justify-center rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 transition hover:border-slate-500"
