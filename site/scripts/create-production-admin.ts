@@ -20,21 +20,31 @@ if (!password || password.length < 16) {
   throw new Error("ADMIN_PASSWORD must be at least 16 characters long.");
 }
 
-const adapter = new PrismaPg({ connectionString });
-const prisma = new PrismaClient({ adapter });
+const adminUsername = username;
+const adminPassword = password;
 
-try {
-  await prisma.adminUser.create({
-    data: {
-      username,
-      passwordHash: createPasswordHash(password),
-      role: "BOSS",
-      permissions: ["analytics", "admin_users"],
-      isActive: true,
-    },
-  });
+async function main() {
+  const adapter = new PrismaPg({ connectionString });
+  const prisma = new PrismaClient({ adapter });
 
-  console.log(`Production BOSS admin created: ${username}`);
-} finally {
-  await prisma.$disconnect();
+  try {
+    await prisma.adminUser.create({
+      data: {
+        username: adminUsername,
+        passwordHash: createPasswordHash(adminPassword),
+        role: "BOSS",
+        permissions: ["analytics", "admin_users"],
+        isActive: true,
+      },
+    });
+
+    console.log(`Production BOSS admin created: ${adminUsername}`);
+  } finally {
+    await prisma.$disconnect();
+  }
 }
+
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
