@@ -8,7 +8,7 @@ COPY package.json package-lock.json ./
 RUN npm ci
 
 COPY . .
-RUN npm run db:generate \
+RUN DATABASE_URL=postgresql://build:build@localhost:5432/build npm run db:generate \
   && mkdir -p public/uploads/logos \
   && chown -R node:node /app
 
