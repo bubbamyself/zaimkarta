@@ -17,6 +17,8 @@ production.env
 site/.env
 site/.env.*
 site/production.env
+deploy/production.env.server
 !.env.example
 !site/.env.example
 !site/production.env.example
+!deploy/production.env.server.example

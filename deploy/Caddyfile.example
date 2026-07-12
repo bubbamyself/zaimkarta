@@ -1,0 +1,32 @@
+{
+	admin off
+}
+
+www.zaimkarta.ru {
+	redir https://zaimkarta.ru{uri} permanent
+}
+
+zaimkarta.ru {
+	encode zstd gzip
+
+	# Общий предел тела запроса. Загрузка логотипа дополнительно ограничена приложением до 400 КБ.
+	request_body {
+		max_size 1MB
+	}
+
+	reverse_proxy app:3000 {
+		# Перезаписываем клиентские заголовки, чтобы посетитель не мог подставить чужой IP.
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Real-IP {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}
+
+# В стандартном Caddy нет rate limit без стороннего модуля.
+# До публичного запуска /go/ нужно ограничить на этапе 6Б: у провайдера/WAF
+# либо после отдельного согласования перейти на Nginx или custom Caddy build.
