@@ -372,7 +372,7 @@ export function OfferEditor({ offer }: { offer?: OfferWithAffiliate }) {
           label="Логотип кредитора"
           name="logoFile"
           currentUrl={offer?.logoUrl}
-          hint="Только SVG. Лучше использовать прозрачный или белый фон."
+          hint="Только PNG до 400 КБ и 4096×4096 px. Лучше использовать прозрачный фон."
         />
         <Field label="Бейдж" name="badge" defaultValue={offer?.badge} />
         <Field label="Приоритет показа" name="displayPriority" type="number" defaultValue={offer?.displayPriority ?? 100} />

@@ -13,8 +13,10 @@ import { normalizeRegionCodes } from "@/lib/russian-regions";
 const LOGO_UPLOAD_DIR = path.join(process.cwd(), "public", "uploads", "logos");
 const LOGO_PUBLIC_PATH = "/uploads/logos";
 const MAX_LOGO_BYTES = 400 * 1024;
+const MAX_LOGO_DIMENSION = 4096;
+const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 const SAFE_LOGO_PATH_PATTERN =
-  /^\/uploads\/logos\/[a-z0-9]+(?:-[a-z0-9]+)*-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.svg$/;
+  /^\/uploads\/logos\/[a-z0-9]+(?:-[a-z0-9]+)*-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(?:png|svg)$/;
 const OFFER_STATUSES: OfferStatus[] = ["DRAFT", "ACTIVE", "PAUSED", "ARCHIVED"];
 const APPROVAL_TONES: ApprovalTone[] = ["LOW", "MEDIUM", "HIGH"];
 
@@ -171,30 +173,25 @@ function validateHttpsUrl(value: string | null, label: string) {
   }
 }
 
-function validateSvgLogo(buffer: Buffer) {
-  const svg = buffer.toString("utf8");
-
-  if (svg.includes("\uFFFD") || !/<svg[\s>]/i.test(svg)) {
-    throw actionError("Файл логотипа должен быть корректным SVG в кодировке UTF-8");
+function validatePngLogo(buffer: Buffer) {
+  if (
+    buffer.length < 24 ||
+    !buffer.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE) ||
+    buffer.toString("ascii", 12, 16) !== "IHDR"
+  ) {
+    throw actionError("Файл логотипа должен быть корректным PNG");
   }
 
-  const forbiddenSvgContent = [
-    /<\s*script\b/i,
-    /\son[a-z]+\s*=/i,
-    /javascript\s*:/i,
-    /<\s*foreignObject\b/i,
-    /<\s*!DOCTYPE\b/i,
-    /<\s*!ENTITY\b/i,
-    /https?:\/\//i,
-    /(?:href|src)\s*=\s*["']?\s*\/\//i,
-    /data\s*:\s*text\/html/i,
-    /&#(?:x[0-9a-f]+|\d+);?/i,
-  ];
+  const width = buffer.readUInt32BE(16);
+  const height = buffer.readUInt32BE(20);
 
-  if (forbiddenSvgContent.some((pattern) => pattern.test(svg))) {
-    throw actionError(
-      "SVG содержит небезопасные скрипты, обработчики или внешние ссылки",
-    );
+  if (
+    width === 0 ||
+    height === 0 ||
+    width > MAX_LOGO_DIMENSION ||
+    height > MAX_LOGO_DIMENSION
+  ) {
+    throw actionError("Размер логотипа не должен превышать 4096×4096 px");
   }
 }
 
@@ -221,8 +218,8 @@ async function saveLogoUpload(formData: FormData, slug: string) {
     return readSafeCurrentLogoPath(formData);
   }
 
-  if (file.type !== "image/svg+xml") {
-    throw actionError("Логотип должен быть SVG-файлом типа image/svg+xml");
+  if (file.type !== "image/png") {
+    throw actionError("Логотип должен быть PNG-файлом");
   }
 
   if (file.size > MAX_LOGO_BYTES) {
@@ -230,14 +227,14 @@ async function saveLogoUpload(formData: FormData, slug: string) {
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
-  validateSvgLogo(buffer);
+  validatePngLogo(buffer);
 
   await mkdir(LOGO_UPLOAD_DIR, {
     recursive: true,
   });
 
   const safeSlug = slug.replace(/[^a-z0-9-]/g, "");
-  const fileName = `${safeSlug}-${randomUUID()}.svg`;
+  const fileName = `${safeSlug}-${randomUUID()}.png`;
   const filePath = path.resolve(LOGO_UPLOAD_DIR, fileName);
 
   if (!filePath.startsWith(`${path.resolve(LOGO_UPLOAD_DIR)}${path.sep}`)) {

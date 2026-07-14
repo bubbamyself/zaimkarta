@@ -3,6 +3,8 @@
 import { useState } from "react";
 
 const MAX_LOGO_BYTES = 400 * 1024;
+const MAX_LOGO_DIMENSION = 4096;
+const PNG_SIGNATURE = [137, 80, 78, 71, 13, 10, 26, 10];
 
 type LogoFileFieldProps = {
   label: string;
@@ -11,46 +13,43 @@ type LogoFileFieldProps = {
   hint?: string;
 };
 
-function validateSvgFile(file: File) {
-  return new Promise<string | null>((resolve) => {
-    if (file.size > MAX_LOGO_BYTES) {
-      resolve("Файл слишком большой. Максимум — 400 КБ");
-      return;
+async function validatePngFile(file: File) {
+  if (file.size > MAX_LOGO_BYTES) {
+    return "Файл слишком большой. Максимум — 400 КБ";
+  }
+
+  if (file.type !== "image/png" || !file.name.toLowerCase().endsWith(".png")) {
+    return "Загрузите логотип в формате PNG";
+  }
+
+  try {
+    const bytes = new Uint8Array(await file.slice(0, 24).arrayBuffer());
+    const hasPngSignature = PNG_SIGNATURE.every(
+      (byte, index) => bytes[index] === byte,
+    );
+    const hasHeader = String.fromCharCode(...bytes.slice(12, 16)) === "IHDR";
+
+    if (bytes.length < 24 || !hasPngSignature || !hasHeader) {
+      return "Файл должен быть корректным PNG";
     }
 
-    if (file.type !== "image/svg+xml") {
-      resolve("Загрузите логотип в формате SVG");
-      return;
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const width = view.getUint32(16);
+    const height = view.getUint32(20);
+
+    if (
+      width === 0 ||
+      height === 0 ||
+      width > MAX_LOGO_DIMENSION ||
+      height > MAX_LOGO_DIMENSION
+    ) {
+      return "Размер логотипа не должен превышать 4096×4096 px";
     }
 
-    const reader = new FileReader();
-
-    reader.onload = () => {
-      const svg = String(reader.result ?? "");
-
-      if (!/<svg[\s>]/i.test(svg)) {
-        resolve("Файл должен быть корректным SVG");
-        return;
-      }
-
-      if (
-        /<\s*script\b|\son[a-z]+\s*=|javascript\s*:|<\s*foreignObject\b|<\s*!DOCTYPE\b|<\s*!ENTITY\b/i.test(
-          svg,
-        ) ||
-        /https?:\/\/|(?:href|src)\s*=\s*["']?\s*\/\/|data\s*:\s*text\/html|&#(?:x[0-9a-f]+|\d+);?/i.test(
-          svg,
-        )
-      ) {
-        resolve("SVG содержит небезопасные элементы или внешние ссылки");
-        return;
-      }
-
-      resolve(null);
-    };
-
-    reader.onerror = () => resolve("Не удалось прочитать SVG");
-    reader.readAsText(file);
-  });
+    return null;
+  } catch {
+    return "Не удалось прочитать PNG";
+  }
 }
 
 export function LogoFileField({
@@ -69,7 +68,7 @@ export function LogoFileField({
       <input
         name={name}
         type="file"
-        accept=".svg,image/svg+xml"
+        accept=".png,image/png"
         className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-900 file:mr-3 file:rounded-md file:border-0 file:bg-slate-950 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white"
         onChange={async (event) => {
           const input = event.currentTarget;
@@ -82,7 +81,7 @@ export function LogoFileField({
             return;
           }
 
-          const nextError = await validateSvgFile(file);
+          const nextError = await validatePngFile(file);
 
           if (nextError) {
             input.value = "";
