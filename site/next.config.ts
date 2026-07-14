@@ -4,6 +4,18 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: __dirname,
   },
+  async rewrites() {
+    return {
+      beforeFiles: [
+        {
+          source: "/uploads/logos/:filename",
+          destination: "/api/logo-files/:filename",
+        },
+      ],
+      afterFiles: [],
+      fallback: [],
+    };
+  },
   async headers() {
     return [
       {
