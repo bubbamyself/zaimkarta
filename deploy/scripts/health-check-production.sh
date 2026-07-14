@@ -287,17 +287,37 @@ check_caddy_logs() {
     return
   fi
 
-  count_5xx=$(awk '$0 ~ /"status":[[:space:]]*5[0-9][0-9]/ { count++ } END { print count + 0 }' "$TEMP_CADDY_LOG")
-  count_4xx=$(awk '$0 ~ /"status":[[:space:]]*4[0-9][0-9]/ { count++ } END { print count + 0 }' "$TEMP_CADDY_LOG")
-  count_go_429=$(awk 'index($0, "\"uri\":\"/go/") && $0 ~ /"status":[[:space:]]*429/ { count++ } END { print count + 0 }' "$TEMP_CADDY_LOG")
+  count_5xx=$(awk '
+    index($0, "\"logger\":\"http.log.access.") &&
+    !index($0, "\"uri\":\"/api/health/server\"") &&
+    $0 ~ /"status":[[:space:]]*5[0-9][0-9]/ { count++ }
+    END { print count + 0 }
+  ' "$TEMP_CADDY_LOG")
+  count_health_5xx=$(awk '
+    index($0, "\"logger\":\"http.log.access.") &&
+    index($0, "\"uri\":\"/api/health/server\"") &&
+    $0 ~ /"status":[[:space:]]*5[0-9][0-9]/ { count++ }
+    END { print count + 0 }
+  ' "$TEMP_CADDY_LOG")
+  count_4xx=$(awk '
+    index($0, "\"logger\":\"http.log.access.") &&
+    $0 ~ /"status":[[:space:]]*4[0-9][0-9]/ { count++ }
+    END { print count + 0 }
+  ' "$TEMP_CADDY_LOG")
+  count_go_429=$(awk '
+    index($0, "\"logger\":\"http.log.access.") &&
+    index($0, "\"uri\":\"/go/") &&
+    $0 ~ /"status":[[:space:]]*429/ { count++ }
+    END { print count + 0 }
+  ' "$TEMP_CADDY_LOG")
 
   [ "$count_5xx" -lt "$MAX_5XX_PER_WINDOW" ] \
-    || fail_check "За $LOG_LOOKBACK найдено $count_5xx ответов 5xx"
+    || fail_check "За $LOG_LOOKBACK найдено $count_5xx публичных ответов 5xx"
   [ "$count_4xx" -lt "$MAX_4XX_PER_WINDOW" ] \
     || fail_check "За $LOG_LOOKBACK найдено $count_4xx ответов 4xx: возможен всплеск сканирования"
   [ "$count_go_429" -lt "$MAX_GO_429_PER_WINDOW" ] \
     || fail_check "За $LOG_LOOKBACK найдено $count_go_429 ответов 429 на /go/"
-  log INFO "Caddy за $LOG_LOOKBACK: 4xx=$count_4xx, 5xx=$count_5xx, /go 429=$count_go_429"
+  log INFO "Caddy за $LOG_LOOKBACK: 4xx=$count_4xx, публичные 5xx=$count_5xx, служебные health 5xx=$count_health_5xx, /go 429=$count_go_429"
 }
 
 run_backup_check() {
