@@ -18,6 +18,7 @@ import {
   type SeoPageOrderRow,
 } from "./seo-page-order-table";
 import { SeoToolEditor } from "./seo-tool-editor";
+import { AdminEmailSection } from "./email-section";
 import { getAdminSession } from "@/lib/admin-auth";
 import { isMaintenanceModeEnabled } from "@/lib/maintenance-mode";
 import { prisma } from "@/lib/prisma";
@@ -156,7 +157,8 @@ type AdminSection =
   | "create-seo"
   | "seo"
   | "seo-archive"
-  | "tools";
+  | "tools"
+  | "email";
 type OfferFilter = "all" | "active" | "paused";
 type SeoStatusFilter = "all" | "published" | "draft" | "paused";
 type SeoTypeFilter = "all" | SeoPageType;
@@ -171,6 +173,12 @@ type AdminPageProps = {
     type?: string;
     from?: string;
     to?: string;
+    mailFolder?: string;
+    mailUid?: string;
+    mailMode?: string;
+    replyUid?: string;
+    mailNotice?: string;
+    mailError?: string;
   }>;
 };
 
@@ -188,6 +196,10 @@ const ADMIN_SECTIONS: { id: AdminSection; label: string }[] = [
 function readSection(value: string | undefined, canManageAdmins: boolean): AdminSection {
   if (value === "access" && canManageAdmins) {
     return "access";
+  }
+
+  if (value === "email" && canManageAdmins) {
+    return "email";
   }
 
   if (
@@ -589,7 +601,11 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     };
   });
   const navSections = canManageAdmins
-    ? [...ADMIN_SECTIONS, { id: "access" as const, label: "Доступы" }]
+    ? [
+        ...ADMIN_SECTIONS,
+        { id: "email" as const, label: "Почта" },
+        { id: "access" as const, label: "Доступы" },
+      ]
     : ADMIN_SECTIONS;
   const seoClicksBySlug = new Map(
     seoCategoryClickCounts
@@ -709,6 +725,10 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       </nav>
 
       <div className="mx-auto grid max-w-7xl gap-8 px-5 py-8">
+        {activeSection === "email" && canManageAdmins ? (
+          <AdminEmailSection searchParams={resolvedSearchParams ?? {}} />
+        ) : null}
+
         {activeSection === "analytics" && canViewAnalytics ? (
           <>
             <section>
