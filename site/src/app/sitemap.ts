@@ -42,6 +42,21 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: "weekly",
       priority: 0.7,
     },
+    {
+      url: getAbsoluteUrl("/privacy-policy"),
+      changeFrequency: "yearly",
+      priority: 0.3,
+    },
+    {
+      url: getAbsoluteUrl("/rules"),
+      changeFrequency: "yearly",
+      priority: 0.3,
+    },
+    {
+      url: getAbsoluteUrl("/editorial-guidelines"),
+      changeFrequency: "yearly",
+      priority: 0.4,
+    },
     ...seoPages.map((page) => ({
       url: getAbsoluteUrl(`/${page.slug}`),
       lastModified: page.updatedAt,
