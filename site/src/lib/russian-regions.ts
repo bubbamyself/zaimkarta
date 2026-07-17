@@ -24,6 +24,7 @@ export const RUSSIAN_REGIONS: RussianRegion[] = [
   { code: "17", number: "17", name: "Республика Тыва" },
   { code: "18", number: "18", name: "Удмуртская Республика" },
   { code: "19", number: "19", name: "Республика Хакасия" },
+  { code: "20", number: "20", name: "Чеченская Республика" },
   { code: "21", number: "21", name: "Чувашская Республика" },
   { code: "22", number: "22", name: "Алтайский край" },
   { code: "23", number: "23", name: "Краснодарский край" },
@@ -83,13 +84,16 @@ export const RUSSIAN_REGIONS: RussianRegion[] = [
   { code: "77", number: "77", name: "Москва" },
   { code: "78", number: "78", name: "Санкт-Петербург" },
   { code: "79", number: "79", name: "Еврейская автономная область" },
-  { code: "82", number: "82", name: "Республика Крым" },
   { code: "83", number: "83", name: "Ненецкий автономный округ" },
   { code: "86", number: "86", name: "Ханты-Мансийский автономный округ — Югра" },
   { code: "87", number: "87", name: "Чукотский автономный округ" },
   { code: "89", number: "89", name: "Ямало-Ненецкий автономный округ" },
+  { code: "90", number: "90", name: "Запорожская область" },
+  { code: "91", number: "91", name: "Республика Крым" },
   { code: "92", number: "92", name: "Севастополь" },
-  { code: "95", number: "95", name: "Чеченская Республика" },
+  { code: "93", number: "93", name: "Донецкая Народная Республика" },
+  { code: "94", number: "94", name: "Луганская Народная Республика" },
+  { code: "95", number: "95", name: "Херсонская область" },
 ];
 
 const REGION_BY_CODE = new Map(

@@ -3,11 +3,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getProductionSecret } from "@/lib/production-secret";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { REGION_COOKIE_NAME } from "@/lib/region-cookie-config";
 import { getRussianRegionByCode } from "@/lib/russian-regions";
 import { getAbsoluteUrl } from "@/lib/site-url";
 
 const LEAD_COOKIE_NAME = "zk_lead_id";
-const REGION_COOKIE_NAME = "zk_region_code";
 const OFFER_FALLBACK_PATH = "/?offer_unavailable=1";
 const REGION_FALLBACK_PATH = "/?offer_unavailable_region=1";
 const NOINDEX_HEADER_VALUE = "noindex, nofollow";

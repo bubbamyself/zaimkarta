@@ -2,12 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
+  LEGACY_REGION_COOKIE_NAME,
+  REGION_COOKIE_MAX_AGE_SECONDS,
+  REGION_COOKIE_NAME,
+} from "@/lib/region-cookie-config";
+import {
   getRussianRegionByCode,
   RUSSIAN_REGIONS,
 } from "@/lib/russian-regions";
-
-const REGION_COOKIE_NAME = "zk_region_code";
-const REGION_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365;
 
 function readCookie(name: string) {
   return document.cookie
@@ -71,6 +73,7 @@ export function RegionRegistrationControl() {
       return;
     }
 
+    document.cookie = `${LEGACY_REGION_COOKIE_NAME}=; Max-Age=0; Path=/; SameSite=Lax`;
     document.cookie = `${REGION_COOKIE_NAME}=${region.code}; Max-Age=${REGION_COOKIE_MAX_AGE_SECONDS}; Path=/; SameSite=Lax`;
     setSelectedCode(region.code);
     setIsOpen(false);

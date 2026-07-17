@@ -357,7 +357,7 @@ The project now has an MVP region-based offer filter.
 
 Any SEO page or SEO tool that renders offers must respect the selected registration region:
 
-- the public region is stored in cookie `zk_region_code`;
+- the public region is stored in cookie `zk_region_subject_code_v2`;
 - offer restrictions are stored in `Offer.restrictedRegionCodes`;
 - public offer lists should use the same filtering logic as the homepage;
 - future mini offer pickers and recommendation blocks must not show offers restricted for the selected region;

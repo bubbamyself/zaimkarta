@@ -1,9 +1,7 @@
 import "server-only";
 import { cookies } from "next/headers";
+import { REGION_COOKIE_NAME } from "@/lib/region-cookie-config";
 import { getRussianRegionByCode } from "@/lib/russian-regions";
-
-export const REGION_COOKIE_NAME = "zk_region_code";
-export const REGION_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365;
 
 export async function getSelectedRegionCode() {
   const cookieStore = await cookies();

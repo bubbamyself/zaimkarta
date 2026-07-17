@@ -47,7 +47,7 @@ Use this checklist before deploying ZaimKarta to production.
 ## Public Site
 
 - [ ] Public pages open on `https://zaimkarta.ru`.
-- [ ] Region selector is visible and saves `zk_region_code`.
+- [ ] Region selector is visible and saves `zk_region_subject_code_v2`.
 - [ ] Offers restricted by `Offer.restrictedRegionCodes` are hidden for the selected registration region.
 - [ ] CPA redirects use `/go/[slug]` and record clicks.
 - [ ] `/go/[slug]` does not redirect to CPA if the offer is restricted for the selected region.
