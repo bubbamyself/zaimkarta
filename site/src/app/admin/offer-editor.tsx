@@ -280,7 +280,13 @@ function SelectField({
   );
 }
 
-export function OfferEditor({ offer }: { offer?: OfferWithAffiliate }) {
+export function OfferEditor({
+  offer,
+  isHomepageFeatured = false,
+}: {
+  offer?: OfferWithAffiliate;
+  isHomepageFeatured?: boolean;
+}) {
   const affiliateOffer = offer?.affiliateOffers.at(0);
   const isEdit = Boolean(offer);
   const publicationChecklist = getPublicationChecklist(offer, affiliateOffer);
@@ -447,6 +453,24 @@ export function OfferEditor({ offer }: { offer?: OfferWithAffiliate }) {
         name="legalDisclosure"
         defaultValue={offer?.legalDisclosure}
       />
+
+      <label className="flex items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+        <input
+          type="checkbox"
+          name="homepageFeatured"
+          defaultChecked={isHomepageFeatured}
+          className="mt-0.5 h-5 w-5 rounded border-slate-300"
+        />
+        <span>
+          <span className="block font-semibold text-slate-950">
+            Показывать в главном рекламном блоке
+          </span>
+          <span className="mt-1 block text-sm leading-6 text-slate-600">
+            Одновременно главным может быть только один оффер. При включении
+            этого переключателя предыдущий оффер будет снят автоматически.
+          </span>
+        </span>
+      </label>
 
       <div className="rounded-lg border border-slate-200 bg-white p-4">
         <h4 className="font-bold text-slate-950">Партнерская ссылка</h4>

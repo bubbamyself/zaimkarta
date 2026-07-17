@@ -1,12 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { HomeOfferPicker } from "@/components/home-offer-picker";
+import { HomepageFeaturedOfferCard } from "@/components/homepage-featured-offer-card";
 import { FilterableOffers } from "@/components/seo-tools/filterable-offers";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { getActiveOffersForRegion } from "@/lib/offers";
 import { prisma } from "@/lib/prisma";
 import { getSelectedRegionCode } from "@/lib/region-cookie";
+import { getHomepageFeaturedOffer } from "@/lib/homepage-featured-offer";
 import { getAbsoluteUrl } from "@/lib/site-url";
 
 export const dynamic = "force-dynamic";
@@ -22,49 +24,59 @@ export const metadata: Metadata = {
 
 export default async function Home() {
   const selectedRegionCode = await getSelectedRegionCode();
-  const [offers, categories, services, articles] = await Promise.all([
-    getActiveOffersForRegion(selectedRegionCode),
-    prisma.seoPage.findMany({
-      where: {
-        status: "PUBLISHED",
-        pageType: "CATEGORY",
-      },
-      orderBy: [{ displayPriority: "asc" }, { createdAt: "asc" }],
-      select: {
-        slug: true,
-        title: true,
-        h1: true,
-      },
-    }),
-    prisma.seoPage.findMany({
-      where: {
-        status: "PUBLISHED",
-        pageType: "SERVICE",
-      },
-      orderBy: [{ displayPriority: "asc" }, { publishedAt: "desc" }, { createdAt: "desc" }],
-      take: 4,
-      select: {
-        slug: true,
-        title: true,
-        description: true,
-        h1: true,
-      },
-    }),
-    prisma.seoPage.findMany({
-      where: {
-        status: "PUBLISHED",
-        pageType: "ARTICLE",
-      },
-      orderBy: [{ displayPriority: "asc" }, { publishedAt: "desc" }, { createdAt: "desc" }],
-      take: 4,
-      select: {
-        slug: true,
-        title: true,
-        description: true,
-        h1: true,
-      },
-    }),
-  ]);
+  const [featuredOffer, offers, categories, services, articles] =
+    await Promise.all([
+      getHomepageFeaturedOffer(selectedRegionCode),
+      getActiveOffersForRegion(selectedRegionCode),
+      prisma.seoPage.findMany({
+        where: {
+          status: "PUBLISHED",
+          pageType: "CATEGORY",
+        },
+        orderBy: [{ displayPriority: "asc" }, { createdAt: "asc" }],
+        select: {
+          slug: true,
+          title: true,
+          h1: true,
+        },
+      }),
+      prisma.seoPage.findMany({
+        where: {
+          status: "PUBLISHED",
+          pageType: "SERVICE",
+        },
+        orderBy: [
+          { displayPriority: "asc" },
+          { publishedAt: "desc" },
+          { createdAt: "desc" },
+        ],
+        take: 4,
+        select: {
+          slug: true,
+          title: true,
+          description: true,
+          h1: true,
+        },
+      }),
+      prisma.seoPage.findMany({
+        where: {
+          status: "PUBLISHED",
+          pageType: "ARTICLE",
+        },
+        orderBy: [
+          { displayPriority: "asc" },
+          { publishedAt: "desc" },
+          { createdAt: "desc" },
+        ],
+        take: 4,
+        select: {
+          slug: true,
+          title: true,
+          description: true,
+          h1: true,
+        },
+      }),
+    ]);
 
   return (
     <main className="min-h-screen bg-[#f6f8fb] text-slate-950">
@@ -97,7 +109,11 @@ export default async function Home() {
             </div>
           </div>
 
-          <HomeOfferPicker />
+          {featuredOffer ? (
+            <HomepageFeaturedOfferCard offer={featuredOffer} />
+          ) : (
+            <HomeOfferPicker />
+          )}
         </div>
       </section>
 

@@ -1,6 +1,6 @@
 "use server";
 
-import type { ApprovalTone, OfferStatus } from "@prisma/client";
+import type { ApprovalTone, OfferStatus, Prisma } from "@prisma/client";
 import { randomUUID } from "crypto";
 import { mkdir, writeFile } from "fs/promises";
 import { revalidatePath } from "next/cache";
@@ -9,6 +9,10 @@ import path from "path";
 import { getAdminSession } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 import { normalizeRegionCodes } from "@/lib/russian-regions";
+import {
+  getFeaturedOfferValidationError,
+  HOMEPAGE_FEATURED_OFFER_KEY,
+} from "@/lib/homepage-featured-offer";
 
 const LOGO_UPLOAD_DIR = path.join(process.cwd(), "public", "uploads", "logos");
 const LOGO_PUBLIC_PATH = "/uploads/logos";
@@ -335,6 +339,26 @@ function collectAffiliateData(formData: FormData) {
   };
 }
 
+function wantsHomepageFeaturedPlacement(formData: FormData) {
+  return readString(formData, "homepageFeatured") === "on";
+}
+
+function validateFeaturedPlacement(
+  formData: FormData,
+  offerData: Awaited<ReturnType<typeof collectOfferData>>,
+  affiliateData: ReturnType<typeof collectAffiliateData>,
+) {
+  if (!wantsHomepageFeaturedPlacement(formData)) {
+    return;
+  }
+
+  const error = getFeaturedOfferValidationError(offerData, affiliateData);
+
+  if (error) {
+    throw actionError(error, ["homepageFeatured"]);
+  }
+}
+
 function hasValue(value: unknown) {
   if (typeof value === "string") {
     return value.trim().length > 0;
@@ -454,11 +478,12 @@ function removeNetworkName<T extends { networkName?: string | null }>(data: T) {
 }
 
 async function updateAffiliateOffer(
+  db: Prisma.TransactionClient,
   affiliateOfferId: string,
   affiliateData: NonNullable<ReturnType<typeof collectAffiliateData>>,
 ) {
   try {
-    await prisma.affiliateOffer.update({
+    await db.affiliateOffer.update({
       where: {
         id: affiliateOfferId,
       },
@@ -469,7 +494,7 @@ async function updateAffiliateOffer(
       throw error;
     }
 
-    await prisma.affiliateOffer.update({
+    await db.affiliateOffer.update({
       where: {
         id: affiliateOfferId,
       },
@@ -479,11 +504,12 @@ async function updateAffiliateOffer(
 }
 
 async function createAffiliateOffer(
+  db: Prisma.TransactionClient,
   offerId: string,
   affiliateData: NonNullable<ReturnType<typeof collectAffiliateData>>,
 ) {
   try {
-    await prisma.affiliateOffer.create({
+    await db.affiliateOffer.create({
       data: {
         ...affiliateData,
         offerId,
@@ -494,13 +520,38 @@ async function createAffiliateOffer(
       throw error;
     }
 
-    await prisma.affiliateOffer.create({
+    await db.affiliateOffer.create({
       data: {
         ...removeNetworkName(affiliateData),
         offerId,
       },
     });
   }
+}
+
+async function updateHomepageFeaturedSetting(
+  db: Prisma.TransactionClient,
+  offerId: string,
+  isFeatured: boolean,
+) {
+  if (isFeatured) {
+    await db.systemSetting.upsert({
+      where: { key: HOMEPAGE_FEATURED_OFFER_KEY },
+      create: {
+        key: HOMEPAGE_FEATURED_OFFER_KEY,
+        value: offerId,
+      },
+      update: { value: offerId },
+    });
+    return;
+  }
+
+  await db.systemSetting.deleteMany({
+    where: {
+      key: HOMEPAGE_FEATURED_OFFER_KEY,
+      value: offerId,
+    },
+  });
 }
 
 export async function createOffer(
@@ -513,20 +564,25 @@ export async function createOffer(
     const offerData = await collectOfferData(formData);
     const affiliateData = collectAffiliateData(formData);
     validateOfferPublication(offerData, affiliateData);
+    validateFeaturedPlacement(formData, offerData, affiliateData);
 
     if (!offerData.brandName) {
       throw actionError("Название кредитора обязательно", ["brandName"]);
     }
 
-    const offer = await prisma.offer.create({
-      data: {
-        ...offerData,
-      },
-    });
+    await prisma.$transaction(async (db) => {
+      const createdOffer = await db.offer.create({ data: offerData });
 
-    if (affiliateData) {
-      await createAffiliateOffer(offer.id, affiliateData);
-    }
+      if (affiliateData) {
+        await createAffiliateOffer(db, createdOffer.id, affiliateData);
+      }
+
+      await updateHomepageFeaturedSetting(
+        db,
+        createdOffer.id,
+        wantsHomepageFeaturedPlacement(formData),
+      );
+    });
 
     revalidatePath("/");
     revalidatePath("/admin");
@@ -552,32 +608,35 @@ export async function updateOffer(
     const offerData = await collectOfferData(formData);
     const affiliateData = collectAffiliateData(formData);
     validateOfferPublication(offerData, affiliateData);
+    validateFeaturedPlacement(formData, offerData, affiliateData);
 
     if (!offerId) {
       throw actionError("Не найден ID оффера");
     }
 
-    await prisma.offer.update({
-      where: {
-        id: offerId,
-      },
-      data: offerData,
-    });
-
-    if (affiliateData && affiliateOfferId) {
-      await updateAffiliateOffer(affiliateOfferId, affiliateData);
-    } else if (affiliateData) {
-      await createAffiliateOffer(offerId, affiliateData);
-    } else if (affiliateOfferId) {
-      await prisma.affiliateOffer.update({
-        where: {
-          id: affiliateOfferId,
-        },
-        data: {
-          isActive: false,
-        },
+    await prisma.$transaction(async (db) => {
+      await db.offer.update({
+        where: { id: offerId },
+        data: offerData,
       });
-    }
+
+      if (affiliateData && affiliateOfferId) {
+        await updateAffiliateOffer(db, affiliateOfferId, affiliateData);
+      } else if (affiliateData) {
+        await createAffiliateOffer(db, offerId, affiliateData);
+      } else if (affiliateOfferId) {
+        await db.affiliateOffer.update({
+          where: { id: affiliateOfferId },
+          data: { isActive: false },
+        });
+      }
+
+      await updateHomepageFeaturedSetting(
+        db,
+        offerId,
+        wantsHomepageFeaturedPlacement(formData),
+      );
+    });
 
     revalidatePath("/");
     revalidatePath("/admin");

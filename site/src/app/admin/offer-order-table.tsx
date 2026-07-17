@@ -18,6 +18,7 @@ export type OfferOrderRow = {
   conditionsCheckedAtLabel: string;
   restrictedRegionCodes: string[];
   clicks: number;
+  isHomepageFeatured: boolean;
 };
 
 type OfferOrderTableProps = {
@@ -137,7 +138,14 @@ export function OfferOrderTable({
                   {index + 1}
                 </td>
                 <td className="px-5 py-4 font-semibold text-slate-950">
-                  {offer.brandName}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span>{offer.brandName}</span>
+                    {offer.isHomepageFeatured ? (
+                      <span className="rounded-md bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-800">
+                        Главный блок
+                      </span>
+                    ) : null}
+                  </div>
                 </td>
                 <td className="px-5 py-4 text-xs text-slate-600">
                   <div className="grid gap-1">

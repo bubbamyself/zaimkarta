@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getAdminSession } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
+import { HOMEPAGE_FEATURED_OFFER_KEY } from "@/lib/homepage-featured-offer";
 import { OfferEditor } from "../../offer-editor";
 
 type EditOfferPageProps = {
@@ -43,19 +44,21 @@ export default async function EditOfferPage({
 
   const { id } = await params;
   const resolvedSearchParams = await searchParams;
-  const offer = await prisma.offer.findUnique({
-    where: {
-      id,
-    },
-    include: {
-      affiliateOffers: {
-        orderBy: {
-          createdAt: "desc",
+  const [offer, homepageFeaturedSetting] = await Promise.all([
+    prisma.offer.findUnique({
+      where: { id },
+      include: {
+        affiliateOffers: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
         },
-        take: 1,
       },
-    },
-  });
+    }),
+    prisma.systemSetting.findUnique({
+      where: { key: HOMEPAGE_FEATURED_OFFER_KEY },
+      select: { value: true },
+    }),
+  ]);
 
   if (!offer) {
     notFound();
@@ -101,7 +104,10 @@ export default async function EditOfferPage({
           </div>
         </section>
 
-        <OfferEditor offer={offer} />
+        <OfferEditor
+          offer={offer}
+          isHomepageFeatured={homepageFeaturedSetting?.value === offer.id}
+        />
       </div>
     </main>
   );

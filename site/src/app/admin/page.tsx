@@ -22,6 +22,7 @@ import { AdminEmailSection } from "./email-section";
 import { getAdminSession } from "@/lib/admin-auth";
 import { isMaintenanceModeEnabled } from "@/lib/maintenance-mode";
 import { prisma } from "@/lib/prisma";
+import { HOMEPAGE_FEATURED_OFFER_KEY } from "@/lib/homepage-featured-offer";
 
 export const metadata: Metadata = {
   title: "Админка — ZaimKarta",
@@ -432,6 +433,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     seoPages,
     seoCategoryClickCounts,
     seoTools,
+    homepageFeaturedSetting,
   ] = await Promise.all([
     prisma.offer.findMany({
       orderBy: [{ displayPriority: "asc" }, { status: "asc" }, { brandName: "asc" }],
@@ -540,6 +542,10 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         },
       },
     }),
+    prisma.systemSetting.findUnique({
+      where: { key: HOMEPAGE_FEATURED_OFFER_KEY },
+      select: { value: true },
+    }),
   ]);
 
   const activeOffersCount = offers.filter((offer) => offer.status === "ACTIVE").length;
@@ -598,6 +604,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         ? formatDate(offer.conditionsCheckedAt)
         : "—",
       clicks: offerClicksById.get(offer.id) ?? 0,
+      isHomepageFeatured: homepageFeaturedSetting?.value === offer.id,
     };
   });
   const navSections = canManageAdmins
