@@ -353,7 +353,6 @@ async function fetchMessageDetail(
   }
 
   const parsed = await simpleParser(message.source, {
-    skipHtmlToText: true,
     skipTextToHtml: true,
   });
   const plainText = parsed.text?.trim();
@@ -374,7 +373,7 @@ async function fetchMessageDetail(
     date: toIsoDate(parsed.date) || baseDetail.date,
     text: plainText
       ? plainText.slice(0, MAX_BODY_CHARACTERS)
-      : "У письма нет обычной текстовой версии. Откройте его в веб-почте Beget.",
+      : "В письме нет текста для отображения. Откройте его в веб-почте Beget.",
     messageId: parsed.messageId?.trim() || baseDetail.messageId,
     references: normalizeReferences(parsed.references),
     attachmentsCount: parsed.attachments.length,
