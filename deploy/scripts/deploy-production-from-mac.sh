@@ -18,6 +18,8 @@ DEPLOY_DIR=$PROJECT_DIR/deploy
 COMPOSE_FILE=docker-compose.prod.yml
 EXPECTED_BRANCH=main
 HEALTH_URL=https://zaimkarta.ru/api/health/server
+HEALTH_MARKER_FILE=/tmp/zaimkarta-health-ok
+HEALTH_LOG=/var/log/zaimkarta-health.log
 APP_URL=https://zaimkarta.ru/
 ADMIN_URL=https://zaimkarta.ru/admin/login
 LOCK_FILE=$HOME/.zaimkarta-production-deploy.lock
@@ -129,6 +131,8 @@ esac
 caddy_state=$(sudo -n docker inspect --format '{{.State.Status}}' "$caddy_before")
 [ "$caddy_state" = 'running' ] || fail "Caddy не работает до деплоя: $caddy_state."
 
+[ -f "$HEALTH_LOG" ] || fail "не найден журнал monitoring: $HEALTH_LOG."
+
 cd "$PROJECT_DIR"
 printf '%s\n' 'Применяю только fast-forward из origin/main...'
 git pull --ff-only origin main
@@ -137,6 +141,11 @@ git pull --ff-only origin main
 cd "$DEPLOY_DIR"
 printf '%s\n' 'Пересобираю только app...'
 sudo -n docker compose -f "$COMPOSE_FILE" build app
+
+health_log_start_line=$(sudo -n wc -l "$HEALTH_LOG" | awk '{print $1}')
+case "$health_log_start_line" in
+  ''|*[!0-9]*) fail 'не удалось запомнить позицию в журнале monitoring.' ;;
+esac
 
 printf '%s\n' 'Заменяю только app без запуска и пересоздания зависимостей...'
 sudo -n docker compose -f "$COMPOSE_FILE" up -d --no-deps app
@@ -190,24 +199,30 @@ check_http_200() {
 check_http_200 "$APP_URL" 'Главная страница'
 check_http_200 "$ADMIN_URL" 'Страница входа в админку'
 
-printf '%s\n' 'Жду восстановления внешнего health-check. После штатной замены app это может занять до 20 минут...'
-health_ok=0
-for attempt in $(seq 1 40); do
-  health_status=$(curl --silent --show-error --max-time 20 --output /dev/null --write-out '%{http_code}' "$HEALTH_URL" || true)
-  if [ "$health_status" = '200' ]; then
-    health_ok=1
+printf '%s\n' 'Жду успешной плановой health-проверки. К сайту во время ожидания не обращаюсь...'
+health_marker_ready=0
+for minute in $(seq 0 20); do
+  new_health_logs=$(sudo -n tail -n "+$((health_log_start_line + 1))" "$HEALTH_LOG" 2>/dev/null || true)
+  if sudo -n docker compose -f "$COMPOSE_FILE" exec -T app test -f "$HEALTH_MARKER_FILE" \
+    && grep -q 'STATUS OK: все проверки пройдены' <<<"$new_health_logs"; then
+    health_marker_ready=1
     break
   fi
-  printf 'Health пока HTTP %s; следующая проверка через 30 секунд.\n' "${health_status:-нет ответа}"
-  sleep 30
+  [ "$minute" -lt 20 ] || break
+  printf 'Плановый monitoring ещё не опубликовал health marker; жду 1 минуту (%s/20).\n' "$((minute + 1))"
+  sleep 60
 done
 
-if [ "$health_ok" -ne 1 ]; then
+if [ "$health_marker_ready" -ne 1 ]; then
   printf '%s\n' 'Последние строки журнала monitoring:' >&2
   sudo -n tail -n 50 /var/log/zaimkarta-health.log 2>/dev/null | redact_logs || true
-  fail 'внешний health-check не восстановился за 20 минут.'
+  fail 'плановый monitoring не создал health marker за 20 минут.'
 fi
 
+health_status=$(curl --silent --show-error --max-time 20 --output /dev/null --write-out '%{http_code}' "$HEALTH_URL" || true)
+[ "$health_status" = '200' ] || fail "после STATUS OK внешний health-check вернул HTTP ${health_status:-нет ответа} вместо 200."
+
+printf '%s\n' 'Плановый monitoring: STATUS OK'
 printf '%s\n' 'Внешний health-check: HTTP 200'
 printf '%s\n' 'Итоговое состояние контейнеров:'
 sudo -n docker compose -f "$COMPOSE_FILE" ps
