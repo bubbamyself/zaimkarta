@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
+import { getSiteUrl } from "@/lib/site-url";
 import "./globals.css";
 
 export const metadata: Metadata = {
+  metadataBase: new URL(getSiteUrl()),
   title: "ZaimKarta — подбор микрозаймов на карту онлайн",
   description:
     "Сравнение кредитных предложений: займы на карту, срочные займы, первый заем под 0%, условия, сроки и ставки.",
