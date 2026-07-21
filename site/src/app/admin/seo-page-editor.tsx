@@ -23,6 +23,11 @@ type OfferForSeoEditor = Offer & {
   affiliateOffers?: AffiliateOffer[];
 };
 
+type SeoPageLinkOption = Pick<
+  SeoPage,
+  "id" | "slug" | "status" | "pageType" | "title" | "h1"
+>;
+
 type JsonRecord = Record<string, unknown>;
 
 function toFieldValue(value: unknown) {
@@ -154,6 +159,7 @@ function createEmptyFaqRows(count: number) {
     id: `new-${index}`,
     question: "",
     answer: "",
+    linkedSeoPageId: null,
     position: index + 1,
   }));
 }
@@ -262,11 +268,13 @@ function getAdvancedToolConfig(config: unknown) {
 export function SeoPageEditor({
   offers,
   seoTools = [],
+  seoPages = [],
   seoPage,
   initialPageType = "CATEGORY",
 }: {
   offers: OfferForSeoEditor[];
   seoTools?: SeoTool[];
+  seoPages?: SeoPageLinkOption[];
   seoPage?: SeoPageWithRelations;
   initialPageType?: "CATEGORY" | "ARTICLE" | "SERVICE";
 }) {
@@ -302,6 +310,19 @@ export function SeoPageEditor({
     ...(seoPage?.faqItems ?? []),
     ...createEmptyFaqRows(Math.max(3, 8 - (seoPage?.faqItems.length ?? 0))),
   ];
+  const faqLinkOptions = seoPages
+    .filter(
+      (page) =>
+        page.status === "PUBLISHED" &&
+        page.pageType === "ARTICLE" &&
+        page.id !== seoPage?.id,
+    )
+    .sort((first, second) => {
+      const firstLabel = first.h1 || first.title;
+      const secondLabel = second.h1 || second.title;
+
+      return firstLabel.localeCompare(secondLabel, "ru");
+    });
   const toolRows = [
     ...(seoPage?.tools ?? []),
     ...Array.from({ length: Math.max(2, 4 - (seoPage?.tools?.length ?? 0)) }, (_, index) => ({
@@ -851,7 +872,7 @@ export function SeoPageEditor({
           {faqRows.map((item, index) => (
             <div
               key={item.id}
-              className="grid gap-3 rounded-lg border border-slate-200 p-3 lg:grid-cols-[80px_1fr_1.3fr]"
+              className="grid gap-3 rounded-lg border border-slate-200 p-3 lg:grid-cols-[80px_1fr_1.3fr_1fr]"
             >
               <label className="grid gap-2">
                 <span className="text-xs font-medium text-slate-500">Позиция</span>
@@ -879,6 +900,23 @@ export function SeoPageEditor({
                   rows={2}
                   className="rounded-md border border-slate-300 bg-white px-3 py-2"
                 />
+              </label>
+              <label className="grid gap-2">
+                <span className="text-xs font-medium text-slate-500">
+                  Подробная статья
+                </span>
+                <select
+                  name="faqLinkedSeoPageId"
+                  defaultValue={item.linkedSeoPageId ?? ""}
+                  className="h-10 rounded-md border border-slate-300 bg-white px-3"
+                >
+                  <option value="">Без дополнительной ссылки</option>
+                  {faqLinkOptions.map((page) => (
+                    <option key={page.id} value={page.id}>
+                      {page.pageType} · {page.h1 || page.title} · /{page.slug}
+                    </option>
+                  ))}
+                </select>
               </label>
             </div>
           ))}

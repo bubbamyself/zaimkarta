@@ -36,7 +36,7 @@ export default async function EditSeoPage({
 
   const { id } = await params;
   const resolvedSearchParams = await searchParams;
-  const [seoPage, offers, seoTools] = await Promise.all([
+  const [seoPage, offers, seoTools, seoPages] = await Promise.all([
     prisma.seoPage.findUnique({
       where: {
         id,
@@ -69,6 +69,20 @@ export default async function EditSeoPage({
     }),
     prisma.seoTool.findMany({
       orderBy: [{ status: "asc" }, { type: "asc" }, { name: "asc" }],
+    }),
+    prisma.seoPage.findMany({
+      where: {
+        status: "PUBLISHED",
+      },
+      orderBy: [{ pageType: "asc" }, { h1: "asc" }],
+      select: {
+        id: true,
+        slug: true,
+        status: true,
+        pageType: true,
+        title: true,
+        h1: true,
+      },
     }),
   ]);
 
@@ -116,7 +130,12 @@ export default async function EditSeoPage({
           </div>
         </section>
 
-        <SeoPageEditor seoPage={seoPage} offers={offers} seoTools={seoTools} />
+        <SeoPageEditor
+          seoPage={seoPage}
+          offers={offers}
+          seoTools={seoTools}
+          seoPages={seoPages}
+        />
       </div>
     </main>
   );

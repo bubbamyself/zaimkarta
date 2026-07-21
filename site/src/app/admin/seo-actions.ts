@@ -438,11 +438,15 @@ function collectFaqItems(formData: FormData) {
   const questions = formData.getAll("faqQuestion").map((value) => String(value).trim());
   const answers = formData.getAll("faqAnswer").map((value) => String(value).trim());
   const positions = formData.getAll("faqPosition").map((value) => String(value).trim());
+  const linkedSeoPageIds = formData
+    .getAll("faqLinkedSeoPageId")
+    .map((value) => String(value).trim());
 
   return questions
     .map((question, index) => ({
       question,
       answer: answers[index] ?? "",
+      linkedSeoPageId: linkedSeoPageIds[index] || null,
       position:
         Number.isInteger(Number(positions[index])) && Number(positions[index]) > 0
           ? Number(positions[index])
@@ -450,6 +454,47 @@ function collectFaqItems(formData: FormData) {
     }))
     .filter((item) => item.question.length > 0 && item.answer.length > 0)
     .sort((first, second) => first.position - second.position);
+}
+
+async function validateFaqLinks(seoPageId: string, faqItems: ReturnType<typeof collectFaqItems>) {
+  const linkedSeoPageIds = Array.from(
+    new Set(
+      faqItems
+        .map((item) => item.linkedSeoPageId)
+        .filter((linkedSeoPageId): linkedSeoPageId is string =>
+          Boolean(linkedSeoPageId),
+        ),
+    ),
+  );
+
+  if (linkedSeoPageIds.length === 0) {
+    return;
+  }
+
+  if (linkedSeoPageIds.includes(seoPageId)) {
+    throw new Error("FAQ не может ссылаться на текущую SEO-страницу");
+  }
+
+  const existingLinkedPages = await prisma.seoPage.findMany({
+    where: {
+      id: {
+        in: linkedSeoPageIds,
+      },
+      status: "PUBLISHED",
+      pageType: "ARTICLE",
+    },
+    select: {
+      id: true,
+    },
+  });
+  const existingLinkedPageIds = new Set(existingLinkedPages.map((page) => page.id));
+  const missingLinkedPageId = linkedSeoPageIds.find(
+    (linkedSeoPageId) => !existingLinkedPageIds.has(linkedSeoPageId),
+  );
+
+  if (missingLinkedPageId) {
+    throw new Error("Выбранная статья для FAQ не найдена или не опубликована");
+  }
 }
 
 function collectPageToolLinks(formData: FormData) {
@@ -568,6 +613,7 @@ async function replaceSeoPageRelations(seoPageId: string, formData: FormData) {
   const offerLinks = collectOfferLinks(formData);
   const faqItems = collectFaqItems(formData);
   const pageToolLinks = collectPageToolLinks(formData);
+  await validateFaqLinks(seoPageId, faqItems);
 
   await prisma.$transaction([
     prisma.seoPageOffer.deleteMany({
@@ -608,6 +654,7 @@ async function replaceSeoPageRelations(seoPageId: string, formData: FormData) {
               question: item.question,
               answer: item.answer,
               position: item.position,
+              linkedSeoPageId: item.linkedSeoPageId,
             })),
           }),
         ]

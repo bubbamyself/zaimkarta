@@ -1,9 +1,5 @@
-import type {
-  SeoPageFaqItem,
-  SeoPageTool,
-  SeoTool,
-  SeoToolType,
-} from "@prisma/client";
+import type { SeoPageTool, SeoTool, SeoToolType } from "@prisma/client";
+import { FaqSection, type FaqItemWithLinkedPage } from "@/components/faq-section";
 import { ApplicationChecklist } from "@/components/seo-tools/application-checklist";
 import { FilterableOffers } from "@/components/seo-tools/filterable-offers";
 import { OverpaymentCalculator } from "@/components/seo-tools/overpayment-calculator";
@@ -31,7 +27,7 @@ type PageToolWithTool = SeoPageTool & {
 type SeoContentRendererProps = {
   blocks: unknown;
   pageTools: PageToolWithTool[];
-  faqItems: SeoPageFaqItem[];
+  faqItems: FaqItemWithLinkedPage[];
   offers: OfferCardData[];
   pageType: string;
   categorySlug: string;
@@ -257,26 +253,12 @@ export function SeoContentRenderer({
           }
 
           return (
-            <section key={key} className="mx-auto max-w-3xl px-5">
-              <h2 className="text-2xl font-bold text-slate-950">
-                {block.title ?? "Вопросы и ответы"}
-              </h2>
-              <div className="mt-6 grid gap-3">
-                {faqItems.map((item) => (
-                  <details
-                    key={item.id}
-                    className="rounded-lg border border-slate-200 bg-white p-5"
-                  >
-                    <summary className="cursor-pointer font-semibold text-slate-950">
-                      {item.question}
-                    </summary>
-                    <p className="mt-3 leading-7 text-slate-600">
-                      {item.answer}
-                    </p>
-                  </details>
-                ))}
-              </div>
-            </section>
+            <FaqSection
+              key={key}
+              items={faqItems}
+              title={block.title ?? "Вопросы и ответы"}
+              className="mx-auto max-w-3xl px-5"
+            />
           );
         }
 

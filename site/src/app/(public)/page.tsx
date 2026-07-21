@@ -10,6 +10,10 @@ import { prisma } from "@/lib/prisma";
 import { getSelectedRegionCode } from "@/lib/region-cookie";
 import { getHomepageFeaturedOffer } from "@/lib/homepage-featured-offer";
 import { getAbsoluteUrl } from "@/lib/site-url";
+import {
+  getSiteIdentityJsonLd,
+  serializeJsonLd,
+} from "@/lib/structured-data";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +27,7 @@ export const metadata: Metadata = {
 };
 
 export default async function Home() {
+  const siteIdentityJsonLd = getSiteIdentityJsonLd();
   const selectedRegionCode = await getSelectedRegionCode();
   const [featuredOffer, offers, categories, services, articles] =
     await Promise.all([
@@ -81,6 +86,12 @@ export default async function Home() {
   return (
     <main className="min-h-screen bg-[#f6f8fb] text-slate-950">
       <SiteHeader />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: serializeJsonLd(siteIdentityJsonLd),
+        }}
+      />
 
       <section className="border-b border-slate-200 bg-white">
         <div className="mx-auto grid max-w-6xl gap-10 px-5 py-10 md:grid-cols-[1.1fr_0.9fr] md:py-14">

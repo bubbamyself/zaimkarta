@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Breadcrumbs } from "@/components/breadcrumbs";
+import { FaqSection } from "@/components/faq-section";
 import { OfferCard } from "@/components/offer-card";
 import { SeoContentRenderer } from "@/components/seo-content-renderer";
 import { FilterableOffers } from "@/components/seo-tools/filterable-offers";
@@ -14,6 +15,11 @@ import {
   getSeoPageBreadcrumbs,
 } from "@/lib/seo-breadcrumbs";
 import { getAbsoluteUrl } from "@/lib/site-url";
+import {
+  getArticleJsonLd,
+  getFaqPageJsonLd,
+  serializeJsonLd,
+} from "@/lib/structured-data";
 
 type CategoryPageProps = {
   params: Promise<{
@@ -100,10 +106,6 @@ function formatUpdatedAt(value?: Date | null) {
     month: "long",
     year: "numeric",
   }).format(value);
-}
-
-function stringifyJsonLd(data: unknown) {
-  return JSON.stringify(data).replace(/</g, "\\u003c");
 }
 
 function escapeHtml(value: string) {
@@ -335,6 +337,17 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
     include: {
       faqItems: {
         orderBy: [{ position: "asc" }, { createdAt: "asc" }],
+        include: {
+          linkedSeoPage: {
+            select: {
+              slug: true,
+              status: true,
+              pageType: true,
+              h1: true,
+              title: true,
+            },
+          },
+        },
       },
       offers: {
         where: {
@@ -436,8 +449,29 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
   const standaloneArticleToolBlocks = getArticleToolBlocks(seoPage.tools).filter(
     (block) => !articleContentBlockToolIds.has(String(block.blockId ?? "")),
   );
+  const hasFaqContentBlock = articleContentBlocks.some(
+    (block) => isRecord(block) && block.type === "faq",
+  );
+  const faqIsVisible =
+    seoPage.pageType !== "SERVICE" ||
+    !seoPage.contentBlocks ||
+    hasFaqContentBlock;
   const breadcrumbs = getSeoPageBreadcrumbs(seoPage);
   const breadcrumbJsonLd = getBreadcrumbListJsonLd(breadcrumbs, `/${slug}`);
+  const faqPageJsonLd = getFaqPageJsonLd(
+    faqIsVisible ? seoPage.faqItems : [],
+  );
+  const articleJsonLd =
+    seoPage.pageType === "ARTICLE"
+      ? getArticleJsonLd({
+          path: `/${slug}`,
+          headline: seoPage.h1,
+          description: seoPage.description,
+          datePublished: seoPage.publishedAt ?? seoPage.createdAt,
+          dateModified:
+            seoPage.updatedByUserAt ?? seoPage.publishedAt ?? seoPage.updatedAt,
+        })
+      : null;
 
   if (isCategoryPage) {
     return (
@@ -446,9 +480,17 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
-            __html: stringifyJsonLd(breadcrumbJsonLd),
+            __html: serializeJsonLd(breadcrumbJsonLd),
           }}
         />
+        {faqPageJsonLd ? (
+          <script
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{
+              __html: serializeJsonLd(faqPageJsonLd),
+            }}
+          />
+        ) : null}
 
         <section className="border-b border-slate-200 bg-white">
           <div className="mx-auto max-w-6xl px-5 py-10 md:py-14">
@@ -557,22 +599,7 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
         ) : null}
 
         {seoPage.faqItems.length > 0 ? (
-          <section className="mx-auto max-w-3xl px-5 py-12">
-            <h2 className="text-2xl font-bold text-slate-950">Вопросы и ответы</h2>
-            <div className="mt-6 grid gap-3">
-              {seoPage.faqItems.map((item) => (
-                <details
-                  key={item.id}
-                  className="rounded-lg border border-slate-200 bg-white p-5"
-                >
-                  <summary className="cursor-pointer font-semibold text-slate-950">
-                    {item.question}
-                  </summary>
-                  <p className="mt-3 leading-7 text-slate-600">{item.answer}</p>
-                </details>
-              ))}
-            </div>
-          </section>
+          <FaqSection items={seoPage.faqItems} />
         ) : null}
 
         {seoPage.riskNotice ? (
@@ -595,9 +622,25 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
-            __html: stringifyJsonLd(breadcrumbJsonLd),
+            __html: serializeJsonLd(breadcrumbJsonLd),
           }}
         />
+        {articleJsonLd ? (
+          <script
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{
+              __html: serializeJsonLd(articleJsonLd),
+            }}
+          />
+        ) : null}
+        {faqPageJsonLd ? (
+          <script
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{
+              __html: serializeJsonLd(faqPageJsonLd),
+            }}
+          />
+        ) : null}
 
         <section className="border-b border-slate-200 bg-white">
           <div className="mx-auto max-w-5xl px-5 py-10 md:py-14">
@@ -635,6 +678,9 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
               {seoPage.intro ?? seoPage.description}
             </p>
             <div className="mt-6 flex flex-wrap gap-3 text-sm text-slate-600">
+              <span className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                Автор: Редакция ZaimKarta
+              </span>
               {updatedAtLabel ? (
                 <span className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
                   Материал обновлен: {updatedAtLabel}
@@ -713,23 +759,8 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
           </section>
         ) : null}
 
-        {seoPage.faqItems.length > 0 ? (
-          <section className="mx-auto max-w-3xl px-5 py-12">
-            <h2 className="text-2xl font-bold text-slate-950">Вопросы и ответы</h2>
-            <div className="mt-6 grid gap-3">
-              {seoPage.faqItems.map((item) => (
-                <details
-                  key={item.id}
-                  className="rounded-lg border border-slate-200 bg-white p-5"
-                >
-                  <summary className="cursor-pointer font-semibold text-slate-950">
-                    {item.question}
-                  </summary>
-                  <p className="mt-3 leading-7 text-slate-600">{item.answer}</p>
-                </details>
-              ))}
-            </div>
-          </section>
+        {seoPage.faqItems.length > 0 && !hasFaqContentBlock ? (
+          <FaqSection items={seoPage.faqItems} />
         ) : null}
 
         {seoPage.riskNotice ? (
@@ -751,9 +782,17 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: stringifyJsonLd(breadcrumbJsonLd),
+          __html: serializeJsonLd(breadcrumbJsonLd),
         }}
       />
+      {faqPageJsonLd ? (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: serializeJsonLd(faqPageJsonLd),
+          }}
+        />
+      ) : null}
 
       <section className="border-b border-slate-200 bg-white">
         <div className="mx-auto max-w-6xl px-5 py-10 md:py-14">
@@ -852,22 +891,7 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
       ) : null}
 
       {!seoPage.contentBlocks && seoPage.faqItems.length > 0 ? (
-        <section className="mx-auto max-w-3xl px-5 py-12">
-          <h2 className="text-2xl font-bold text-slate-950">Вопросы и ответы</h2>
-          <div className="mt-6 grid gap-3">
-            {seoPage.faqItems.map((item) => (
-              <details
-                key={item.id}
-                className="rounded-lg border border-slate-200 bg-white p-5"
-              >
-                <summary className="cursor-pointer font-semibold text-slate-950">
-                  {item.question}
-                </summary>
-                <p className="mt-3 leading-7 text-slate-600">{item.answer}</p>
-              </details>
-            ))}
-          </div>
-        </section>
+        <FaqSection items={seoPage.faqItems} />
       ) : null}
 
       {!seoPage.contentBlocks && seoPage.riskNotice ? (

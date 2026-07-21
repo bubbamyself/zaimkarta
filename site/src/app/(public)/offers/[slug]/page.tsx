@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { Breadcrumbs, type BreadcrumbItem } from "@/components/breadcrumbs";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { getOfferDetails } from "@/lib/offers";
 import { getSelectedRegionCode } from "@/lib/region-cookie";
+import { getBreadcrumbListJsonLd } from "@/lib/seo-breadcrumbs";
 import { getAbsoluteUrl } from "@/lib/site-url";
+import { serializeJsonLd } from "@/lib/structured-data";
 
 type OfferPageProps = {
   params: Promise<{
@@ -77,14 +80,30 @@ export default async function OfferPage({ params }: OfferPageProps) {
 
   const approvalClass =
     offer.approvalTone === "high" ? "text-emerald-700" : "text-amber-600";
+  const breadcrumbs: BreadcrumbItem[] = [
+    { label: "Главная", href: "/" },
+    { label: "Предложения", href: "/#offers" },
+    { label: offer.name },
+  ];
+  const breadcrumbJsonLd = getBreadcrumbListJsonLd(
+    breadcrumbs,
+    `/offers/${slug}`,
+  );
 
   return (
     <main className="min-h-screen bg-[#f6f8fb] text-slate-950">
       <SiteHeader />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: serializeJsonLd(breadcrumbJsonLd),
+        }}
+      />
 
       <section className="border-b border-slate-200 bg-white">
         <div className="mx-auto grid max-w-6xl gap-8 px-5 py-10 lg:grid-cols-[1fr_360px]">
           <div>
+            <Breadcrumbs items={breadcrumbs} />
             <div className="flex items-start gap-4">
               <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-emerald-50 text-3xl font-black text-emerald-700">
                 {offer.logoUrl ? (

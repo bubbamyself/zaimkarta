@@ -1150,6 +1150,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                     initialPageType={createSeoType}
                     offers={offers}
                     seoTools={seoTools}
+                    seoPages={seoPages}
                   />
                 </div>
               </section>

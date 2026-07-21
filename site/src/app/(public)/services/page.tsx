@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Breadcrumbs, type BreadcrumbItem } from "@/components/breadcrumbs";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { prisma } from "@/lib/prisma";
+import { getBreadcrumbListJsonLd } from "@/lib/seo-breadcrumbs";
 import { getAbsoluteUrl } from "@/lib/site-url";
+import { serializeJsonLd } from "@/lib/structured-data";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +19,11 @@ export const metadata: Metadata = {
 };
 
 export default async function ServicesPage() {
+  const breadcrumbs: BreadcrumbItem[] = [
+    { label: "Главная", href: "/" },
+    { label: "Сервисы" },
+  ];
+  const breadcrumbJsonLd = getBreadcrumbListJsonLd(breadcrumbs, "/services");
   const services = await prisma.seoPage.findMany({
     where: {
       status: "PUBLISHED",
@@ -33,8 +41,15 @@ export default async function ServicesPage() {
   return (
     <main className="min-h-screen bg-[#f6f8fb] text-slate-950">
       <SiteHeader />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: serializeJsonLd(breadcrumbJsonLd),
+        }}
+      />
       <section className="border-b border-slate-200 bg-white">
         <div className="mx-auto max-w-6xl px-5 py-10 md:py-14">
+          <Breadcrumbs items={breadcrumbs} />
           <p className="mb-4 text-sm font-semibold uppercase text-emerald-700">
             Сервисы
           </p>

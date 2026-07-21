@@ -232,7 +232,8 @@ model SeoPage {
   updatedAt       DateTime         @updatedAt
 
   offers          SeoPageOffer[]
-  faqItems        SeoPageFaqItem[]
+  faqItems        SeoPageFaqItem[] @relation("SeoPageFaqItems")
+  linkedFaqItems  SeoPageFaqItem[] @relation("SeoPageFaqLinks")
   tools           SeoPageTool[]
 
   @@index([status])
@@ -260,17 +261,20 @@ model SeoPageOffer {
 }
 
 model SeoPageFaqItem {
-  id        String   @id @default(cuid())
-  seoPageId String
-  question  String
-  answer    String
-  position  Int      @default(100)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id              String   @id @default(cuid())
+  seoPageId       String
+  linkedSeoPageId String?
+  question        String
+  answer          String
+  position        Int      @default(100)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  seoPage   SeoPage  @relation(fields: [seoPageId], references: [id], onDelete: Cascade)
+  seoPage          SeoPage  @relation("SeoPageFaqItems", fields: [seoPageId], references: [id], onDelete: Cascade)
+  linkedSeoPage    SeoPage? @relation("SeoPageFaqLinks", fields: [linkedSeoPageId], references: [id], onDelete: SetNull)
 
   @@index([seoPageId, position])
+  @@index([linkedSeoPageId])
 }
 
 model SeoTool {
