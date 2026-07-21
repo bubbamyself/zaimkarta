@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { connection } from "next/server";
 import { isMaintenanceModeEnabled } from "@/lib/maintenance-mode";
+import { YandexMetrika } from "@/components/yandex-metrika";
 
 export async function generateMetadata(): Promise<Metadata> {
   await connection();
@@ -24,8 +26,24 @@ export default async function PublicLayout({
 }>) {
   await connection();
 
+  const configuredCounterId =
+    process.env.NEXT_PUBLIC_YANDEX_METRIKA_ID?.trim();
+  const counterId =
+    configuredCounterId && /^\d+$/.test(configuredCounterId)
+      ? Number(configuredCounterId)
+      : null;
+
   if (!(await isMaintenanceModeEnabled())) {
-    return children;
+    return (
+      <>
+        {children}
+        {counterId ? (
+          <Suspense fallback={null}>
+            <YandexMetrika counterId={counterId} />
+          </Suspense>
+        ) : null}
+      </>
+    );
   }
 
   return (

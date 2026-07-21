@@ -94,6 +94,7 @@ export function RegionRegistrationControl() {
 
     document.cookie = `${COOKIE_NOTICE_COOKIE_NAME}=1; Max-Age=${REGION_COOKIE_MAX_AGE_SECONDS}; Path=/; SameSite=Lax${secureAttribute}`;
     setIsCookieNoticeVisible(false);
+    window.dispatchEvent(new Event("zk-cookie-consent-accepted"));
   }
 
   return (

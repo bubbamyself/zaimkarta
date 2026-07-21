@@ -32,7 +32,7 @@ export default function PrivacyPolicyPage() {
           Политика обработки персональных данных и cookies
         </h1>
         <p className="mt-4 text-sm text-slate-500">
-          Редакция от 18 июля 2026 года
+          Редакция от 22 июля 2026 года
         </p>
 
         <div className="mt-10 grid gap-10 rounded-lg border border-slate-200 bg-white p-6 md:p-10">
@@ -155,9 +155,41 @@ export default function PrivacyPolicyPage() {
                       После нажатия кнопки «OK» в уведомлении.
                     </td>
                   </tr>
+                  <tr className="border-b border-slate-200 align-top">
+                    <td className="px-3 py-3 font-mono text-xs">
+                      _ym_* и служебные cookie Яндекс Метрики
+                    </td>
+                    <td className="px-3 py-3">
+                      Обезличенная статистика посещений, источников трафика и
+                      действий на страницах, включая записи сессий в
+                      Вебвизоре.
+                    </td>
+                    <td className="px-3 py-3">
+                      От сессии браузера до 2 лет
+                    </td>
+                    <td className="px-3 py-3">
+                      После согласия пользователя с использованием cookie.
+                    </td>
+                  </tr>
                 </tbody>
               </table>
             </div>
+            <p className={paragraphClassName}>
+              Для сбора обезличенной статистики используется Яндекс Метрика.
+              Сервис может сохранять анонимные идентификаторы браузера в cookie,
+              localStorage и sessionStorage, а Вебвизор — записывать действия
+              посетителей на публичных страницах после получения согласия.
+              Описание используемых файлов и сроков хранения опубликовано в{" "}
+              <a
+                href="https://yandex.ru/support/metrica/ru/general/cookie-usage"
+                className="font-semibold text-emerald-700 underline"
+                target="_blank"
+                rel="noreferrer"
+              >
+                документации Яндекс Метрики
+              </a>
+              .
+            </p>
             <p className={paragraphClassName}>
               Выбор региона и переход к партнёру являются действиями
               пользователя, инициирующими соответствующую обработку. Пользователь
