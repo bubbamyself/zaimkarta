@@ -134,9 +134,9 @@ caddy_state=$(sudo -n docker inspect --format '{{.State.Status}}' "$caddy_before
 [ -f "$HEALTH_LOG" ] || fail "не найден журнал monitoring: $HEALTH_LOG."
 
 cd "$PROJECT_DIR"
-printf '%s\n' 'Применяю только fast-forward из origin/main...'
-git pull --ff-only origin main
-[ "$(git rev-parse HEAD)" = "$target_commit" ] || fail 'после pull установлен неожиданный commit.'
+printf '%s\n' 'Применяю ровно тот fast-forward commit, который был показан перед DEPLOY...'
+git merge --ff-only "$target_commit"
+[ "$(git rev-parse HEAD)" = "$target_commit" ] || fail 'установлен неожиданный commit.'
 
 cd "$DEPLOY_DIR"
 printf '%s\n' 'Пересобираю только app...'
