@@ -11,6 +11,7 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:admin:create": "tsx scripts/create-production-admin.ts",
+    "content:import:snowball": "tsx scripts/import-snowball-article.ts",
     "db:seed": "prisma db seed"
   },
   "prisma": {
