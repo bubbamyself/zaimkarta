@@ -65,15 +65,15 @@ function normalizeStatusKey(value: string) {
 export function normalizeLeadGidStatus(value: string): ConversionStatus {
   const normalized = normalizeStatusKey(value);
 
-  if (normalized === "на проверке") {
+  if (normalized === "на проверке" || normalized === "pending") {
     return ConversionStatus.PENDING;
   }
 
-  if (normalized === "подлежит оплате") {
+  if (normalized === "подлежит оплате" || normalized === "approved") {
     return ConversionStatus.APPROVED;
   }
 
-  if (normalized === "отклонен") {
+  if (normalized === "отклонен" || normalized === "rejected") {
     return ConversionStatus.REJECTED;
   }
 
