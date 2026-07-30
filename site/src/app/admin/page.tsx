@@ -670,10 +670,6 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     0,
     ...eligiblePeriodOfferStats.map((item) => item.epc ?? 0),
   );
-  const bestApproved = Math.max(
-    0,
-    ...eligiblePeriodOfferStats.map((item) => item.approved),
-  );
   const periodOfferStatsById = new Map(
     periodOfferStats.map((item) => [item.offerId, item]),
   );
@@ -701,18 +697,11 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       conditionsCheckedAtLabel: offer.conditionsCheckedAt
         ? formatDate(offer.conditionsCheckedAt)
         : "—",
-      clicks,
-      conversions: stats?.conversions ?? 0,
-      approved: stats?.approved ?? 0,
-      leadCr: stats?.leadCr ?? 0,
       epc: stats?.epc ?? 0,
-      payout: stats?.payout ?? 0,
       currency: stats?.currency ?? "RUB",
       mixedCurrencies: stats?.mixedCurrencies ?? false,
       hasEnoughData,
       isEpcLeader: hasEnoughData && bestEpc > 0 && stats?.epc === bestEpc,
-      isApprovedLeader:
-        hasEnoughData && bestApproved > 0 && stats?.approved === bestApproved,
       isHomepageFeatured: homepageFeaturedSetting?.value === offer.id,
     };
   });
@@ -947,7 +936,16 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                       periodOfferStats.map((item) => (
                         <tr key={item.offerId}>
                           <td className="px-5 py-4 font-semibold text-slate-950">
-                            {item.offer?.brandName ?? "Оффер удален"}
+                            {item.offer ? (
+                              <Link
+                                href={`/admin/offers/${item.offer.id}`}
+                                className="text-emerald-700 hover:text-emerald-800 hover:underline"
+                              >
+                                {item.offer.brandName}
+                              </Link>
+                            ) : (
+                              "Оффер удален"
+                            )}
                           </td>
                           <td className="px-5 py-4 text-slate-700">
                             {item.offer?.slug ?? item.offerId}
@@ -1034,7 +1032,12 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                             {formatDate(click.createdAt)}
                           </td>
                           <td className="px-5 py-4 font-semibold text-slate-950">
-                            {click.offer.brandName}
+                            <Link
+                              href={`/admin/offers/${click.offer.id}`}
+                              className="text-emerald-700 hover:text-emerald-800 hover:underline"
+                            >
+                              {click.offer.brandName}
+                            </Link>
                           </td>
                           <td className="px-5 py-4 text-slate-700">
                             {click.pageType ?? "—"}
@@ -1114,9 +1117,10 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                   Офферы на паузе остаются в работе, но не показываются трафику.
                 </p>
                 <p className="mt-2 text-sm text-slate-500">
-                  Показатели рассчитаны за {analyticsPeriod.from} —{" "}
-                  {analyticsPeriod.to}. Лидер выделяется только после{" "}
-                  {MIN_EFFECTIVE_SAMPLE_CLICKS} кликов. Подсветка ничего не
+                  EPC рассчитан за {analyticsPeriod.from} —{" "}
+                  {analyticsPeriod.to}. EPC-лидер выделяется только после{" "}
+                  {MIN_EFFECTIVE_SAMPLE_CLICKS} кликов. Остальная аналитика
+                  находится во вкладке «Аналитика». Подсветка ничего не
                   переставляет — порядок по-прежнему меняется вручную.
                 </p>
               </div>
