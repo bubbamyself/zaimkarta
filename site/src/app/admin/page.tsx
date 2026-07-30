@@ -37,6 +37,7 @@ export const dynamic = "force-dynamic";
 const REPORT_TIME_ZONE = "Asia/Ho_Chi_Minh";
 const REPORT_TIME_ZONE_OFFSET = "+07:00";
 const ANALYTICS_TABLE_LIMIT = 100;
+const MIN_EFFECTIVE_SAMPLE_CLICKS = 30;
 
 function formatDate(value: Date) {
   return new Intl.DateTimeFormat("ru-RU", {
@@ -46,6 +47,21 @@ function formatDate(value: Date) {
     hour: "2-digit",
     minute: "2-digit",
     timeZone: REPORT_TIME_ZONE,
+  }).format(value);
+}
+
+function formatPercent(value: number) {
+  return `${value.toLocaleString("ru-RU", {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+  })}%`;
+}
+
+function formatMoney(value: number, currency: string) {
+  return new Intl.NumberFormat("ru-RU", {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 2,
   }).format(value);
 }
 
@@ -428,8 +444,8 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     leadsCount,
     latestClicks,
     adminUsers,
-    offerClickCounts,
     periodOfferClickCounts,
+    periodConversions,
     seoPages,
     seoCategoryClickCounts,
     seoTools,
@@ -485,12 +501,6 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       : Promise.resolve([]),
     prisma.offerClick.groupBy({
       by: ["offerId"],
-      _count: {
-        id: true,
-      },
-    }),
-    prisma.offerClick.groupBy({
-      by: ["offerId"],
       where: {
         createdAt: {
           gte: analyticsPeriod.fromDate,
@@ -499,6 +509,20 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       },
       _count: {
         id: true,
+      },
+    }),
+    prisma.affiliateConversion.findMany({
+      where: {
+        createdAt: {
+          gte: analyticsPeriod.fromDate,
+          lte: analyticsPeriod.toDate,
+        },
+      },
+      select: {
+        offerId: true,
+        normalizedStatus: true,
+        payoutAmount: true,
+        currency: true,
       },
     }),
     prisma.seoPage.findMany({
@@ -570,19 +594,94 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     return true;
   });
   const archivedOffers = offers.filter((offer) => offer.status === "ARCHIVED");
-  const offerClicksById = new Map(
-    offerClickCounts.map((item) => [item.offerId, item._count.id]),
-  );
   const offersById = new Map(offers.map((offer) => [offer.id, offer]));
-  const periodOfferStats = periodOfferClickCounts
-    .map((item) => ({
-      clicks: item._count.id,
-      offer: offersById.get(item.offerId),
-      offerId: item.offerId,
-    }))
+  const periodConversionsByOfferId = new Map<
+    string,
+    {
+      conversions: number;
+      approved: number;
+      rejected: number;
+      payout: number;
+      currencies: Set<string>;
+    }
+  >();
+
+  for (const conversion of periodConversions) {
+    const stats = periodConversionsByOfferId.get(conversion.offerId) ?? {
+      conversions: 0,
+      approved: 0,
+      rejected: 0,
+      payout: 0,
+      currencies: new Set<string>(),
+    };
+    const isApproved =
+      conversion.normalizedStatus === "APPROVED" ||
+      conversion.normalizedStatus === "PAID";
+
+    stats.conversions += 1;
+
+    if (isApproved) {
+      stats.approved += 1;
+      stats.payout += conversion.payoutAmount.toNumber();
+      stats.currencies.add(conversion.currency);
+    }
+
+    if (conversion.normalizedStatus === "REJECTED") {
+      stats.rejected += 1;
+    }
+
+    periodConversionsByOfferId.set(conversion.offerId, stats);
+  }
+
+  const periodOfferClicksById = new Map(
+    periodOfferClickCounts.map((item) => [item.offerId, item._count.id]),
+  );
+  const periodOfferIds = new Set([
+    ...periodOfferClicksById.keys(),
+    ...periodConversionsByOfferId.keys(),
+  ]);
+  const periodOfferStats = [...periodOfferIds]
+    .map((offerId) => {
+      const clicks = periodOfferClicksById.get(offerId) ?? 0;
+      const conversionStats = periodConversionsByOfferId.get(offerId);
+      const currencies = conversionStats?.currencies ?? new Set<string>();
+      const payout = conversionStats?.payout ?? 0;
+
+      return {
+        clicks,
+        conversions: conversionStats?.conversions ?? 0,
+        approved: conversionStats?.approved ?? 0,
+        rejected: conversionStats?.rejected ?? 0,
+        payout,
+        currency: currencies.size === 1 ? [...currencies][0] : "RUB",
+        mixedCurrencies: currencies.size > 1,
+        leadCr: clicks > 0 ? ((conversionStats?.conversions ?? 0) / clicks) * 100 : 0,
+        approvedCr: clicks > 0 ? ((conversionStats?.approved ?? 0) / clicks) * 100 : 0,
+        epc: clicks > 0 && currencies.size <= 1 ? payout / clicks : null,
+        offer: offersById.get(offerId),
+        offerId,
+      };
+    })
     .sort((first, second) => second.clicks - first.clicks);
+  const eligiblePeriodOfferStats = periodOfferStats.filter(
+    (item) => item.clicks >= MIN_EFFECTIVE_SAMPLE_CLICKS,
+  );
+  const bestEpc = Math.max(
+    0,
+    ...eligiblePeriodOfferStats.map((item) => item.epc ?? 0),
+  );
+  const bestApproved = Math.max(
+    0,
+    ...eligiblePeriodOfferStats.map((item) => item.approved),
+  );
+  const periodOfferStatsById = new Map(
+    periodOfferStats.map((item) => [item.offerId, item]),
+  );
   const workingOfferRows: OfferOrderRow[] = workingOffers.map((offer) => {
     const affiliateOffer = offer.affiliateOffers.at(0);
+    const stats = periodOfferStatsById.get(offer.id);
+    const clicks = stats?.clicks ?? 0;
+    const hasEnoughData = clicks >= MIN_EFFECTIVE_SAMPLE_CLICKS;
 
     return {
       id: offer.id,
@@ -602,7 +701,18 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       conditionsCheckedAtLabel: offer.conditionsCheckedAt
         ? formatDate(offer.conditionsCheckedAt)
         : "—",
-      clicks: offerClicksById.get(offer.id) ?? 0,
+      clicks,
+      conversions: stats?.conversions ?? 0,
+      approved: stats?.approved ?? 0,
+      leadCr: stats?.leadCr ?? 0,
+      epc: stats?.epc ?? 0,
+      payout: stats?.payout ?? 0,
+      currency: stats?.currency ?? "RUB",
+      mixedCurrencies: stats?.mixedCurrencies ?? false,
+      hasEnoughData,
+      isEpcLeader: hasEnoughData && bestEpc > 0 && stats?.epc === bestEpc,
+      isApprovedLeader:
+        hasEnoughData && bestApproved > 0 && stats?.approved === bestApproved,
       isHomepageFeatured: homepageFeaturedSetting?.value === offer.id,
     };
   });
@@ -810,15 +920,26 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                 <h2 className="text-xl font-bold text-slate-950">
                   Сводка по офферам за период
                 </h2>
+                <p className="mt-2 text-sm text-slate-500">
+                  CR в заявку = конверсии / клики. CR подтверждения =
+                  подтверждения / клики. EPC = подтверждённая выплата / клики.
+                </p>
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[720px] border-collapse text-left text-sm">
+                <table className="w-full min-w-[1320px] border-collapse text-left text-sm">
                   <thead className="bg-slate-50 text-slate-500">
                     <tr>
                       <th className="px-5 py-3 font-semibold">Оффер</th>
                       <th className="px-5 py-3 font-semibold">Slug</th>
                       <th className="px-5 py-3 font-semibold">Статус</th>
                       <th className="px-5 py-3 font-semibold">Клики</th>
+                      <th className="px-5 py-3 font-semibold">Конверсии</th>
+                      <th className="px-5 py-3 font-semibold">Подтверждения</th>
+                      <th className="px-5 py-3 font-semibold">Отклонения</th>
+                      <th className="px-5 py-3 font-semibold">CR заявки</th>
+                      <th className="px-5 py-3 font-semibold">CR подтверждения</th>
+                      <th className="px-5 py-3 font-semibold">EPC</th>
+                      <th className="px-5 py-3 font-semibold">Выплата</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -845,13 +966,38 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                           <td className="px-5 py-4 font-semibold text-slate-950">
                             {item.clicks}
                           </td>
+                          <td className="px-5 py-4 text-slate-700">
+                            {item.conversions}
+                          </td>
+                          <td className="px-5 py-4 text-slate-700">
+                            {item.approved}
+                          </td>
+                          <td className="px-5 py-4 text-slate-700">
+                            {item.rejected}
+                          </td>
+                          <td className="px-5 py-4 text-slate-700">
+                            {formatPercent(item.leadCr)}
+                          </td>
+                          <td className="px-5 py-4 text-slate-700">
+                            {formatPercent(item.approvedCr)}
+                          </td>
+                          <td className="px-5 py-4 font-semibold text-slate-950">
+                            {item.epc === null || item.mixedCurrencies
+                              ? "несколько валют"
+                              : formatMoney(item.epc, item.currency)}
+                          </td>
+                          <td className="px-5 py-4 font-semibold text-slate-950">
+                            {item.mixedCurrencies
+                              ? "несколько валют"
+                              : formatMoney(item.payout, item.currency)}
+                          </td>
                         </tr>
                       ))
                     ) : (
                       <tr>
                         <td
                           className="px-5 py-8 text-center text-slate-500"
-                          colSpan={4}
+                          colSpan={11}
                         >
                           За выбранный период кликов нет
                         </td>
@@ -966,6 +1112,12 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                 <p className="mt-2 text-sm text-slate-500">
                   Активные показываются на витрине и имеют публичную страницу.
                   Офферы на паузе остаются в работе, но не показываются трафику.
+                </p>
+                <p className="mt-2 text-sm text-slate-500">
+                  Показатели рассчитаны за {analyticsPeriod.from} —{" "}
+                  {analyticsPeriod.to}. Лидер выделяется только после{" "}
+                  {MIN_EFFECTIVE_SAMPLE_CLICKS} кликов. Подсветка ничего не
+                  переставляет — порядок по-прежнему меняется вручную.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">

@@ -20,6 +20,13 @@ type ReportRow = {
   utmCampaign: string;
   utmContent: string;
   utmTerm: string;
+  externalConversionId: string;
+  rawConversionStatus: string;
+  normalizedConversionStatus: string;
+  payoutAmount: string;
+  payoutCurrency: string;
+  conversionCreatedAt: Date | null;
+  conversionUpdatedAt: Date | null;
 };
 
 const HEADERS = [
@@ -40,6 +47,13 @@ const HEADERS = [
   "UTM Campaign",
   "UTM Content",
   "UTM Term",
+  "Внешний ID конверсии",
+  "Исходный статус",
+  "Нормализованный статус",
+  "Сумма выплаты",
+  "Валюта выплаты",
+  "Дата создания конверсии",
+  "Дата обновления конверсии",
 ];
 
 const REPORT_TIME_ZONE = "Asia/Ho_Chi_Minh";
@@ -102,6 +116,13 @@ function rowsToMatrix(rows: ReportRow[]) {
       row.utmCampaign,
       row.utmContent,
       row.utmTerm,
+      row.externalConversionId,
+      row.rawConversionStatus,
+      row.normalizedConversionStatus,
+      row.payoutAmount,
+      row.payoutCurrency,
+      row.conversionCreatedAt ? formatCellDate(row.conversionCreatedAt) : "",
+      row.conversionUpdatedAt ? formatCellDate(row.conversionUpdatedAt) : "",
     ]),
   ];
 }
@@ -231,7 +252,7 @@ function buildSheetXml(rows: ReportRow[]) {
   <cols>
     <col min="1" max="1" width="20" customWidth="1"/>
     <col min="2" max="6" width="22" customWidth="1"/>
-    <col min="7" max="17" width="28" customWidth="1"/>
+    <col min="7" max="24" width="28" customWidth="1"/>
   </cols>
   <sheetData>${sheetData}</sheetData>
 </worksheet>`;
@@ -311,28 +332,45 @@ export async function GET(request: NextRequest) {
       offer: true,
       affiliateOffer: true,
       lead: true,
+      conversions: {
+        orderBy: {
+          createdAt: "asc",
+        },
+      },
     },
   });
 
-  const rows: ReportRow[] = clicks.map((click) => ({
-    createdAt: click.createdAt,
-    offer: click.offer.brandName,
-    offerSlug: click.offer.slug,
-    network: click.affiliateOffer?.networkName ?? click.affiliateOffer?.network ?? "",
-    networkOfferId: click.affiliateOffer?.networkOfferId ?? "",
-    leadId: click.lead.leadId,
-    pageType: click.pageType ?? "",
-    categorySlug: click.categorySlug ?? "",
-    cardPosition: click.cardPosition,
-    pageUrl: click.pageUrl ?? "",
-    redirectUrl: click.redirectUrl,
-    referrer: click.lead.referrer ?? "",
-    utmSource: click.lead.utmSource ?? "",
-    utmMedium: click.lead.utmMedium ?? "",
-    utmCampaign: click.lead.utmCampaign ?? "",
-    utmContent: click.lead.utmContent ?? "",
-    utmTerm: click.lead.utmTerm ?? "",
-  }));
+  const rows: ReportRow[] = clicks.flatMap((click) => {
+    const conversions = click.conversions.length > 0 ? click.conversions : [null];
+
+    return conversions.map((conversion) => ({
+      createdAt: click.createdAt,
+      offer: click.offer.brandName,
+      offerSlug: click.offer.slug,
+      network:
+        click.affiliateOffer?.networkName ?? click.affiliateOffer?.network ?? "",
+      networkOfferId: click.affiliateOffer?.networkOfferId ?? "",
+      leadId: click.lead.leadId,
+      pageType: click.pageType ?? "",
+      categorySlug: click.categorySlug ?? "",
+      cardPosition: click.cardPosition,
+      pageUrl: click.pageUrl ?? "",
+      redirectUrl: click.redirectUrl,
+      referrer: click.lead.referrer ?? "",
+      utmSource: click.lead.utmSource ?? "",
+      utmMedium: click.lead.utmMedium ?? "",
+      utmCampaign: click.lead.utmCampaign ?? "",
+      utmContent: click.lead.utmContent ?? "",
+      utmTerm: click.lead.utmTerm ?? "",
+      externalConversionId: conversion?.externalConversionId ?? "",
+      rawConversionStatus: conversion?.rawStatus ?? "",
+      normalizedConversionStatus: conversion?.normalizedStatus ?? "",
+      payoutAmount: conversion?.payoutAmount.toFixed(2) ?? "",
+      payoutCurrency: conversion?.currency ?? "",
+      conversionCreatedAt: conversion?.createdAt ?? null,
+      conversionUpdatedAt: conversion?.updatedAt ?? null,
+    }));
+  });
 
   const fileBase = `zaimkarta-clicks-${fromValue}-${toValue}`;
 

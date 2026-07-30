@@ -18,6 +18,16 @@ export type OfferOrderRow = {
   conditionsCheckedAtLabel: string;
   restrictedRegionCodes: string[];
   clicks: number;
+  conversions: number;
+  approved: number;
+  leadCr: number;
+  epc: number;
+  payout: number;
+  currency: string;
+  mixedCurrencies: boolean;
+  hasEnoughData: boolean;
+  isEpcLeader: boolean;
+  isApprovedLeader: boolean;
   isHomepageFeatured: boolean;
 };
 
@@ -79,7 +89,7 @@ export function OfferOrderTable({
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[1220px] border-collapse text-left text-sm">
+      <table className="w-full min-w-[1720px] border-collapse text-left text-sm">
         <thead className="bg-slate-50 text-slate-500">
           <tr>
             <th className="w-12 px-5 py-3 font-semibold">
@@ -94,6 +104,11 @@ export function OfferOrderTable({
             <th className="px-5 py-3 font-semibold">Регионы</th>
             <th className="px-5 py-3 font-semibold">Проверено</th>
             <th className="px-5 py-3 font-semibold">Клики</th>
+            <th className="px-5 py-3 font-semibold">Конверсии</th>
+            <th className="px-5 py-3 font-semibold">Подтверждения</th>
+            <th className="px-5 py-3 font-semibold">CR</th>
+            <th className="px-5 py-3 font-semibold">EPC</th>
+            <th className="px-5 py-3 font-semibold">Выплата</th>
             <th className="px-5 py-3 font-semibold">Страница</th>
             {canManageOffers ? (
               <th className="px-5 py-3 font-semibold">Правка</th>
@@ -113,7 +128,13 @@ export function OfferOrderTable({
                   }
                 }}
                 onDrop={() => handleDrop(offer.id)}
-                className={isDragging ? "bg-slate-50 opacity-60" : "bg-white"}
+                className={
+                  isDragging
+                    ? "bg-slate-50 opacity-60"
+                    : offer.isEpcLeader || offer.isApprovedLeader
+                      ? "bg-emerald-50/50"
+                      : "bg-white"
+                }
               >
                 <td className="px-5 py-4">
                   {canManageOffers ? (
@@ -143,6 +164,21 @@ export function OfferOrderTable({
                     {offer.isHomepageFeatured ? (
                       <span className="rounded-md bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-800">
                         Главный блок
+                      </span>
+                    ) : null}
+                    {offer.isEpcLeader ? (
+                      <span className="rounded-md bg-violet-100 px-2 py-1 text-xs font-semibold text-violet-800">
+                        Лидер EPC
+                      </span>
+                    ) : null}
+                    {offer.isApprovedLeader ? (
+                      <span className="rounded-md bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-800">
+                        Лидер подтверждений
+                      </span>
+                    ) : null}
+                    {!offer.hasEnoughData ? (
+                      <span className="rounded-md bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800">
+                        Мало данных
                       </span>
                     ) : null}
                   </div>
@@ -175,6 +211,38 @@ export function OfferOrderTable({
                 </td>
                 <td className="px-5 py-4 font-semibold text-slate-950">
                   {offer.clicks}
+                </td>
+                <td className="px-5 py-4 text-slate-700">
+                  {offer.conversions}
+                </td>
+                <td className="px-5 py-4 text-slate-700">
+                  {offer.approved}
+                </td>
+                <td className="px-5 py-4 text-slate-700">
+                  {offer.clicks > 0
+                    ? `${offer.leadCr.toLocaleString("ru-RU", {
+                        maximumFractionDigits: 2,
+                        minimumFractionDigits: 2,
+                      })}%`
+                    : "0,00%"}
+                </td>
+                <td className="px-5 py-4 font-semibold text-slate-950">
+                  {offer.mixedCurrencies
+                    ? "несколько валют"
+                    : new Intl.NumberFormat("ru-RU", {
+                        style: "currency",
+                        currency: offer.currency,
+                        maximumFractionDigits: 2,
+                      }).format(offer.epc)}
+                </td>
+                <td className="px-5 py-4 font-semibold text-slate-950">
+                  {offer.mixedCurrencies
+                    ? "несколько валют"
+                    : new Intl.NumberFormat("ru-RU", {
+                        style: "currency",
+                        currency: offer.currency,
+                        maximumFractionDigits: 2,
+                      }).format(offer.payout)}
                 </td>
                 <td className="px-5 py-4">
                   <Link

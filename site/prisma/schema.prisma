@@ -20,6 +20,23 @@ enum AffiliateNetwork {
   OTHER
 }
 
+enum ConversionStatus {
+  NEW
+  PENDING
+  APPROVED
+  REJECTED
+  PAID
+  CANCELLED
+  UNKNOWN
+}
+
+enum ConversionEventType {
+  NEW
+  STATUS_UPDATE
+  PAYOUT_UPDATE
+  STATUS_AND_PAYOUT_UPDATE
+}
+
 enum ApprovalTone {
   LOW
   MEDIUM
@@ -112,6 +129,7 @@ model Offer {
 
   affiliateOffers AffiliateOffer[]
   offerClicks     OfferClick[]
+  conversions     AffiliateConversion[]
   seoPageOffers   SeoPageOffer[]
 }
 
@@ -183,12 +201,55 @@ model OfferClick {
   lead             Lead            @relation(fields: [leadId], references: [id], onDelete: Cascade)
   offer            Offer           @relation(fields: [offerId], references: [id], onDelete: Cascade)
   affiliateOffer   AffiliateOffer? @relation(fields: [affiliateOfferId], references: [id], onDelete: SetNull)
+  conversions      AffiliateConversion[]
 
   @@index([leadId])
   @@index([offerId])
   @@index([affiliateOfferId])
   @@index([createdAt])
   @@index([categorySlug])
+}
+
+model AffiliateConversion {
+  id                   String            @id @default(cuid())
+  network              AffiliateNetwork  @default(LEADGID)
+  externalConversionId String
+  networkTransactionId String?
+  offerClickId         String
+  offerId              String
+  networkOfferId       String?
+  rawStatus            String
+  normalizedStatus     ConversionStatus  @default(UNKNOWN)
+  payoutAmount         Decimal           @default(0) @db.Decimal(12, 2)
+  currency             String
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  offerClick           OfferClick        @relation(fields: [offerClickId], references: [id], onDelete: Restrict)
+  offer                Offer             @relation(fields: [offerId], references: [id], onDelete: Restrict)
+  events               AffiliateConversionEvent[]
+
+  @@unique([network, externalConversionId])
+  @@index([offerClickId])
+  @@index([offerId, createdAt])
+  @@index([normalizedStatus, createdAt])
+}
+
+model AffiliateConversionEvent {
+  id               String              @id @default(cuid())
+  conversionId     String
+  eventKey         String              @unique
+  eventType        ConversionEventType
+  rawStatus        String
+  normalizedStatus ConversionStatus
+  payoutAmount     Decimal             @db.Decimal(12, 2)
+  currency         String
+  receivedAt       DateTime            @default(now())
+
+  conversion       AffiliateConversion @relation(fields: [conversionId], references: [id], onDelete: Cascade)
+
+  @@index([conversionId, receivedAt])
+  @@index([receivedAt])
 }
 
 model AdminUser {
