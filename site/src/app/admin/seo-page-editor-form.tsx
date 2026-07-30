@@ -1,13 +1,91 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
+import type { SeoPageActionState } from "./seo-actions";
 
 type SeoPageEditorFormProps = {
-  action: (formData: FormData) => void | Promise<void>;
+  action: (
+    state: SeoPageActionState,
+    formData: FormData,
+  ) => Promise<SeoPageActionState>;
   children: ReactNode;
   isEdit: boolean;
 };
+
+type FormControlSnapshot = {
+  checked?: boolean;
+  value: string;
+};
+
+function captureFormControls(form: HTMLFormElement) {
+  const snapshot = new Map<string, FormControlSnapshot[]>();
+
+  Array.from(form.elements).forEach((element) => {
+    if (
+      !(
+        element instanceof HTMLInputElement ||
+        element instanceof HTMLTextAreaElement ||
+        element instanceof HTMLSelectElement
+      ) ||
+      !element.name ||
+      (element instanceof HTMLInputElement && element.type === "file")
+    ) {
+      return;
+    }
+
+    const values = snapshot.get(element.name) ?? [];
+    values.push({
+      value: element.value,
+      ...(element instanceof HTMLInputElement &&
+      (element.type === "checkbox" || element.type === "radio")
+        ? { checked: element.checked }
+        : {}),
+    });
+    snapshot.set(element.name, values);
+  });
+
+  return snapshot;
+}
+
+function restoreFormControls(
+  form: HTMLFormElement,
+  snapshot: Map<string, FormControlSnapshot[]>,
+) {
+  const indexes = new Map<string, number>();
+
+  Array.from(form.elements).forEach((element) => {
+    if (
+      !(
+        element instanceof HTMLInputElement ||
+        element instanceof HTMLTextAreaElement ||
+        element instanceof HTMLSelectElement
+      ) ||
+      !element.name ||
+      (element instanceof HTMLInputElement && element.type === "file")
+    ) {
+      return;
+    }
+
+    const index = indexes.get(element.name) ?? 0;
+    indexes.set(element.name, index + 1);
+    const savedControl = snapshot.get(element.name)?.[index];
+
+    if (!savedControl) {
+      return;
+    }
+
+    if (
+      element instanceof HTMLInputElement &&
+      (element.type === "checkbox" || element.type === "radio")
+    ) {
+      element.checked = Boolean(savedControl.checked);
+      return;
+    }
+
+    element.value = savedControl.value;
+  });
+}
 
 function textValue(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
@@ -79,7 +157,22 @@ export function SeoPageEditorForm({
   children,
   isEdit,
 }: SeoPageEditorFormProps) {
+  const formRef = useRef<HTMLFormElement>(null);
+  const submittedControlsRef =
+    useRef<Map<string, FormControlSnapshot[]> | null>(null);
   const [validationMessage, setValidationMessage] = useState("");
+  const [state, formAction, isPending] = useActionState(action, {});
+
+  useEffect(() => {
+    const form = formRef.current;
+    const submittedControls = submittedControlsRef.current;
+
+    if (!state.error || !form || !submittedControls) {
+      return;
+    }
+
+    restoreFormControls(form, submittedControls);
+  }, [state]);
 
   function validatePublication(event: React.FormEvent<HTMLFormElement>) {
     const nativeEvent = event.nativeEvent as SubmitEvent;
@@ -87,6 +180,7 @@ export function SeoPageEditorForm({
     const formData = new FormData(form);
     const submitStatus = getSubmitStatus(formData, nativeEvent.submitter);
     const slug = textValue(formData, "slug");
+    submittedControlsRef.current = captureFormControls(form);
 
     if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
       event.preventDefault();
@@ -128,8 +222,31 @@ export function SeoPageEditorForm({
       missingFields.push({ name: "content", label: "Основной текст статьи" });
     }
 
-    if (pageType === "CATEGORY" && formData.getAll("offerId").length === 0) {
-      missingFields.push({ name: "offerId", label: "Офферы в подборке" });
+    if (pageType === "CATEGORY") {
+      const selectedOfferIds = formData.getAll("offerId");
+
+      if (selectedOfferIds.length === 0) {
+        missingFields.push({ name: "offerId", label: "Офферы в подборке" });
+      } else {
+        const unavailableOffers = Array.from(
+          form.querySelectorAll<HTMLInputElement>(
+            'input[name="offerId"]:checked[data-publication-unavailable]',
+          ),
+        );
+
+        if (unavailableOffers.length > 0) {
+          event.preventDefault();
+          markMissingFields(form, ["offerId"]);
+          setValidationMessage(
+            unavailableOffers
+              .map((input) => input.dataset.publicationUnavailable)
+              .filter(Boolean)
+              .join(" "),
+          );
+          focusFirstMissingField(form, ["offerId"]);
+          return;
+        }
+      }
     }
 
     if (pageType === "SERVICE" && !textValue(formData, "pageToolToolId")) {
@@ -178,14 +295,18 @@ export function SeoPageEditorForm({
 
   return (
     <form
-      action={action}
+      ref={formRef}
+      action={formAction}
       onSubmit={validatePublication}
       noValidate
       className="grid gap-6 rounded-lg border border-slate-200 bg-slate-50 p-4"
     >
-      {validationMessage ? (
-        <div className="sticky top-3 z-30 rounded-lg border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-800 shadow-sm">
-          {validationMessage}
+      {validationMessage || state.error ? (
+        <div
+          aria-live="polite"
+          className="sticky top-3 z-30 rounded-lg border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-800 shadow-sm"
+        >
+          {validationMessage || state.error}
         </div>
       ) : null}
 
@@ -202,23 +323,30 @@ export function SeoPageEditorForm({
               type="submit"
               name="submitStatus"
               value="DRAFT"
+              disabled={isPending}
               className="rounded-md border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-800 transition hover:bg-slate-100"
             >
-              Сохранить черновик
+              {isPending ? "Сохраняем…" : "Сохранить черновик"}
             </button>
             <button
               type="submit"
+              disabled={isPending}
               className="rounded-md border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-800 transition hover:bg-slate-100"
             >
-              {isEdit ? "Сохранить изменения" : "Создать страницу"}
+              {isPending
+                ? "Сохраняем…"
+                : isEdit
+                  ? "Сохранить изменения"
+                  : "Создать страницу"}
             </button>
             <button
               type="submit"
               name="submitStatus"
               value="PUBLISHED"
+              disabled={isPending}
               className="rounded-md bg-emerald-700 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-800"
             >
-              Опубликовать
+              {isPending ? "Публикуем…" : "Опубликовать"}
             </button>
           </div>
         </div>

@@ -27,6 +27,55 @@ const SEO_PAGE_INTENTS: SeoPageIntent[] = [
 ];
 const SEO_TOOL_VARIANTS: SeoToolVariant[] = ["FULL", "COMPACT", "INLINE"];
 
+export type SeoPageActionState = {
+  error?: string;
+};
+
+class SeoPageFormError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "SeoPageFormError";
+  }
+}
+
+function actionError(message: string) {
+  return new SeoPageFormError(message);
+}
+
+function isRedirectError(error: unknown) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "digest" in error &&
+    typeof error.digest === "string" &&
+    error.digest.startsWith("NEXT_REDIRECT")
+  );
+}
+
+function toSeoPageActionState(error: unknown): SeoPageActionState {
+  if (error instanceof SeoPageFormError) {
+    return {
+      error: error.message,
+    };
+  }
+
+  if (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === "P2002"
+  ) {
+    return {
+      error: "Страница с таким slug уже существует. Выбери другой slug.",
+    };
+  }
+
+  console.error("Не удалось сохранить SEO-страницу", error);
+
+  return {
+    error:
+      "Не удалось сохранить SEO-страницу. Данные остались в форме — проверь поля и попробуй ещё раз.",
+  };
+}
+
 function readString(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
 }
@@ -77,7 +126,7 @@ function parseOptionalJsonObject(value: string, label: string) {
 
     return parsed;
   } catch {
-    throw new Error(`${label}: нужен валидный JSON`);
+    throw actionError(`${label}: нужен валидный JSON`);
   }
 }
 
@@ -89,7 +138,7 @@ function parseOptionalJsonValue(value: string, label: string) {
   try {
     return JSON.parse(value);
   } catch {
-    throw new Error(`${label}: нужен валидный JSON`);
+    throw actionError(`${label}: нужен валидный JSON`);
   }
 }
 
@@ -122,7 +171,7 @@ function mergeJsonRecords(base: unknown, override: unknown) {
 
 function validateSlug(slug: string) {
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
-    throw new Error("Slug должен быть латиницей в формате primer-stranicy");
+    throw actionError("Slug должен быть латиницей в формате primer-stranicy");
   }
 }
 
@@ -153,7 +202,7 @@ async function requireSeoManager() {
   const session = await getAdminSession();
 
   if (!session) {
-    throw new Error("Недостаточно прав для управления SEO-страницами");
+    throw actionError("Недостаточно прав для управления SEO-страницами");
   }
 
   return session;
@@ -302,7 +351,7 @@ async function validateSeoPagePublication(
   }
 
   if (missingFields.length > 0) {
-    throw new Error(
+    throw actionError(
       `Нельзя опубликовать страницу. Заполни поля: ${missingFields.join(", ")}.`,
     );
   }
@@ -321,7 +370,7 @@ async function validateSeoPagePublication(
     .join("\n");
 
   if (hasForbiddenPromise(publicText)) {
-    throw new Error(
+    throw actionError(
       "В тексте есть рискованные обещания вроде «100% одобрение», «гарантированно», «деньги всем» или «без отказа» как обещание. Смягчи формулировку перед публикацией.",
     );
   }
@@ -345,7 +394,7 @@ async function validateSeoPagePublication(
   );
 
   if (pageTools.some((item) => !activeToolIds.has(item.toolId))) {
-    throw new Error(
+    throw actionError(
       "Опубликованная страница не может использовать черновые, архивные или остановленные инструменты.",
     );
   }
@@ -358,18 +407,18 @@ async function validateSeoPagePublication(
   );
 
   if (missingBlockLinks.length > 0) {
-    throw new Error(
+    throw actionError(
       `Для tool-блоков нет подключенных инструментов: ${missingBlockLinks.join(", ")}.`,
     );
   }
 
   if (data.pageType === "SERVICE" && !pageTools.some((item) => activeToolIds.has(item.toolId))) {
-    throw new Error("SERVICE-страница должна иметь хотя бы один активный инструмент.");
+    throw actionError("SERVICE-страница должна иметь хотя бы один активный инструмент.");
   }
 
   if (data.pageType === "CATEGORY") {
     if (offerLinks.length === 0) {
-      throw new Error("Подборку нельзя опубликовать без выбранных офферов.");
+      throw actionError("Подборку нельзя опубликовать без выбранных офферов.");
     }
 
     const selectedOffers = await prisma.offer.findMany({
@@ -390,26 +439,64 @@ async function validateSeoPagePublication(
             id: true,
             trackingBaseUrl: true,
           },
-          take: 1,
         },
       },
     });
     const offersById = new Map(selectedOffers.map((offer) => [offer.id, offer]));
     const unavailableOffers = offerLinks
-      .map((item) => offersById.get(item.offerId))
+      .map((item) => {
+        const offer = offersById.get(item.offerId);
+
+        if (!offer) {
+          return {
+            brandName: "Неизвестный оффер",
+            reason: "оффер не найден",
+          };
+        }
+
+        if (offer.status !== "ACTIVE") {
+          return {
+            brandName: offer.brandName,
+            reason: `статус ${offer.status}, а для публикации нужен ACTIVE`,
+          };
+        }
+
+        const hasActiveHttpsCpa = offer.affiliateOffers.some(
+          (affiliateOffer) => {
+            try {
+              return new URL(affiliateOffer.trackingBaseUrl).protocol === "https:";
+            } catch {
+              return false;
+            }
+          },
+        );
+
+        if (!hasActiveHttpsCpa) {
+          return {
+            brandName: offer.brandName,
+            reason: "нет активной корректной HTTPS CPA-ссылки",
+          };
+        }
+
+        return null;
+      })
       .filter(
-        (offer) =>
-          !offer ||
-          offer.status !== "ACTIVE" ||
-          offer.affiliateOffers.length === 0 ||
-          !offer.affiliateOffers.at(0)?.trackingBaseUrl,
+        (
+          item,
+        ): item is {
+          brandName: string;
+          reason: string;
+        } => item !== null,
       );
 
     if (unavailableOffers.length > 0) {
-      throw new Error(
-        `Подборку нельзя опубликовать: у выбранных офферов нет ACTIVE-статуса или активной CPA-ссылки (${unavailableOffers
-          .map((offer) => offer?.brandName ?? "неизвестный оффер")
-          .join(", ")}).`,
+      throw actionError(
+        unavailableOffers
+          .map(
+            (offer) =>
+              `Оффер ${offer.brandName} нельзя добавить в опубликованную подборку: ${offer.reason}.`,
+          )
+          .join(" "),
       );
     }
   }
@@ -472,7 +559,7 @@ async function validateFaqLinks(seoPageId: string, faqItems: ReturnType<typeof c
   }
 
   if (linkedSeoPageIds.includes(seoPageId)) {
-    throw new Error("FAQ не может ссылаться на текущую SEO-страницу");
+    throw actionError("FAQ не может ссылаться на текущую SEO-страницу");
   }
 
   const existingLinkedPages = await prisma.seoPage.findMany({
@@ -493,7 +580,7 @@ async function validateFaqLinks(seoPageId: string, faqItems: ReturnType<typeof c
   );
 
   if (missingLinkedPageId) {
-    throw new Error("Выбранная статья для FAQ не найдена или не опубликована");
+    throw actionError("Выбранная статья для FAQ не найдена или не опубликована");
   }
 }
 
@@ -680,79 +767,101 @@ async function replaceSeoPageRelations(seoPageId: string, formData: FormData) {
   ]);
 }
 
-export async function createSeoPage(formData: FormData) {
-  await requireSeoManager();
+export async function createSeoPage(
+  _state: SeoPageActionState,
+  formData: FormData,
+): Promise<SeoPageActionState> {
+  try {
+    await requireSeoManager();
 
-  const seoPageData = collectSeoPageData(formData);
-  const pageToolLinks = collectPageToolLinks(formData);
-  const offerLinks = collectOfferLinks(formData);
-  if (seoPageData.pageType === "SERVICE" && !seoPageData.contentBlocks) {
-    seoPageData.contentBlocks = buildServiceContentBlocks(pageToolLinks);
+    const seoPageData = collectSeoPageData(formData);
+    const pageToolLinks = collectPageToolLinks(formData);
+    const offerLinks = collectOfferLinks(formData);
+    if (seoPageData.pageType === "SERVICE" && !seoPageData.contentBlocks) {
+      seoPageData.contentBlocks = buildServiceContentBlocks(pageToolLinks);
+    }
+    await validateSeoPagePublication(seoPageData, pageToolLinks, offerLinks);
+
+    const seoPage = await prisma.seoPage.create({
+      data: {
+        ...seoPageData,
+        publishedAt: seoPageData.status === "PUBLISHED" ? new Date() : null,
+      },
+    });
+
+    await replaceSeoPageRelations(seoPage.id, formData);
+
+    revalidatePath("/");
+    revalidatePath(`/${seoPage.slug}`);
+    revalidatePath("/admin");
+    redirect(`/admin/seo/${seoPage.id}?saved=1`);
+  } catch (error) {
+    if (isRedirectError(error)) {
+      throw error;
+    }
+
+    return toSeoPageActionState(error);
   }
-  await validateSeoPagePublication(seoPageData, pageToolLinks, offerLinks);
-
-  const seoPage = await prisma.seoPage.create({
-    data: {
-      ...seoPageData,
-      publishedAt: seoPageData.status === "PUBLISHED" ? new Date() : null,
-    },
-  });
-
-  await replaceSeoPageRelations(seoPage.id, formData);
-
-  revalidatePath("/");
-  revalidatePath(`/${seoPage.slug}`);
-  revalidatePath("/admin");
-  redirect(`/admin/seo/${seoPage.id}?saved=1`);
 }
 
-export async function updateSeoPage(formData: FormData) {
-  await requireSeoManager();
+export async function updateSeoPage(
+  _state: SeoPageActionState,
+  formData: FormData,
+): Promise<SeoPageActionState> {
+  try {
+    await requireSeoManager();
 
-  const seoPageId = readString(formData, "seoPageId");
-  const seoPageData = collectSeoPageData(formData);
-  const pageToolLinks = collectPageToolLinks(formData);
-  const offerLinks = collectOfferLinks(formData);
-  if (seoPageData.pageType === "SERVICE" && !seoPageData.contentBlocks) {
-    seoPageData.contentBlocks = buildServiceContentBlocks(pageToolLinks);
+    const seoPageId = readString(formData, "seoPageId");
+    const seoPageData = collectSeoPageData(formData);
+    const pageToolLinks = collectPageToolLinks(formData);
+    const offerLinks = collectOfferLinks(formData);
+    if (seoPageData.pageType === "SERVICE" && !seoPageData.contentBlocks) {
+      seoPageData.contentBlocks = buildServiceContentBlocks(pageToolLinks);
+    }
+    await validateSeoPagePublication(seoPageData, pageToolLinks, offerLinks);
+
+    if (!seoPageId) {
+      throw actionError("Не найден ID SEO-страницы");
+    }
+
+    const currentPage = await prisma.seoPage.findUnique({
+      where: {
+        id: seoPageId,
+      },
+    });
+
+    if (!currentPage) {
+      throw actionError("SEO-страница не найдена");
+    }
+
+    await prisma.seoPage.update({
+      where: {
+        id: seoPageId,
+      },
+      data: {
+        ...seoPageData,
+        publishedAt:
+          seoPageData.status === "PUBLISHED"
+            ? (currentPage.publishedAt ?? new Date())
+            : currentPage.publishedAt,
+      },
+    });
+
+    await replaceSeoPageRelations(seoPageId, formData);
+
+    revalidatePath("/");
+    revalidatePath(`/${currentPage.slug}`);
+    revalidatePath(`/${seoPageData.slug}`);
+    revalidatePath("/admin");
+    revalidatePath(`/admin/seo/${seoPageId}`);
+    redirect(`/admin/seo/${seoPageId}?saved=1`);
+  } catch (error) {
+    if (isRedirectError(error)) {
+      throw error;
+    }
+
+    return toSeoPageActionState(error);
   }
-  await validateSeoPagePublication(seoPageData, pageToolLinks, offerLinks);
-
-  if (!seoPageId) {
-    throw new Error("Не найден ID SEO-страницы");
-  }
-
-  const currentPage = await prisma.seoPage.findUnique({
-    where: {
-      id: seoPageId,
-    },
-  });
-
-  if (!currentPage) {
-    throw new Error("SEO-страница не найдена");
-  }
-
-  await prisma.seoPage.update({
-    where: {
-      id: seoPageId,
-    },
-    data: {
-      ...seoPageData,
-      publishedAt:
-        seoPageData.status === "PUBLISHED"
-          ? (currentPage.publishedAt ?? new Date())
-          : currentPage.publishedAt,
-    },
-  });
-
-  await replaceSeoPageRelations(seoPageId, formData);
-
-  revalidatePath("/");
-  revalidatePath(`/${currentPage.slug}`);
-  revalidatePath(`/${seoPageData.slug}`);
-  revalidatePath("/admin");
-  revalidatePath(`/admin/seo/${seoPageId}`);
-  redirect(`/admin/seo/${seoPageId}?saved=1`);
 }
 
 export async function updateSeoPageDisplayOrder(

@@ -442,7 +442,6 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
           orderBy: {
             createdAt: "desc",
           },
-          take: 1,
         },
       },
     }),

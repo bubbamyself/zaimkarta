@@ -63,7 +63,6 @@ export default async function EditSeoPage({
           orderBy: {
             createdAt: "desc",
           },
-          take: 1,
         },
       },
     }),

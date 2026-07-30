@@ -265,6 +265,22 @@ function getAdvancedToolConfig(config: unknown) {
     : "";
 }
 
+function hasValidActiveCpa(affiliateOffers: AffiliateOffer[] | undefined) {
+  return Boolean(
+    affiliateOffers?.some((affiliateOffer) => {
+      if (!affiliateOffer.isActive) {
+        return false;
+      }
+
+      try {
+        return new URL(affiliateOffer.trackingBaseUrl).protocol === "https:";
+      } catch {
+        return false;
+      }
+    }),
+  );
+}
+
 export function SeoPageEditor({
   offers,
   seoTools = [],
@@ -616,13 +632,22 @@ export function SeoPageEditor({
         <div className="mt-4 grid gap-4 xl:grid-cols-2">
           {offers.map((offer, index) => {
             const selectedOffer = selectedOffers.get(offer.id);
-            const affiliateOffer = offer.affiliateOffers?.find((item) => item.isActive);
-            const hasActiveCpa = Boolean(affiliateOffer?.trackingBaseUrl);
+            const hasActiveCpa = hasValidActiveCpa(offer.affiliateOffers);
+            const publicationUnavailableReason =
+              offer.status !== "ACTIVE"
+                ? `Оффер ${offer.brandName} нельзя добавить в опубликованную подборку: статус ${offer.status}, а для публикации нужен ACTIVE.`
+                : !hasActiveCpa
+                  ? `Оффер ${offer.brandName} нельзя добавить в опубликованную подборку: нет активной корректной HTTPS CPA-ссылки.`
+                  : null;
 
             return (
               <div
                 key={offer.id}
-                className="min-w-0 rounded-lg border border-slate-200 p-4"
+                className={`min-w-0 rounded-lg border p-4 ${
+                  publicationUnavailableReason
+                    ? "border-amber-300 bg-amber-50"
+                    : "border-slate-200"
+                }`}
               >
                 <span className="flex min-w-0 items-start gap-3">
                   <input
@@ -630,6 +655,9 @@ export function SeoPageEditor({
                     name="offerId"
                     value={offer.id}
                     defaultChecked={selectedOffer !== undefined}
+                    data-publication-unavailable={
+                      publicationUnavailableReason ?? undefined
+                    }
                     className="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-700"
                   />
                   <span className="min-w-0">
@@ -638,8 +666,20 @@ export function SeoPageEditor({
                     </span>
                     <span className="block text-sm text-slate-500">
                       {offer.slug} · {offer.status} · CPA{" "}
-                      {hasActiveCpa ? "активна" : "не подключена"}
+                      {hasActiveCpa ? "активна и HTTPS" : "не готова"}
                     </span>
+                    {publicationUnavailableReason ? (
+                      <span className="mt-2 block text-sm font-semibold text-amber-800">
+                        Нельзя публиковать:{" "}
+                        {offer.status !== "ACTIVE"
+                          ? `статус ${offer.status}, нужен ACTIVE`
+                          : "нет активной корректной HTTPS CPA-ссылки"}
+                      </span>
+                    ) : (
+                      <span className="mt-2 block text-sm font-semibold text-emerald-700">
+                        Готов к публикации
+                      </span>
+                    )}
                   </span>
                 </span>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-[90px_minmax(0,1fr)] xl:grid-cols-2">
