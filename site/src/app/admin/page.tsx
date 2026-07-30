@@ -840,7 +840,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         </div>
       </nav>
 
-      <div className="mx-auto grid max-w-7xl gap-8 px-5 py-8">
+      <div className="mx-auto grid max-w-7xl grid-cols-[minmax(0,1fr)] gap-8 px-5 py-8">
         {activeSection === "email" && canManageAdmins ? (
           <AdminEmailSection searchParams={resolvedSearchParams ?? {}} />
         ) : null}
