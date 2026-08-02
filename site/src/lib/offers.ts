@@ -16,6 +16,8 @@ export type OfferCardData = {
   maxTermDays: number | null;
   dailyRateFrom: number | null;
   dailyRateTo: number | null;
+  pskFrom: number | null;
+  pskTo: number | null;
   amount: string;
   term: string;
   psk: string;
@@ -24,9 +26,13 @@ export type OfferCardData = {
   approval: string;
   approvalTone: "low" | "medium" | "high";
   payoutMethods: string[];
+  repaymentMethods: string[];
   requirements: string[];
   documents: string[];
   advantages: string[];
+  warnings: string[];
+  restrictedRegionCodes: string[];
+  conditionsCheckedAt: string | null;
   tags: string[];
   pageBadge?: string | null;
   pageNote?: string | null;
@@ -67,9 +73,13 @@ type OfferForCard = Pick<
   | "pskFrom"
   | "pskTo"
   | "rating"
+  | "repaymentMethods"
   | "requirements"
+  | "restrictedRegionCodes"
   | "reviewsCount"
   | "slug"
+  | "warnings"
+  | "conditionsCheckedAt"
 >;
 
 function formatMoney(value: number | null) {
@@ -128,6 +138,8 @@ export function mapOfferToCardData(offer: OfferForCard): OfferCardData {
     maxTermDays: offer.maxTermDays,
     dailyRateFrom: decimalToNumber(offer.dailyRateFrom),
     dailyRateTo: decimalToNumber(offer.dailyRateTo),
+    pskFrom: decimalToNumber(offer.pskFrom),
+    pskTo: decimalToNumber(offer.pskTo),
     amount: `до ${formatMoney(offer.maxAmount)}`,
     term:
       offer.minTermDays && offer.maxTermDays
@@ -139,9 +151,15 @@ export function mapOfferToCardData(offer: OfferForCard): OfferCardData {
     approval: offer.approvalLabel ?? "Индивидуально",
     approvalTone: mapApprovalTone(offer.approvalTone),
     payoutMethods: offer.payoutMethods,
+    repaymentMethods: offer.repaymentMethods,
     requirements: offer.requirements,
     documents: offer.documents,
     advantages: offer.advantages,
+    warnings: offer.warnings,
+    restrictedRegionCodes: offer.restrictedRegionCodes,
+    conditionsCheckedAt: offer.conditionsCheckedAt
+      ? offer.conditionsCheckedAt.toISOString()
+      : null,
     tags: offer.advantages.slice(0, 3),
   };
 }
@@ -216,6 +234,8 @@ export async function getOfferDetails(
     maxTermDays: offer.maxTermDays,
     dailyRateFrom: decimalToNumber(offer.dailyRateFrom),
     dailyRateTo: decimalToNumber(offer.dailyRateTo),
+    pskFrom: decimalToNumber(offer.pskFrom),
+    pskTo: decimalToNumber(offer.pskTo),
     amount: `до ${formatMoney(offer.maxAmount)}`,
     term:
       offer.minTermDays && offer.maxTermDays
@@ -227,15 +247,19 @@ export async function getOfferDetails(
     approval: offer.approvalLabel ?? "Индивидуально",
     approvalTone: mapApprovalTone(offer.approvalTone),
     payoutMethods: offer.payoutMethods,
+    repaymentMethods: offer.repaymentMethods,
     requirements: offer.requirements,
     documents: offer.documents,
     advantages: offer.advantages,
+    warnings: offer.warnings,
+    restrictedRegionCodes: offer.restrictedRegionCodes,
+    conditionsCheckedAt: offer.conditionsCheckedAt
+      ? offer.conditionsCheckedAt.toISOString()
+      : null,
     tags: offer.advantages.slice(0, 3),
     legalName: offer.legalName,
     officialSite: offer.officialSite,
     shortDescription: offer.shortDescription,
-    repaymentMethods: offer.repaymentMethods,
-    warnings: offer.warnings,
     legalDisclosure: offer.legalDisclosure,
   };
 }

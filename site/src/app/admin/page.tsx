@@ -292,6 +292,14 @@ function getSeoToolTypeLabel(type: string) {
     return "Чек-лист";
   }
 
+  if (type === "REPAYMENT_DATE_CALCULATOR") {
+    return "Дата возврата";
+  }
+
+  if (type === "OVERDUE_LOAN_CALCULATOR") {
+    return "Просрочка";
+  }
+
   if (type === "MINI_OFFER_PICKER") {
     return "Мини-подборщик";
   }
