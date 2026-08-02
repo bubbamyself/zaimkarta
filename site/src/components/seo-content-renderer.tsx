@@ -2,7 +2,10 @@ import type { SeoPageTool, SeoTool, SeoToolType } from "@prisma/client";
 import { FaqSection, type FaqItemWithLinkedPage } from "@/components/faq-section";
 import { ApplicationChecklist } from "@/components/seo-tools/application-checklist";
 import { FilterableOffers } from "@/components/seo-tools/filterable-offers";
+import { LoanComparison } from "@/components/seo-tools/loan-comparison";
+import { OverdueLoanCalculator } from "@/components/seo-tools/overdue-loan-calculator";
 import { OverpaymentCalculator } from "@/components/seo-tools/overpayment-calculator";
+import { RepaymentDateCalculator } from "@/components/seo-tools/repayment-date-calculator";
 import type { OfferCardData } from "@/lib/offers";
 
 type JsonRecord = Record<string, unknown>;
@@ -31,6 +34,7 @@ type SeoContentRendererProps = {
   offers: OfferCardData[];
   pageType: string;
   categorySlug: string;
+  selectedRegionCode?: string | null;
   riskNotice?: string | null;
   adminPreview?: boolean;
 };
@@ -68,6 +72,7 @@ function renderToolByType({
   offers,
   pageType,
   categorySlug,
+  selectedRegionCode,
 }: {
   toolType: SeoToolType;
   title: string;
@@ -77,6 +82,7 @@ function renderToolByType({
   offers: OfferCardData[];
   pageType: string;
   categorySlug: string;
+  selectedRegionCode?: string | null;
 }) {
   if (toolType === "OVERPAYMENT_CALCULATOR") {
     return (
@@ -88,6 +94,7 @@ function renderToolByType({
         offers={offers}
         pageType={pageType}
         categorySlug={categorySlug}
+        selectedRegionCode={selectedRegionCode}
       />
     );
   }
@@ -102,6 +109,52 @@ function renderToolByType({
         offers={offers}
         pageType={pageType}
         categorySlug={categorySlug}
+        selectedRegionCode={selectedRegionCode}
+      />
+    );
+  }
+
+  if (toolType === "REPAYMENT_DATE_CALCULATOR") {
+    return (
+      <RepaymentDateCalculator
+        title={title}
+        intro={intro}
+        config={config}
+        variant={variant}
+        offers={offers}
+        pageType={pageType}
+        categorySlug={categorySlug}
+        selectedRegionCode={selectedRegionCode}
+      />
+    );
+  }
+
+  if (toolType === "OVERDUE_LOAN_CALCULATOR") {
+    return (
+      <OverdueLoanCalculator
+        title={title}
+        intro={intro}
+        config={config}
+        variant={variant}
+        offers={offers}
+        pageType={pageType}
+        categorySlug={categorySlug}
+        selectedRegionCode={selectedRegionCode}
+      />
+    );
+  }
+
+  if (toolType === "COMPARISON") {
+    return (
+      <LoanComparison
+        title={title}
+        intro={intro}
+        config={config}
+        variant={variant}
+        offers={offers}
+        pageType={pageType}
+        categorySlug={categorySlug}
+        selectedRegionCode={selectedRegionCode}
       />
     );
   }
@@ -116,6 +169,7 @@ export function SeoContentRenderer({
   offers,
   pageType,
   categorySlug,
+  selectedRegionCode,
   riskNotice,
   adminPreview = false,
 }: SeoContentRendererProps) {
@@ -238,6 +292,7 @@ export function SeoContentRenderer({
             offers,
             pageType,
             categorySlug,
+            selectedRegionCode,
           });
 
           return renderedTool ? (

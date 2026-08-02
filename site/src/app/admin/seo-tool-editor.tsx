@@ -82,8 +82,14 @@ function getAdvancedConfig(config: unknown) {
     "limits",
     "steps",
     "labels",
+    "hints",
     "result",
     "results",
+    "quickAmounts",
+    "quickTerms",
+    "priorities",
+    "rows",
+    "links",
     "cta",
     "offers",
     "riskNotice",
@@ -427,6 +433,533 @@ function ApplicationChecklistFields({ config }: { config: unknown }) {
   );
 }
 
+function getQuickTermsText(config: unknown) {
+  if (!isRecord(config) || !Array.isArray(config.quickTerms)) {
+    return "";
+  }
+
+  return config.quickTerms.join(", ");
+}
+
+function getQuickAmountsText(config: unknown) {
+  if (!isRecord(config) || !Array.isArray(config.quickAmounts)) {
+    return "";
+  }
+
+  return config.quickAmounts.join(", ");
+}
+
+function RepaymentDateCalculatorFields({ config }: { config: unknown }) {
+  return (
+    <section className="grid gap-5 rounded-lg border border-slate-200 bg-white p-4">
+      <SectionHeader
+        title="Настройки калькулятора даты возврата"
+        description="Инструмент считает ориентировочную дату возврата по дате получения денег и сроку займа."
+      />
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <Field
+          label="Дефолтный срок, дней"
+          name="defaultTermDays"
+          defaultValue={getConfigText(config, "defaults", "termDays")}
+          placeholder="30"
+        />
+        <Field
+          label="Минимальный срок"
+          name="termMinDays"
+          defaultValue={getConfigText(config, "limits", "termMinDays")}
+          placeholder="1"
+        />
+        <Field
+          label="Максимальный срок"
+          name="termMaxDays"
+          defaultValue={getConfigText(config, "limits", "termMaxDays")}
+          placeholder="365"
+        />
+      </div>
+
+      <Field
+        label="Быстрые варианты срока"
+        name="quickTerms"
+        defaultValue={getQuickTermsText(config)}
+        placeholder="7, 14, 21, 30"
+      />
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <Field
+          label="Подпись даты"
+          name="startDateLabel"
+          defaultValue={getConfigText(config, "labels", "startDate")}
+          placeholder="Когда вы получили деньги?"
+        />
+        <Field
+          label="Подпись срока"
+          name="termDaysLabel"
+          defaultValue={getConfigText(config, "labels", "termDays")}
+          placeholder="На какой срок вы взяли займ?"
+        />
+        <Field
+          label="Единица срока"
+          name="termUnitLabel"
+          defaultValue={getConfigText(config, "labels", "termUnit")}
+          placeholder="дней"
+        />
+      </div>
+
+      <Field
+        label="Шаблон результата"
+        name="repaymentDateTitleTemplate"
+        defaultValue={getResultConfigText(config, "titleTemplate")}
+        placeholder="Вернуть займ: {date}"
+      />
+      <TextArea
+        label="Текст, если дата уже прошла"
+        name="repaymentDatePastText"
+        defaultValue={getResultConfigText(config, "pastText")}
+        rows={2}
+      />
+      <TextArea
+        label="Текст, если дата сегодня"
+        name="repaymentDateTodayText"
+        defaultValue={getResultConfigText(config, "todayText")}
+        rows={2}
+      />
+      <TextArea
+        label="Шаблон будущей даты"
+        name="repaymentDateFutureTextTemplate"
+        defaultValue={getResultConfigText(config, "futureTextTemplate")}
+        rows={2}
+      />
+      <TextArea
+        label="Предупреждение для выходного"
+        name="repaymentDateWeekendWarning"
+        defaultValue={getResultConfigText(config, "weekendWarning")}
+        rows={2}
+      />
+
+      <Field
+        label="CTA"
+        name="ctaText"
+        defaultValue={getConfigText(config, "cta", "text")}
+        placeholder="Посмотреть предложения"
+      />
+      <TextArea
+        label="Risk notice"
+        name="riskNoticeText"
+        defaultValue={getConfigText(config, "riskNotice", "text")}
+        rows={3}
+      />
+    </section>
+  );
+}
+
+function getLinksText(config: unknown) {
+  if (!isRecord(config) || !Array.isArray(config.links)) {
+    return "";
+  }
+
+  return config.links
+    .filter(isRecord)
+    .map((link) => `${String(link.label ?? "")} | ${String(link.href ?? "")}`)
+    .join("\n");
+}
+
+function OverdueLoanCalculatorFields({ config }: { config: unknown }) {
+  return (
+    <section className="grid gap-5 rounded-lg border border-slate-200 bg-white p-4">
+      <SectionHeader
+        title="Настройки калькулятора просрочки"
+        description="Инструмент считает ориентировочную структуру задолженности по данным из договора и личного кабинета кредитора."
+      />
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <Field
+          label="Дефолтный основной долг"
+          name="defaultPrincipalDebt"
+          defaultValue={getConfigText(config, "defaults", "principalDebt")}
+          placeholder="10000"
+        />
+        <Field
+          label="Дефолтные проценты на дату платежа"
+          name="defaultAccruedInterestAtDueDate"
+          defaultValue={getConfigText(
+            config,
+            "defaults",
+            "accruedInterestAtDueDate",
+          )}
+          placeholder="0"
+        />
+        <SelectField
+          label="Проценты после просрочки"
+          name="overdueInterestMode"
+          defaultValue={getConfigText(config, "defaults", "interestMode") || "unknown"}
+          options={[
+            { value: "unknown", label: "Не уверен" },
+            { value: "yes", label: "Да" },
+            { value: "no", label: "Нет" },
+          ]}
+        />
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <Field
+          label="Дефолтная дневная ставка"
+          name="defaultDailyRate"
+          defaultValue={getConfigText(config, "defaults", "dailyRate")}
+          placeholder="0.8"
+        />
+        <Field
+          label="Дефолтная годовая неустойка"
+          name="defaultAnnualPenaltyRate"
+          defaultValue={getConfigText(config, "defaults", "annualPenaltyRate")}
+          placeholder="0"
+        />
+        <Field
+          label="Дефолтная дневная неустойка"
+          name="defaultDailyPenaltyRate"
+          defaultValue={getConfigText(config, "defaults", "dailyPenaltyRate")}
+          placeholder="0"
+        />
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <Field
+          label="Мин. основной долг"
+          name="principalDebtMin"
+          defaultValue={getConfigText(config, "limits", "principalDebtMin")}
+          placeholder="0"
+        />
+        <Field
+          label="Макс. основной долг"
+          name="principalDebtMax"
+          defaultValue={getConfigText(config, "limits", "principalDebtMax")}
+          placeholder="1000000"
+        />
+        <Field
+          label="Мин. проценты"
+          name="accruedInterestMin"
+          defaultValue={getConfigText(config, "limits", "accruedInterestMin")}
+          placeholder="0"
+        />
+        <Field
+          label="Макс. проценты"
+          name="accruedInterestMax"
+          defaultValue={getConfigText(config, "limits", "accruedInterestMax")}
+          placeholder="1000000"
+        />
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <Field
+          label="Мин. дневная ставка"
+          name="dailyRateMin"
+          defaultValue={getConfigText(config, "limits", "dailyRateMin")}
+          placeholder="0"
+        />
+        <Field
+          label="Макс. дневная ставка"
+          name="dailyRateMax"
+          defaultValue={getConfigText(config, "limits", "dailyRateMax")}
+          placeholder="5"
+        />
+        <Field
+          label="Макс. годовая неустойка"
+          name="annualPenaltyRateMax"
+          defaultValue={getConfigText(config, "limits", "annualPenaltyRateMax")}
+          placeholder="100"
+        />
+        <Field
+          label="Мин. годовая неустойка"
+          name="annualPenaltyRateMin"
+          defaultValue={getConfigText(config, "limits", "annualPenaltyRateMin")}
+          placeholder="0"
+        />
+        <Field
+          label="Мин. дневная неустойка"
+          name="dailyPenaltyRateMin"
+          defaultValue={getConfigText(config, "limits", "dailyPenaltyRateMin")}
+          placeholder="0"
+        />
+        <Field
+          label="Макс. дневная неустойка"
+          name="dailyPenaltyRateMax"
+          defaultValue={getConfigText(config, "limits", "dailyPenaltyRateMax")}
+          placeholder="5"
+        />
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <Field
+          label="Подпись даты платежа"
+          name="dueDateLabel"
+          defaultValue={getConfigText(config, "labels", "dueDate")}
+        />
+        <Field
+          label="Подпись даты расчета"
+          name="calculationDateLabel"
+          defaultValue={getConfigText(config, "labels", "calculationDate")}
+        />
+        <Field
+          label="Подпись основного долга"
+          name="principalDebtLabel"
+          defaultValue={getConfigText(config, "labels", "principalDebt")}
+        />
+        <Field
+          label="Подпись процентов"
+          name="accruedInterestLabel"
+          defaultValue={getConfigText(
+            config,
+            "labels",
+            "accruedInterestAtDueDate",
+          )}
+        />
+        <Field
+          label="Подпись вопроса о процентах"
+          name="overdueInterestModeLabel"
+          defaultValue={getConfigText(config, "labels", "interestMode")}
+        />
+        <Field
+          label="Подпись дневной ставки"
+          name="dailyRateLabel"
+          defaultValue={getConfigText(config, "labels", "dailyRate")}
+        />
+        <Field
+          label="Подпись годовой неустойки"
+          name="annualPenaltyRateLabel"
+          defaultValue={getConfigText(config, "labels", "annualPenaltyRate")}
+        />
+        <Field
+          label="Подпись дневной неустойки"
+          name="dailyPenaltyRateLabel"
+          defaultValue={getConfigText(config, "labels", "dailyPenaltyRate")}
+        />
+      </div>
+
+      <TextArea
+        label="Подсказка про частичные платежи"
+        name="partialPaymentsHint"
+        defaultValue={getConfigText(config, "hints", "partialPayments")}
+        rows={2}
+      />
+      <TextArea
+        label="Подсказка про дневную ставку"
+        name="dailyRateHint"
+        defaultValue={getConfigText(config, "hints", "dailyRate")}
+        rows={2}
+      />
+      <TextArea
+        label="Подсказка про неустойку"
+        name="penaltyHint"
+        defaultValue={getConfigText(config, "hints", "penalty")}
+        rows={2}
+      />
+      <TextArea
+        label="Подсказка про лимит"
+        name="limitHint"
+        defaultValue={getConfigText(config, "hints", "limit")}
+        rows={2}
+      />
+      <TextArea
+        label="Подсказка для ответа «Не уверен»"
+        name="unknownInterestModeHint"
+        defaultValue={getConfigText(config, "hints", "unknownInterestMode")}
+        rows={2}
+      />
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <Field
+          label="Заголовок результата"
+          name="overdueResultTitle"
+          defaultValue={getResultConfigText(config, "title")}
+        />
+        <Field
+          label="Заголовок формулы"
+          name="overdueFormulaTitle"
+          defaultValue={getResultConfigText(config, "formulaTitle")}
+        />
+      </div>
+
+      <TextArea
+        label="Информационные ссылки"
+        name="overdueLinks"
+        defaultValue={getLinksText(config)}
+        rows={3}
+      />
+      <p className="-mt-3 text-xs leading-5 text-slate-500">
+        Формат: Название | /adres-materiala. По одной ссылке на строку.
+      </p>
+      <TextArea
+        label="Risk notice"
+        name="riskNoticeText"
+        defaultValue={getConfigText(config, "riskNotice", "text")}
+        rows={3}
+      />
+    </section>
+  );
+}
+
+function ComparisonFields({ config }: { config: unknown }) {
+  return (
+    <section className="grid gap-5 rounded-lg border border-slate-200 bg-white p-4">
+      <SectionHeader
+        title="Настройки сравнения двух займов"
+        description="Инструмент сравнивает два оффера по сумме, сроку и выбранному региону сайта без выбора победителя."
+      />
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <Field
+          label="Дефолтная сумма"
+          name="defaultAmount"
+          defaultValue={getConfigText(config, "defaults", "amount")}
+          placeholder="10000"
+        />
+        <Field
+          label="Дефолтный срок, дней"
+          name="defaultTermDays"
+          defaultValue={getConfigText(config, "defaults", "termDays")}
+          placeholder="14"
+        />
+        <SelectField
+          label="Приоритет по умолчанию"
+          name="comparisonPriority"
+          defaultValue={getConfigText(config, "defaults", "priority") || "none"}
+          options={[
+            { value: "none", label: "Без приоритета" },
+            {
+              value: "min_overpayment",
+              label: "Минимальная ориентировочная переплата",
+            },
+            { value: "fast_decision", label: "Быстрое решение" },
+            { value: "payout_method", label: "Удобный способ получения" },
+            { value: "simple_requirements", label: "Минимум требований" },
+          ]}
+        />
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <Field
+          label="Минимальная сумма"
+          name="amountMin"
+          defaultValue={getConfigText(config, "limits", "amountMin")}
+          placeholder="1000"
+        />
+        <Field
+          label="Максимальная сумма"
+          name="amountMax"
+          defaultValue={getConfigText(config, "limits", "amountMax")}
+          placeholder="100000"
+        />
+        <Field
+          label="Шаг суммы"
+          name="amountStep"
+          defaultValue={getConfigText(config, "steps", "amount")}
+          placeholder="1000"
+        />
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <Field
+          label="Минимальный срок"
+          name="termMinDays"
+          defaultValue={getConfigText(config, "limits", "termMinDays")}
+          placeholder="1"
+        />
+        <Field
+          label="Максимальный срок"
+          name="termMaxDays"
+          defaultValue={getConfigText(config, "limits", "termMaxDays")}
+          placeholder="365"
+        />
+        <Field
+          label="Шаг срока"
+          name="termDaysStep"
+          defaultValue={getConfigText(config, "steps", "termDays")}
+          placeholder="1"
+        />
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <Field
+          label="Быстрые суммы"
+          name="quickAmounts"
+          defaultValue={getQuickAmountsText(config)}
+          placeholder="5000, 10000, 15000, 30000"
+        />
+        <Field
+          label="Быстрые сроки"
+          name="quickTerms"
+          defaultValue={getQuickTermsText(config)}
+          placeholder="7, 14, 21, 30"
+        />
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <Field
+          label="Подпись первого оффера"
+          name="firstOfferLabel"
+          defaultValue={getConfigText(config, "labels", "firstOffer")}
+          placeholder="Первый оффер"
+        />
+        <Field
+          label="Подпись второго оффера"
+          name="secondOfferLabel"
+          defaultValue={getConfigText(config, "labels", "secondOffer")}
+          placeholder="Второй оффер"
+        />
+        <Field
+          label="Подпись суммы"
+          name="amountLabel"
+          defaultValue={getConfigText(config, "labels", "amount")}
+          placeholder="Сумма займа"
+        />
+        <Field
+          label="Подпись срока"
+          name="termDaysLabel"
+          defaultValue={getConfigText(config, "labels", "termDays")}
+          placeholder="Срок займа"
+        />
+        <Field
+          label="Подпись приоритета"
+          name="priorityLabel"
+          defaultValue={getConfigText(config, "labels", "priority")}
+          placeholder="Что важнее"
+        />
+        <Field
+          label="Заголовок результата"
+          name="comparisonResultTitle"
+          defaultValue={getResultConfigText(config, "title")}
+          placeholder="Сравнение по выбранным параметрам"
+        />
+      </div>
+
+      <TextArea
+        label="Текст одинаковой стоимости"
+        name="sameCostText"
+        defaultValue={getResultConfigText(config, "sameCostText")}
+        rows={2}
+      />
+      <TextArea
+        label="Текст неподходящего оффера"
+        name="notAvailableText"
+        defaultValue={getResultConfigText(config, "notAvailableText")}
+        rows={2}
+      />
+      <Field
+        label="CTA"
+        name="ctaText"
+        defaultValue={getConfigText(config, "cta", "text")}
+        placeholder="Перейти к предложению"
+      />
+      <TextArea
+        label="Risk notice"
+        name="riskNoticeText"
+        defaultValue={getConfigText(config, "riskNotice", "text")}
+        rows={3}
+      />
+    </section>
+  );
+}
+
 export function SeoToolEditor({ seoTool }: { seoTool?: SeoToolWithUsages }) {
   const isEdit = Boolean(seoTool);
   const defaultType = seoTool?.type ?? "OVERPAYMENT_CALCULATOR";
@@ -482,9 +1015,11 @@ export function SeoToolEditor({ seoTool }: { seoTool?: SeoToolWithUsages }) {
           options={[
             { value: "OVERPAYMENT_CALCULATOR", label: "Калькулятор переплаты" },
             { value: "APPLICATION_CHECKLIST", label: "Чек-лист заявки" },
+            { value: "REPAYMENT_DATE_CALCULATOR", label: "Калькулятор даты возврата" },
+            { value: "OVERDUE_LOAN_CALCULATOR", label: "Калькулятор просрочки" },
             { value: "MINI_OFFER_PICKER", label: "Mini offer picker - позже", disabled: true },
             { value: "LOAN_TYPE_QUIZ", label: "Loan type quiz - позже", disabled: true },
-            { value: "COMPARISON", label: "Comparison - позже", disabled: true },
+            { value: "COMPARISON", label: "Сравнение двух займов" },
           ]}
         />
       </div>
@@ -517,6 +1052,18 @@ export function SeoToolEditor({ seoTool }: { seoTool?: SeoToolWithUsages }) {
 
       {selectedType === "APPLICATION_CHECKLIST" ? (
         <ApplicationChecklistFields config={defaultConfig} />
+      ) : null}
+
+      {selectedType === "REPAYMENT_DATE_CALCULATOR" ? (
+        <RepaymentDateCalculatorFields config={defaultConfig} />
+      ) : null}
+
+      {selectedType === "OVERDUE_LOAN_CALCULATOR" ? (
+        <OverdueLoanCalculatorFields config={defaultConfig} />
+      ) : null}
+
+      {selectedType === "COMPARISON" ? (
+        <ComparisonFields config={defaultConfig} />
       ) : null}
 
       <details className="rounded-lg border border-slate-200 bg-white p-4">

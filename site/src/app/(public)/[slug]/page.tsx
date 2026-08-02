@@ -566,6 +566,7 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
               offers={offers}
               pageType="category"
               categorySlug={slug}
+              selectedRegionCode={selectedRegionCode}
               riskNotice={seoPage.riskNotice}
             />
           </section>
@@ -593,6 +594,7 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
               offers={offers}
               pageType="category"
               categorySlug={slug}
+              selectedRegionCode={selectedRegionCode}
               riskNotice={seoPage.riskNotice}
             />
           </section>
@@ -715,6 +717,7 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
               offers={selectedOffers}
               pageType="article"
               categorySlug={slug}
+              selectedRegionCode={selectedRegionCode}
               riskNotice={seoPage.riskNotice}
             />
           </section>
@@ -729,6 +732,7 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
               offers={selectedOffers}
               pageType="article"
               categorySlug={slug}
+              selectedRegionCode={selectedRegionCode}
               riskNotice={seoPage.riskNotice}
             />
           </section>
@@ -818,6 +822,7 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
             offers={offers}
             pageType={seoPage.pageType.toLowerCase()}
             categorySlug={slug}
+            selectedRegionCode={selectedRegionCode}
             riskNotice={seoPage.riskNotice}
           />
         ) : (

@@ -211,6 +211,8 @@ export function ApplicationChecklist({
   title,
   intro,
   config,
+  variant,
+  pageType,
 }: SeoToolRenderProps<ApplicationChecklistConfig>) {
   const configuredQuestions = useMemo(() => getConfiguredQuestions(config), [config]);
   const usesConfiguredQuestions = configuredQuestions.length > 0;
@@ -298,19 +300,22 @@ export function ApplicationChecklist({
       : result.tone === "success"
         ? "border-emerald-100 bg-emerald-50"
         : "border-slate-200 bg-slate-50";
+  const showToolHeader = pageType !== "service" || variant !== "FULL";
 
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
-        <div>
-          <p className="text-sm font-semibold uppercase text-emerald-700">
-            Чек-лист
-          </p>
-          <h2 className="mt-2 text-2xl font-bold text-slate-950">{title}</h2>
-          {intro ? (
-            <p className="mt-3 max-w-2xl leading-7 text-slate-600">{intro}</p>
-          ) : null}
-        </div>
+        {showToolHeader ? (
+          <div>
+            <p className="text-sm font-semibold uppercase text-emerald-700">
+              Чек-лист
+            </p>
+            <h2 className="mt-2 text-2xl font-bold text-slate-950">{title}</h2>
+            {intro ? (
+              <p className="mt-3 max-w-2xl leading-7 text-slate-600">{intro}</p>
+            ) : null}
+          </div>
+        ) : null}
         <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
           <p className="text-sm text-slate-500">Заполнено</p>
           <p className="text-2xl font-bold text-slate-950">{displayedPercent}%</p>

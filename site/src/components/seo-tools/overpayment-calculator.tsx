@@ -23,7 +23,9 @@ export function OverpaymentCalculator({
   title,
   intro,
   config,
+  variant,
   offers,
+  pageType,
 }: SeoToolRenderProps<OverpaymentCalculatorConfig>) {
   const limits = {
     amountMin: config.limits?.amountMin ?? 1000,
@@ -64,6 +66,7 @@ export function OverpaymentCalculator({
       (offer.dailyRateFrom === null || offer.dailyRateFrom <= dailyRate) &&
       (offer.dailyRateTo === null || offer.dailyRateTo >= dailyRate),
   );
+  const showToolHeader = pageType !== "service" || variant !== "FULL";
 
   function handleOffersClick() {
     publishOfferAmountFilter({
@@ -77,15 +80,21 @@ export function OverpaymentCalculator({
     <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
       <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
         <div>
-          <p className="text-sm font-semibold uppercase text-emerald-700">
-            Интерактивный расчет
-          </p>
-          <h2 className="mt-2 text-2xl font-bold text-slate-950">{title}</h2>
-          {intro ? (
-            <p className="mt-3 max-w-2xl leading-7 text-slate-600">{intro}</p>
+          {showToolHeader ? (
+            <>
+              <p className="text-sm font-semibold uppercase text-emerald-700">
+                Интерактивный расчет
+              </p>
+              <h2 className="mt-2 text-2xl font-bold text-slate-950">{title}</h2>
+              {intro ? (
+                <p className="mt-3 max-w-2xl leading-7 text-slate-600">
+                  {intro}
+                </p>
+              ) : null}
+            </>
           ) : null}
 
-          <div className="mt-6 grid gap-5">
+          <div className={`${showToolHeader ? "mt-6" : ""} grid gap-5`}>
             <label className="grid gap-2">
               <span className="flex items-center justify-between text-sm font-medium text-slate-700">
                 {config.labels?.amount ?? "Сумма займа"}
