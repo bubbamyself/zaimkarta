@@ -9,6 +9,7 @@ const OFFER_FILTER_EVENT = "zaimkarta:offer-filter";
 type OfferFilterDetail = {
   amount?: number;
   termDays?: number;
+  strictTerm?: boolean;
   dailyRate?: number;
   priority?: OfferPickerPriority;
   checklist?: ChecklistFilter;
@@ -40,8 +41,20 @@ export function publishOfferAmountFilter({
       detail: {
         amount,
         termDays,
+        strictTerm: false,
         dailyRate,
         priority,
+      },
+    }),
+  );
+}
+
+export function publishOfferTermFilter(termDays: number) {
+  window.dispatchEvent(
+    new CustomEvent<OfferFilterDetail>(OFFER_FILTER_EVENT, {
+      detail: {
+        termDays,
+        strictTerm: true,
       },
     }),
   );
@@ -130,9 +143,17 @@ function offerMatchesAmount(offer: OfferCardData, amount: number | null) {
   return !amount || offer.maxAmount === null || offer.maxAmount >= amount;
 }
 
-function offerMatchesTerm(offer: OfferCardData, termDays: number | null) {
+function offerMatchesTerm(
+  offer: OfferCardData,
+  termDays: number | null,
+  strictTerm: boolean,
+) {
   if (!termDays) {
     return true;
+  }
+
+  if (strictTerm && offer.maxTermDays === null) {
+    return false;
   }
 
   const minTerm = offer.minTermDays ?? 0;
@@ -266,6 +287,7 @@ export function FilterableOffers({
 }) {
   const [requestedAmount, setRequestedAmount] = useState<number | null>(null);
   const [requestedTermDays, setRequestedTermDays] = useState<number | null>(null);
+  const [strictTerm, setStrictTerm] = useState(false);
   const [requestedDailyRate, setRequestedDailyRate] = useState<number | null>(null);
   const [pickerPriority, setPickerPriority] = useState<OfferPickerPriority | null>(null);
   const [checklistFilter, setChecklistFilter] = useState<ChecklistFilter | null>(null);
@@ -280,6 +302,10 @@ export function FilterableOffers({
 
       if (typeof detail?.termDays === "number" && Number.isFinite(detail.termDays)) {
         setRequestedTermDays(detail.termDays);
+      }
+
+      if (typeof detail?.strictTerm === "boolean") {
+        setStrictTerm(detail.strictTerm);
       }
 
       if (typeof detail?.dailyRate === "number" && Number.isFinite(detail.dailyRate)) {
@@ -306,7 +332,7 @@ export function FilterableOffers({
     const filteredByCalculation = offers.filter(
       (offer) =>
         offerMatchesAmount(offer, requestedAmount) &&
-        offerMatchesTerm(offer, requestedTermDays) &&
+        offerMatchesTerm(offer, requestedTermDays, strictTerm) &&
         offerMatchesDailyRate(offer, requestedDailyRate) &&
         offerMatchesPriority(offer, pickerPriority),
     );
@@ -345,6 +371,7 @@ export function FilterableOffers({
     requestedAmount,
     requestedDailyRate,
     requestedTermDays,
+    strictTerm,
     pickerPriority,
     checklistFilter,
   ]);
@@ -353,20 +380,23 @@ export function FilterableOffers({
     checklistFilter && Object.values(checklistFilter).some(Boolean);
   const hasHardWarning =
     checklistFilter?.passportReady === "no" || checklistFilter?.namedCard === "no";
+  const calculationFilterLabels = [
+    requestedAmount
+      ? `сумма ${requestedAmount.toLocaleString("ru-RU")} ₽`
+      : null,
+    requestedTermDays ? `срок ${requestedTermDays} дней` : null,
+    requestedDailyRate !== null
+      ? `ставка ${requestedDailyRate.toLocaleString("ru-RU")}% в день`
+      : null,
+  ].filter(Boolean);
 
   return (
     <section id="offers" className="mx-auto max-w-6xl px-5">
       <div className="mb-6">
         <h2 className="text-2xl font-bold text-slate-950">{title}</h2>
-        {requestedAmount ? (
+        {calculationFilterLabels.length > 0 ? (
           <p className="mt-2 text-sm leading-6 text-slate-600">
-            Показываем предложения, где подходят сумма{" "}
-            {requestedAmount.toLocaleString("ru-RU")} ₽
-            {requestedTermDays ? `, срок ${requestedTermDays} дней` : ""}
-            {requestedDailyRate !== null
-              ? ` и ставка ${requestedDailyRate.toLocaleString("ru-RU")}% в день`
-              : ""}
-            .
+            Показываем предложения, где подходят: {calculationFilterLabels.join(", ")}.
           </p>
         ) : null}
         {hasChecklistAnswers ? (

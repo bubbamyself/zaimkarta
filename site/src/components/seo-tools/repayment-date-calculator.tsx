@@ -5,6 +5,7 @@ import {
   calculateRepaymentDate,
   toLocalInputDateValue,
 } from "@/lib/repayment-date";
+import { publishOfferTermFilter } from "./filterable-offers";
 import type {
   RepaymentDateCalculatorConfig,
   SeoToolRenderProps,
@@ -68,21 +69,41 @@ export function RepaymentDateCalculator({
   intro,
   config,
   variant,
+  offers,
   pageType,
 }: SeoToolRenderProps<RepaymentDateCalculatorConfig>) {
   const today = useMemo(() => new Date(), []);
+  const configuredTermMaxDays = config.limits?.termMaxDays ?? 365;
+  const maximumOfferTermDays = Math.max(
+    0,
+    ...offers.flatMap((offer) =>
+      offer.maxTermDays === null ? [] : [offer.maxTermDays],
+    ),
+  );
   const limits = {
     termMinDays: config.limits?.termMinDays ?? 1,
-    termMaxDays: config.limits?.termMaxDays ?? 365,
+    termMaxDays:
+      maximumOfferTermDays > 0
+        ? Math.min(configuredTermMaxDays, maximumOfferTermDays)
+        : configuredTermMaxDays,
   };
   const quickTerms = config.quickTerms?.length
-    ? config.quickTerms
-    : [7, 14, 21, 30];
+    ? config.quickTerms.filter(
+        (term) => term >= limits.termMinDays && term <= limits.termMaxDays,
+      )
+    : [7, 14, 21, 30].filter(
+        (term) => term >= limits.termMinDays && term <= limits.termMaxDays,
+      );
   const [startDateValue, setStartDateValue] = useState(
     toLocalInputDateValue(today),
   );
   const [termDaysValue, setTermDaysValue] = useState(
-    String(config.defaults?.termDays ?? 30),
+    String(
+      Math.min(
+        Math.max(config.defaults?.termDays ?? 30, limits.termMinDays),
+        limits.termMaxDays,
+      ),
+    ),
   );
   const result = calculateRepaymentDate({
     startDateValue,
@@ -98,6 +119,12 @@ export function RepaymentDateCalculator({
       })
     : "";
   const showToolHeader = pageType !== "service" || variant !== "FULL";
+
+  function handleOffersClick() {
+    if (result.ok) {
+      publishOfferTermFilter(result.termDays);
+    }
+  }
 
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
@@ -211,6 +238,7 @@ export function RepaymentDateCalculator({
               ) : null}
               <a
                 href="#offers"
+                onClick={handleOffersClick}
                 className="mt-5 inline-flex min-h-10 items-center justify-center rounded-md border border-emerald-700 bg-white px-4 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-100"
               >
                 {config.cta?.text ?? "Посмотреть предложения"}

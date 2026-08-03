@@ -32,6 +32,7 @@ jobs:
 
     env:
       DATABASE_URL: postgresql://zaimkarta:zaimkarta_local_password@127.0.0.1:5432/zaimkarta?schema=public
+      NEXT_PUBLIC_SITE_URL: https://zaimkarta.ru
 
     steps:
       - name: Checkout repository
