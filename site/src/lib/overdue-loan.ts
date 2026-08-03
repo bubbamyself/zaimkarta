@@ -1,21 +1,27 @@
 import { OVERDUE_LOAN_RULES } from "@/lib/overdue-loan-rules";
 
-export type InterestMode = "yes" | "no" | "unknown";
+export type InterestMode = "yes" | "no" | "";
 export type PenaltyType = "annual" | "daily";
+export type PenaltyBase = "scheduled-payment" | "principal";
 
 export type OverdueLoanInput = {
-  dueDateValue: string;
-  calculationDateValue: string;
-  principalDebtValue: string;
-  accruedInterestAtDueDateValue: string;
+  loanAmountValue: string;
+  receivedDateValue: string;
+  termDaysValue: string;
+  plannedPaymentDateValue: string;
+  exactDueDateValue?: string;
+  dailyRateValue?: string;
   interestMode: InterestMode;
-  dailyRateValue: string;
-  annualPenaltyRateValue: string;
-  dailyPenaltyRateValue: string;
-  contractDateValue?: string;
-  originalPrincipalAmountValue?: string;
-  initialTermDaysValue?: string;
+  penaltyType?: PenaltyType | "";
+  penaltyRateValue?: string;
+  penaltyStartDayValue?: string;
+  penaltyBase?: PenaltyBase | "";
   otherChargesValue?: string;
+};
+
+export type AppliedAssumption = {
+  field: string;
+  value: string;
 };
 
 export type LimitCheckResult =
@@ -23,9 +29,9 @@ export type LimitCheckResult =
       applies: true;
       percent: number;
       capAmount: number;
-      chargesForCap: number;
-      remaining: number;
-      exceededBy: number;
+      calculatedCharges: number;
+      allowedCharges: number;
+      reduction: number;
       note: string;
     }
   | {
@@ -36,31 +42,24 @@ export type LimitCheckResult =
 export type OverdueLoanResult =
   | {
       ok: true;
-      canCalculateTotal: true;
+      loanAmount: number;
+      receivedDate: Date;
+      dueDate: Date;
+      plannedPaymentDate: Date;
+      termDays: number;
       daysOverdue: number;
-      principalDebt: number;
-      accruedInterestAtDueDate: number;
-      overdueBase: number;
+      dailyRate: number;
+      contractInterest: number;
+      scheduledPayment: number;
       overdueInterest: number;
+      penaltyDays: number;
       penalty: number;
       otherCharges: number;
+      calculatedTotal: number;
       estimatedTotal: number;
-      penaltyType: PenaltyType;
       limitCheck: LimitCheckResult;
+      assumptions: AppliedAssumption[];
       warnings: string[];
-      formulaNotes: string[];
-    }
-  | {
-      ok: true;
-      canCalculateTotal: false;
-      daysOverdue: number;
-      principalDebt: number;
-      accruedInterestAtDueDate: number;
-      overdueBase: number;
-      otherCharges: number;
-      limitCheck: LimitCheckResult;
-      warnings: string[];
-      formulaNotes: string[];
     }
   | {
       ok: false;
@@ -71,6 +70,7 @@ export type OverdueLoanResult =
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
+
 export function parseLocalInputDate(value: string) {
   const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
 
@@ -102,30 +102,33 @@ export function toLocalInputDateValue(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
+export function addCalendarDays(date: Date, days: number) {
+  const nextDate = new Date(date);
+  nextDate.setDate(nextDate.getDate() + days);
+  return nextDate;
+}
+
 function localMidnight(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
 function diffCalendarDays(from: Date, to: Date) {
-  const fromMidnight = localMidnight(from).getTime();
-  const toMidnight = localMidnight(to).getTime();
-
-  return Math.round((toMidnight - fromMidnight) / 86_400_000);
+  return Math.round(
+    (localMidnight(to).getTime() - localMidnight(from).getTime()) / 86_400_000,
+  );
 }
 
 function daysInYear(year: number) {
   return new Date(year, 1, 29).getMonth() === 1 ? 366 : 365;
 }
 
-function addDays(date: Date, days: number) {
-  const nextDate = new Date(date);
-  nextDate.setDate(nextDate.getDate() + days);
-
-  return nextDate;
-}
-
-function readNumber(value: string, label: string, errors: string[]) {
-  const normalizedValue = value.trim().replace(",", ".");
+function readNumber(
+  value: string | undefined,
+  label: string,
+  errors: string[],
+  options: { positive?: boolean; integer?: boolean } = {},
+) {
+  const normalizedValue = value?.trim().replace(",", ".") ?? "";
 
   if (!normalizedValue) {
     errors.push(`${label}: укажите значение`);
@@ -135,126 +138,107 @@ function readNumber(value: string, label: string, errors: string[]) {
   const number = Number(normalizedValue);
 
   if (!Number.isFinite(number)) {
-    errors.push(`${label}: нужно конечное число`);
+    errors.push(`${label}: укажите число`);
     return null;
   }
 
-  if (number < 0) {
-    errors.push(`${label}: значение не может быть отрицательным`);
+  if (number < 0 || (options.positive && number <= 0)) {
+    errors.push(`${label}: значение должно быть больше нуля`);
+    return null;
+  }
+
+  if (options.integer && !Number.isInteger(number)) {
+    errors.push(`${label}: укажите целое число дней`);
     return null;
   }
 
   return number;
 }
 
-function readOptionalNumber(value: string | undefined, label: string, errors: string[]) {
+function readOptionalNumber(
+  value: string | undefined,
+  label: string,
+  errors: string[],
+) {
   if (!value?.trim()) {
-    return null;
+    return 0;
   }
 
   return readNumber(value, label, errors);
 }
 
-function readPositiveInteger(value: string | undefined, label: string, errors: string[]) {
-  if (!value?.trim()) {
-    return null;
-  }
-
-  if (!/^\d+$/.test(value.trim())) {
-    errors.push(`${label}: нужно целое число`);
-    return null;
-  }
-
-  const number = Number(value);
-
-  if (!Number.isInteger(number) || number <= 0) {
-    errors.push(`${label}: нужно положительное целое число`);
-    return null;
-  }
-
-  return number;
-}
-
-function calculateAnnualPenalty({
+function calculatePenalty({
   base,
-  annualRate,
-  startDate,
-  daysOverdue,
+  rate,
+  penaltyType,
+  interestMode,
+  firstPenaltyDate,
+  penaltyDays,
 }: {
   base: number;
-  annualRate: number;
-  startDate: Date;
-  daysOverdue: number;
+  rate: number;
+  penaltyType: PenaltyType;
+  interestMode: Exclude<InterestMode, "">;
+  firstPenaltyDate: Date;
+  penaltyDays: number;
 }) {
   let penalty = 0;
 
-  for (let dayIndex = 1; dayIndex <= daysOverdue; dayIndex += 1) {
-    const currentDate = addDays(startDate, dayIndex);
-    penalty += base * (annualRate / 100) / daysInYear(currentDate.getFullYear());
+  for (let dayIndex = 0; dayIndex < penaltyDays; dayIndex += 1) {
+    const currentDate = addCalendarDays(firstPenaltyDate, dayIndex);
+    const contractDailyRate =
+      penaltyType === "annual"
+        ? rate / daysInYear(currentDate.getFullYear())
+        : rate;
+    const legalDailyRate =
+      interestMode === "yes"
+        ? OVERDUE_LOAN_RULES.annualPenaltyWarningPercent /
+          daysInYear(currentDate.getFullYear())
+        : OVERDUE_LOAN_RULES.dailyPenaltyWarningPercent;
+    penalty += base * (Math.min(contractDailyRate, legalDailyRate) / 100);
   }
 
   return penalty;
 }
 
 function getLimitCheck({
-  contractDate,
-  initialTermDays,
-  originalPrincipalAmount,
-  accruedInterestAtDueDate,
-  overdueInterest,
-  penalty,
-  otherCharges,
+  receivedDate,
+  termDays,
+  loanAmount,
+  calculatedCharges,
 }: {
-  contractDate: Date | null;
-  initialTermDays: number | null;
-  originalPrincipalAmount: number | null;
-  accruedInterestAtDueDate: number;
-  overdueInterest: number;
-  penalty: number;
-  otherCharges: number;
+  receivedDate: Date;
+  termDays: number;
+  loanAmount: number;
+  calculatedCharges: number;
 }): LimitCheckResult {
-  if (!contractDate || !initialTermDays || !originalPrincipalAmount) {
-    return {
-      applies: false,
-      reason:
-        "Недостаточно данных для автоматической проверки общего лимита: нужны дата договора, первоначальная сумма и первоначальный срок.",
-    };
-  }
-
-  const contractDateValue = toLocalInputDateValue(contractDate);
+  const receivedDateValue = toLocalInputDateValue(receivedDate);
   const rule = OVERDUE_LOAN_RULES.limits.find((item) => {
-    if (initialTermDays > item.maxInitialTermDays) {
+    if (termDays > item.maxInitialTermDays || receivedDateValue < item.startsAt) {
       return false;
     }
 
-    if (contractDateValue < item.startsAt) {
-      return false;
-    }
-
-    return !item.endsAt || contractDateValue <= item.endsAt;
+    return !item.endsAt || receivedDateValue <= item.endsAt;
   });
 
   if (!rule) {
     return {
       applies: false,
       reason:
-        "По указанной дате или сроку калькулятор не применяет автоматический вывод о лимите.",
+        "Для этой даты или срока калькулятор не применяет автоматический общий предел начислений.",
     };
   }
 
-  const capAmount = originalPrincipalAmount * (rule.percent / 100);
-  const chargesForCap =
-    accruedInterestAtDueDate + overdueInterest + penalty + otherCharges;
-  const remaining = Math.max(capAmount - chargesForCap, 0);
-  const exceededBy = Math.max(chargesForCap - capAmount, 0);
+  const capAmount = loanAmount * (rule.percent / 100);
+  const allowedCharges = Math.min(calculatedCharges, capAmount);
 
   return {
     applies: true,
     percent: rule.percent,
     capAmount,
-    chargesForCap,
-    remaining,
-    exceededBy,
+    calculatedCharges,
+    allowedCharges,
+    reduction: Math.max(calculatedCharges - allowedCharges, 0),
     note: rule.note,
   };
 }
@@ -262,195 +246,226 @@ function getLimitCheck({
 export function calculateOverdueLoan(input: OverdueLoanInput): OverdueLoanResult {
   const errors: string[] = [];
   const warnings: string[] = [];
-  const dueDate = parseLocalInputDate(input.dueDateValue);
-  const calculationDate = parseLocalInputDate(input.calculationDateValue);
-  const contractDate = input.contractDateValue
-    ? parseLocalInputDate(input.contractDateValue)
+  const assumptions: AppliedAssumption[] = [];
+  const loanAmount = readNumber(
+    input.loanAmountValue,
+    "Сумма займа",
+    errors,
+    { positive: true },
+  );
+  const termDays = readNumber(input.termDaysValue, "Срок займа", errors, {
+    positive: true,
+    integer: true,
+  });
+  const receivedDate = parseLocalInputDate(input.receivedDateValue);
+  const exactDueDate = input.exactDueDateValue?.trim()
+    ? parseLocalInputDate(input.exactDueDateValue)
     : null;
+  const plannedPaymentDate = parseLocalInputDate(input.plannedPaymentDateValue);
 
-  if (!dueDate) {
-    errors.push("Дата платежа по договору: укажите корректную дату");
+  if (!receivedDate) {
+    errors.push("Дата получения денег: укажите корректную дату");
   }
 
-  if (!calculationDate) {
-    errors.push("Дата расчета: укажите корректную дату");
+  if (input.exactDueDateValue?.trim() && !exactDueDate) {
+    errors.push("Дата возврата из договора: укажите корректную дату");
   }
 
-  if (input.contractDateValue && !contractDate) {
-    errors.push("Дата договора: укажите корректную дату");
+  if (!plannedPaymentDate) {
+    errors.push("Дата фактического возврата: укажите корректную дату");
   }
 
-  const principalDebt = readNumber(
-    input.principalDebtValue,
-    "Непогашенный основной долг",
-    errors,
-  );
-  const accruedInterestAtDueDate = readNumber(
-    input.accruedInterestAtDueDateValue,
-    "Начисленные проценты на дату платежа",
-    errors,
-  );
-  const otherCharges =
-    readOptionalNumber(
-      input.otherChargesValue,
-      "Другие начисления для проверки лимита",
-      errors,
-    ) ?? 0;
-  const originalPrincipalAmount = readOptionalNumber(
-    input.originalPrincipalAmountValue,
-    "Первоначальная сумма займа",
-    errors,
-  );
-  const initialTermDays = readPositiveInteger(
-    input.initialTermDaysValue,
-    "Первоначальный срок займа",
-    errors,
-  );
+  const dailyRate = input.dailyRateValue?.trim()
+    ? readNumber(input.dailyRateValue, "Ставка в день", errors)
+    : OVERDUE_LOAN_RULES.dailyRateWarningPercent;
 
-  if (dueDate && calculationDate && calculationDate < dueDate) {
-    errors.push("Дата расчета не может быть раньше даты платежа");
+  if (!input.dailyRateValue?.trim()) {
+    assumptions.push({
+      field: "Ставка в день",
+      value: `${OVERDUE_LOAN_RULES.dailyRateWarningPercent}% — предельное значение`,
+    });
   }
+
+  const interestMode = input.interestMode || "yes";
+
+  if (!input.interestMode) {
+    assumptions.push({
+      field: "Проценты во время просрочки",
+      value: "продолжают начисляться",
+    });
+  }
+
+  const penaltyType: PenaltyType =
+    input.penaltyType || (interestMode === "yes" ? "annual" : "daily");
+
+  if (!input.penaltyType) {
+    assumptions.push({
+      field: "Вид неустойки",
+      value: interestMode === "yes" ? "20% годовых" : "0,1% в день",
+    });
+  }
+
+  const defaultPenaltyRate =
+    penaltyType === "annual"
+      ? OVERDUE_LOAN_RULES.annualPenaltyWarningPercent
+      : OVERDUE_LOAN_RULES.dailyPenaltyWarningPercent;
+  const penaltyRate = input.penaltyRateValue?.trim()
+    ? readNumber(input.penaltyRateValue, "Ставка неустойки", errors)
+    : defaultPenaltyRate;
+
+  if (!input.penaltyRateValue?.trim()) {
+    assumptions.push({
+      field: "Ставка неустойки",
+      value:
+        penaltyType === "annual"
+          ? `${defaultPenaltyRate}% годовых`
+          : `${defaultPenaltyRate}% в день`,
+    });
+  }
+
+  const penaltyStartDay = input.penaltyStartDayValue?.trim()
+    ? readNumber(
+        input.penaltyStartDayValue,
+        "Первый день начисления неустойки",
+        errors,
+        { positive: true, integer: true },
+      )
+    : 1;
+
+  if (!input.penaltyStartDayValue?.trim()) {
+    assumptions.push({
+      field: "Начало неустойки",
+      value: "с первого дня просрочки",
+    });
+  }
+
+  const penaltyBase = input.penaltyBase || "scheduled-payment";
+
+  if (!input.penaltyBase) {
+    assumptions.push({
+      field: "Сумма, на которую начисляется неустойка",
+      value: "весь просроченный платёж",
+    });
+  }
+
+  const otherCharges = readOptionalNumber(
+    input.otherChargesValue,
+    "Другие начисления из договора",
+    errors,
+  );
 
   if (
     errors.length > 0 ||
-    !dueDate ||
-    !calculationDate ||
-    principalDebt === null ||
-    accruedInterestAtDueDate === null
+    loanAmount === null ||
+    termDays === null ||
+    !receivedDate ||
+    !plannedPaymentDate ||
+    dailyRate === null ||
+    penaltyRate === null ||
+    penaltyStartDay === null ||
+    otherCharges === null
   ) {
-    return {
-      ok: false,
-      errors,
-      warnings,
-    };
+    return { ok: false, errors, warnings };
   }
 
-  const daysOverdue = Math.max(diffCalendarDays(dueDate, calculationDate), 0);
-  const overdueBase = principalDebt + accruedInterestAtDueDate;
+  const calculatedDueDate = addCalendarDays(receivedDate, termDays);
+  const dueDate = exactDueDate ?? calculatedDueDate;
 
-  if (input.interestMode === "unknown") {
-    const limitCheck = getLimitCheck({
-      contractDate,
-      initialTermDays,
-      originalPrincipalAmount,
-      accruedInterestAtDueDate,
-      overdueInterest: 0,
-      penalty: 0,
-      otherCharges,
-    });
-
-    return {
-      ok: true,
-      canCalculateTotal: false,
-      daysOverdue,
-      principalDebt,
-      accruedInterestAtDueDate,
-      overdueBase,
-      otherCharges,
-      limitCheck,
-      warnings: [
-        "Нужно проверить в договоре, продолжают ли начисляться проценты после просрочки.",
-      ],
-      formulaNotes: [
-        "Итоговая сумма не рассчитана, потому что неизвестно правило начисления процентов после просрочки.",
-      ],
-    };
+  if (dueDate <= receivedDate) {
+    errors.push("Дата возврата должна быть позже даты получения денег");
   }
 
-  const dailyRate =
-    input.interestMode === "yes"
-      ? readNumber(input.dailyRateValue, "Дневная ставка по договору", errors)
-      : 0;
-  const annualPenaltyRate =
-    input.interestMode === "yes"
-      ? readNumber(
-          input.annualPenaltyRateValue,
-          "Годовая ставка неустойки",
-          errors,
-        )
-      : null;
-  const dailyPenaltyRate =
-    input.interestMode === "no"
-      ? readNumber(input.dailyPenaltyRateValue, "Дневная ставка неустойки", errors)
-      : null;
-
-  if (dailyRate !== null && dailyRate > OVERDUE_LOAN_RULES.dailyRateWarningPercent) {
-    warnings.push("Дневная ставка выше 0,8%. Проверьте значение в договоре.");
+  if (plannedPaymentDate < receivedDate) {
+    errors.push("Дата фактического возврата не может быть раньше получения денег");
   }
 
-  if (
-    annualPenaltyRate !== null &&
-    annualPenaltyRate > OVERDUE_LOAN_RULES.annualPenaltyWarningPercent
-  ) {
+  if (dailyRate > OVERDUE_LOAN_RULES.dailyRateWarningPercent) {
     warnings.push(
-      "Годовая ставка неустойки выше 20%. Проверьте применимый предел и условия договора.",
+      "Указанная дневная ставка выше 0,8%. Проверьте договор: калькулятор ограничил её предельным значением.",
     );
   }
 
   if (
-    dailyPenaltyRate !== null &&
-    dailyPenaltyRate > OVERDUE_LOAN_RULES.dailyPenaltyWarningPercent
+    interestMode === "yes" &&
+    (penaltyType === "annual"
+      ? penaltyRate > OVERDUE_LOAN_RULES.annualPenaltyWarningPercent
+      : penaltyRate * 365 > OVERDUE_LOAN_RULES.annualPenaltyWarningPercent)
   ) {
     warnings.push(
-      "Дневная ставка неустойки выше 0,1%. Проверьте применимый предел и условия договора.",
+      "Указанная неустойка в пересчёте выше 20% годовых. В расчёте применён предельный размер.",
     );
   }
 
-  if (errors.length > 0 || dailyRate === null) {
-    return {
-      ok: false,
-      errors,
-      warnings,
-    };
+  if (
+    interestMode === "no" &&
+    (penaltyType === "daily"
+      ? penaltyRate > OVERDUE_LOAN_RULES.dailyPenaltyWarningPercent
+      : penaltyRate / 365 > OVERDUE_LOAN_RULES.dailyPenaltyWarningPercent)
+  ) {
+    warnings.push(
+      "Указанная неустойка выше 0,1% в день. В расчёте применён предельный размер.",
+    );
   }
 
+  if (errors.length > 0) {
+    return { ok: false, errors, warnings };
+  }
+
+  const appliedDailyRate = Math.min(
+    dailyRate,
+    OVERDUE_LOAN_RULES.dailyRateWarningPercent,
+  );
+  const daysOverdue = Math.max(diffCalendarDays(dueDate, plannedPaymentDate), 0);
+  const contractInterest = loanAmount * (appliedDailyRate / 100) * termDays;
+  const scheduledPayment = loanAmount + contractInterest;
   const overdueInterest =
-    input.interestMode === "yes"
-      ? principalDebt * (dailyRate / 100) * daysOverdue
+    interestMode === "yes"
+      ? loanAmount * (appliedDailyRate / 100) * daysOverdue
       : 0;
-  const penalty =
-    input.interestMode === "yes"
-      ? calculateAnnualPenalty({
-          base: overdueBase,
-          annualRate: annualPenaltyRate ?? 0,
-          startDate: dueDate,
-          daysOverdue,
-        })
-      : overdueBase * ((dailyPenaltyRate ?? 0) / 100) * daysOverdue;
-  const estimatedTotal =
-    principalDebt +
-    accruedInterestAtDueDate +
-    overdueInterest +
-    penalty +
-    otherCharges;
-  const limitCheck = getLimitCheck({
-    contractDate,
-    initialTermDays,
-    originalPrincipalAmount,
-    accruedInterestAtDueDate,
-    overdueInterest,
-    penalty,
-    otherCharges,
+  const penaltyDays = Math.max(daysOverdue - penaltyStartDay + 1, 0);
+  const penaltyBaseAmount =
+    penaltyBase === "principal" ? loanAmount : scheduledPayment;
+  const firstPenaltyDate = addCalendarDays(dueDate, penaltyStartDay);
+  const penalty = calculatePenalty({
+    base: penaltyBaseAmount,
+    rate: penaltyRate,
+    penaltyType,
+    interestMode,
+    firstPenaltyDate,
+    penaltyDays,
   });
+  const calculatedCharges =
+    contractInterest + overdueInterest + penalty + otherCharges;
+  const limitCheck = getLimitCheck({
+    receivedDate,
+    termDays,
+    loanAmount,
+    calculatedCharges,
+  });
+  const allowedCharges = limitCheck.applies
+    ? limitCheck.allowedCharges
+    : calculatedCharges;
 
   return {
     ok: true,
-    canCalculateTotal: true,
+    loanAmount,
+    receivedDate,
+    dueDate,
+    plannedPaymentDate,
+    termDays,
     daysOverdue,
-    principalDebt,
-    accruedInterestAtDueDate,
-    overdueBase,
+    dailyRate: appliedDailyRate,
+    contractInterest,
+    scheduledPayment,
     overdueInterest,
+    penaltyDays,
     penalty,
     otherCharges,
-    estimatedTotal,
-    penaltyType: input.interestMode === "yes" ? "annual" : "daily",
+    calculatedTotal: loanAmount + calculatedCharges,
+    estimatedTotal: loanAmount + allowedCharges,
     limitCheck,
+    assumptions,
     warnings,
-    formulaNotes: [
-      "Годовая неустойка рассчитывается по календарным дням: для каждого дня используется 365 или 366 дней в соответствующем году.",
-      "Если были частичные платежи, введите уже актуальные остатки из личного кабинета или расчета кредитора.",
-    ],
   };
 }
 
