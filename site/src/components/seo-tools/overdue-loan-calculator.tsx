@@ -325,56 +325,58 @@ export function OverdueLoanCalculator({
               />
             </div>
 
-            <div className="grid gap-3">
-              <Field
-                label="На сколько дней вы взяли займ"
-                value={termDaysValue}
-                onChange={(value) => changeTerm(value)}
-                min={1}
-                max={3650}
-                step="1"
-                contractField
-                verified={termVerified}
-                hint="Найдите срок займа в индивидуальных условиях договора."
-              />
-              <div className="flex flex-wrap gap-2">
-                {[7, 14, 21, 28, 30].map((days) => (
-                  <button
-                    key={days}
-                    type="button"
-                    onClick={() => changeTerm(String(days))}
-                    className={`min-h-10 rounded-md border px-4 text-sm font-semibold transition ${
-                      termVerified && termDaysValue === String(days)
-                        ? "border-emerald-700 bg-emerald-50 text-emerald-800"
-                        : "border-slate-300 bg-white text-slate-700 hover:border-emerald-600"
-                    }`}
-                  >
-                    {days} дней
-                  </button>
-                ))}
-              </div>
-            </div>
-
             <div className="grid gap-4 md:grid-cols-2">
-              <Field
-                label="Ставка в день, %"
-                value={dailyRateValue}
-                onChange={setDailyRateValue}
-                min={0}
-                max={5}
-                step="0.01"
-                placeholder="Если не знаете — 0,8%"
-                contractField
-                verified={Boolean(dailyRateValue)}
-                hint="Обычно указана на первой странице договора."
-              />
-              <Field
-                type="date"
-                label="Точная дата возврата из договора"
-                value={exactDueDateValue}
-                onChange={setExactDueDateValue}
-                hint="Необязательно: если не указать, дата будет рассчитана по сроку займа."
-              />
+              <div className="grid content-start gap-3">
+                <Field
+                  label="На сколько дней вы взяли займ"
+                  value={termDaysValue}
+                  onChange={(value) => changeTerm(value)}
+                  min={1}
+                  max={3650}
+                  step="1"
+                  contractField
+                  verified={termVerified}
+                  hint="Найдите срок займа в индивидуальных условиях договора."
+                />
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  {[7, 14, 21, 28, 30].map((days) => (
+                    <button
+                      key={days}
+                      type="button"
+                      onClick={() => changeTerm(String(days))}
+                      className={`min-h-10 rounded-md border px-3 text-sm font-semibold transition ${
+                        termVerified && termDaysValue === String(days)
+                          ? "border-emerald-700 bg-emerald-50 text-emerald-800"
+                          : "border-slate-300 bg-white text-slate-700 hover:border-emerald-600"
+                      }`}
+                    >
+                      {days} дней
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid content-start gap-4">
+                <Field
+                  label="Ставка в день, %"
+                  value={dailyRateValue}
+                  onChange={setDailyRateValue}
+                  min={0}
+                  max={5}
+                  step="0.01"
+                  placeholder="Если не знаете — 0,8%"
+                  contractField
+                  verified={Boolean(dailyRateValue)}
+                  hint="Обычно указана на первой странице договора."
+                />
+                <Field
+                  type="date"
+                  label="Точная дата возврата из договора"
+                  value={exactDueDateValue}
+                  onChange={setExactDueDateValue}
+                  hint="Необязательно: если не указать, дата будет рассчитана по сроку займа."
+                />
+              </div>
             </div>
           </section>
 
