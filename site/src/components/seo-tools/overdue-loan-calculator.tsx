@@ -77,6 +77,7 @@ function Field({
   contractField = false,
   verified = false,
   placeholder,
+  alignLabel = false,
 }: {
   label: string;
   value: string;
@@ -89,6 +90,7 @@ function Field({
   contractField?: boolean;
   verified?: boolean;
   placeholder?: string;
+  alignLabel?: boolean;
 }) {
   const fieldColor = contractField
     ? verified
@@ -98,11 +100,15 @@ function Field({
 
   return (
     <label className="grid gap-2">
-      <span className="flex items-center gap-2 text-sm font-medium text-slate-700">
-        {label}
+      <span
+        className={`flex items-start justify-between gap-2 text-sm font-medium text-slate-700 ${
+          alignLabel ? "md:min-h-10" : ""
+        }`}
+      >
+        <span>{label}</span>
         {contractField ? (
           <span
-            className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${
+            className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold ${
               verified
                 ? "bg-lime-200 text-lime-900"
                 : "bg-amber-200 text-amber-950"
@@ -145,10 +151,10 @@ function ContractChoice({
 
   return (
     <label className="grid gap-2">
-      <span className="flex items-center gap-2 text-sm font-medium text-slate-700">
-        {label}
+      <span className="flex items-start justify-between gap-2 text-sm font-medium text-slate-700 md:min-h-10">
+        <span>{label}</span>
         <span
-          className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${
+          className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold ${
             verified
               ? "bg-lime-200 text-lime-900"
               : "bg-amber-200 text-amber-950"
@@ -433,6 +439,7 @@ export function OverdueLoanCalculator({
                 }
                 contractField
                 verified={Boolean(penaltyRateValue)}
+                alignLabel
               />
               <Field
                 label="С какого дня просрочки начисляется неустойка"
@@ -443,6 +450,7 @@ export function OverdueLoanCalculator({
                 placeholder="Если не знаете — с 1-го дня"
                 contractField
                 verified={Boolean(penaltyStartDayValue)}
+                alignLabel
               />
               <ContractChoice
                 label="На какую сумму начисляется неустойка?"
@@ -462,6 +470,7 @@ export function OverdueLoanCalculator({
                 step="0.01"
                 placeholder="Не добавляем, если поле пустое"
                 hint="Добавляйте только сумму, прямо указанную в договоре или личном кабинете."
+                alignLabel
               />
             </div>
           </section>
