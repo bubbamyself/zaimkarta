@@ -1,5 +1,6 @@
 export const OVERDUE_LOAN_RULES = {
-  version: 1,
+  version: 2,
+  supportedFrom: "2023-07-01",
   dailyRateWarningPercent: 0.8,
   annualPenaltyWarningPercent: 20,
   dailyPenaltyWarningPercent: 0.1,
@@ -9,7 +10,6 @@ export const OVERDUE_LOAN_RULES = {
       percent: 130,
       startsAt: "2023-07-01",
       endsAt: "2026-03-31",
-      maxInitialTermDays: 365,
       note:
         "Для договоров с 1 июля 2023 года до 31 марта 2026 года включительно применяется контрольный лимит 130% для займов сроком до года.",
     },
@@ -18,7 +18,6 @@ export const OVERDUE_LOAN_RULES = {
       percent: 100,
       startsAt: "2026-04-01",
       endsAt: null,
-      maxInitialTermDays: 365,
       note:
         "Для договоров с 1 апреля 2026 года применяется контрольный лимит 100% для займов сроком до года.",
     },

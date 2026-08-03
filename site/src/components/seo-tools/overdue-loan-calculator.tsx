@@ -6,6 +6,7 @@ import {
   calculateOverdueLoan,
   toLocalInputDateValue,
   type InterestMode,
+  type PartialPaymentsMode,
   type PenaltyBase,
   type PenaltyType,
 } from "@/lib/overdue-loan";
@@ -78,19 +79,21 @@ function Field({
   verified = false,
   placeholder,
   alignLabel = false,
+  sourceLabel = "из договора",
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   type?: "number" | "date";
-  min?: number;
-  max?: number;
+  min?: number | string;
+  max?: number | string;
   step?: number | string;
   hint?: string;
   contractField?: boolean;
   verified?: boolean;
   placeholder?: string;
   alignLabel?: boolean;
+  sourceLabel?: string;
 }) {
   const fieldColor = contractField
     ? verified
@@ -99,7 +102,7 @@ function Field({
     : "border-slate-300 bg-white";
 
   return (
-    <label className="grid gap-2">
+    <label className="grid min-w-0 content-start gap-2">
       <span
         className={`flex items-start justify-between gap-2 text-sm font-medium text-slate-700 ${
           alignLabel ? "md:min-h-10" : ""
@@ -114,7 +117,7 @@ function Field({
                 : "bg-amber-200 text-amber-950"
             }`}
           >
-            {verified ? "указано" : "из договора"}
+            {verified ? "указано" : sourceLabel}
           </span>
         ) : null}
       </span>
@@ -127,7 +130,7 @@ function Field({
         value={value}
         placeholder={placeholder}
         onChange={(event) => onChange(event.target.value)}
-        className={`h-12 rounded-md border px-3 text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100 ${fieldColor}`}
+        className={`h-12 w-full min-w-0 rounded-md border px-3 text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100 ${fieldColor}`}
       />
       {hint ? <span className="text-xs leading-5 text-slate-600">{hint}</span> : null}
     </label>
@@ -150,7 +153,7 @@ function ContractChoice({
   const verified = Boolean(value);
 
   return (
-    <label className="grid gap-2">
+    <label className="grid min-w-0 content-start gap-2">
       <span className="flex items-start justify-between gap-2 text-sm font-medium text-slate-700 md:min-h-10">
         <span>{label}</span>
         <span
@@ -166,7 +169,7 @@ function ContractChoice({
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className={`h-12 rounded-md border px-3 text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100 ${
+        className={`h-12 w-full min-w-0 rounded-md border px-3 text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100 ${
           verified
             ? "border-lime-300 bg-lime-50"
             : "border-amber-300 bg-amber-50"
@@ -207,7 +210,13 @@ export function OverdueLoanCalculator({
   );
   const [exactDueDateValue, setExactDueDateValue] = useState("");
   const [dailyRateValue, setDailyRateValue] = useState("");
+  const [overdueDailyRateValue, setOverdueDailyRateValue] = useState("");
   const [interestMode, setInterestMode] = useState<InterestMode>("");
+  const [partialPaymentsMode, setPartialPaymentsMode] =
+    useState<PartialPaymentsMode>("");
+  const [outstandingPrincipalValue, setOutstandingPrincipalValue] = useState("");
+  const [accruedInterestAtDueDateValue, setAccruedInterestAtDueDateValue] =
+    useState("");
   const [penaltyType, setPenaltyType] = useState<PenaltyType | "">("");
   const [penaltyRateValue, setPenaltyRateValue] = useState("");
   const [penaltyStartDayValue, setPenaltyStartDayValue] = useState("");
@@ -225,7 +234,11 @@ export function OverdueLoanCalculator({
     plannedPaymentDateValue,
     exactDueDateValue,
     dailyRateValue,
+    overdueDailyRateValue,
     interestMode,
+    partialPaymentsMode,
+    outstandingPrincipalValue,
+    accruedInterestAtDueDateValue,
     penaltyType,
     penaltyRateValue,
     penaltyStartDayValue,
@@ -236,6 +249,7 @@ export function OverdueLoanCalculator({
     termVerified &&
     Boolean(dailyRateValue) &&
     Boolean(interestMode) &&
+    (interestMode === "no" || Boolean(overdueDailyRateValue)) &&
     Boolean(penaltyType) &&
     Boolean(penaltyRateValue) &&
     Boolean(penaltyStartDayValue) &&
@@ -322,29 +336,50 @@ export function OverdueLoanCalculator({
                 label="Когда деньги поступили на карту"
                 value={receivedDateValue}
                 onChange={changeReceivedDate}
+                min="2023-07-01"
               />
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
-              <div className="grid content-start gap-3">
-                <Field
-                  label="На сколько дней вы взяли займ"
-                  value={termDaysValue}
-                  onChange={(value) => changeTerm(value)}
-                  min={1}
-                  max={3650}
-                  step="1"
-                  contractField
-                  verified={termVerified}
-                  hint="Найдите срок займа в индивидуальных условиях договора."
-                />
+              <Field
+                label="На сколько дней вы взяли займ"
+                value={termDaysValue}
+                onChange={(value) => changeTerm(value)}
+                min={1}
+                max={3650}
+                step="1"
+                contractField
+                verified={termVerified}
+                alignLabel
+                hint="Найдите срок займа в индивидуальных условиях договора."
+              />
+              <Field
+                label="Ставка в день, %"
+                value={dailyRateValue}
+                onChange={setDailyRateValue}
+                min={0}
+                max={5}
+                step="0.01"
+                placeholder="Если не знаете — 0,8%"
+                contractField
+                verified={Boolean(dailyRateValue)}
+                alignLabel
+                hint="Обычно указана на первой странице договора."
+              />
+            </div>
+
+            <div className="grid items-start gap-4 md:grid-cols-2">
+              <div className="grid min-w-0 content-start gap-2">
+                <span className="text-sm font-medium text-slate-700">
+                  Быстрый выбор срока
+                </span>
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                   {[7, 14, 21, 28, 30].map((days) => (
                     <button
                       key={days}
                       type="button"
                       onClick={() => changeTerm(String(days))}
-                      className={`min-h-10 rounded-md border px-3 text-sm font-semibold transition ${
+                      className={`h-12 rounded-md border px-3 text-sm font-semibold transition ${
                         termVerified && termDaysValue === String(days)
                           ? "border-emerald-700 bg-emerald-50 text-emerald-800"
                           : "border-slate-300 bg-white text-slate-700 hover:border-emerald-600"
@@ -355,28 +390,14 @@ export function OverdueLoanCalculator({
                   ))}
                 </div>
               </div>
-
-              <div className="grid content-start gap-4">
-                <Field
-                  label="Ставка в день, %"
-                  value={dailyRateValue}
-                  onChange={setDailyRateValue}
-                  min={0}
-                  max={5}
-                  step="0.01"
-                  placeholder="Если не знаете — 0,8%"
-                  contractField
-                  verified={Boolean(dailyRateValue)}
-                  hint="Обычно указана на первой странице договора."
-                />
-                <Field
-                  type="date"
-                  label="Точная дата возврата из договора"
-                  value={exactDueDateValue}
-                  onChange={setExactDueDateValue}
-                  hint="Необязательно: если не указать, дата будет рассчитана по сроку займа."
-                />
-              </div>
+              <Field
+                type="date"
+                label="Точная дата возврата из договора"
+                value={exactDueDateValue}
+                onChange={setExactDueDateValue}
+                min={receivedDateValue || "2023-07-01"}
+                hint="Необязательно: если не указать, дата будет рассчитана по сроку займа."
+              />
             </div>
           </section>
 
@@ -392,8 +413,75 @@ export function OverdueLoanCalculator({
               label="Когда вы фактически внесёте платёж"
               value={plannedPaymentDateValue}
               onChange={setPlannedPaymentDateValue}
+              min={receivedDateValue || "2023-07-01"}
               hint="Можно выбрать будущую дату и заранее оценить возможную просрочку."
             />
+
+            <fieldset className="grid gap-3 rounded-lg border border-slate-200 p-3">
+              <legend className="px-1 text-sm font-medium text-slate-700">
+                Вы уже вносили платежи по этому займу?
+              </legend>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { value: "no", label: "Нет" },
+                  { value: "yes", label: "Да" },
+                ].map((item) => (
+                  <label
+                    key={item.value}
+                    className={`inline-flex min-h-10 cursor-pointer items-center rounded-md border px-4 text-sm font-semibold transition ${
+                      partialPaymentsMode === item.value
+                        ? "border-emerald-700 bg-emerald-50 text-emerald-800"
+                        : "border-slate-300 bg-white text-slate-700 hover:border-emerald-600"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="partialPaymentsMode"
+                      value={item.value}
+                      checked={partialPaymentsMode === item.value}
+                      onChange={() =>
+                        setPartialPaymentsMode(item.value as PartialPaymentsMode)
+                      }
+                      className="sr-only"
+                    />
+                    {item.label}
+                  </label>
+                ))}
+              </div>
+              {!partialPaymentsMode ? (
+                <p className="text-xs leading-5 text-amber-800">
+                  Если не выбрать ответ, калькулятор будет считать, что платежей ещё не было.
+                </p>
+              ) : null}
+            </fieldset>
+
+            {partialPaymentsMode === "yes" ? (
+              <div className="grid gap-4 md:grid-cols-2">
+                <Field
+                  label="Остаток основного долга, ₽"
+                  value={outstandingPrincipalValue}
+                  onChange={setOutstandingPrincipalValue}
+                  min={0}
+                  step="0.01"
+                  contractField
+                  verified={Boolean(outstandingPrincipalValue)}
+                  sourceLabel="из личного кабинета"
+                  alignLabel
+                  hint="Не первоначальная сумма, а остаток после ваших платежей."
+                />
+                <Field
+                  label="Неоплаченные проценты на дату возврата, ₽"
+                  value={accruedInterestAtDueDateValue}
+                  onChange={setAccruedInterestAtDueDateValue}
+                  min={0}
+                  step="0.01"
+                  contractField
+                  verified={Boolean(accruedInterestAtDueDateValue)}
+                  sourceLabel="из личного кабинета"
+                  alignLabel
+                />
+              </div>
+            ) : null}
           </section>
 
           <section className="grid gap-4 rounded-xl border border-slate-200 p-4">
@@ -427,6 +515,21 @@ export function OverdueLoanCalculator({
                   { value: "daily", label: "Процент в день" },
                 ]}
               />
+              {interestMode !== "no" ? (
+                <Field
+                  label="Ставка после наступления просрочки, % в день"
+                  value={overdueDailyRateValue}
+                  onChange={setOverdueDailyRateValue}
+                  min={0}
+                  max={5}
+                  step="0.01"
+                  placeholder="Если не знаете — как до просрочки"
+                  contractField
+                  verified={Boolean(overdueDailyRateValue)}
+                  alignLabel
+                  hint="Проверьте, меняется ли ставка после даты возврата."
+                />
+              ) : null}
               <Field
                 label="Ставка неустойки, %"
                 value={penaltyRateValue}
@@ -465,13 +568,13 @@ export function OverdueLoanCalculator({
                 hint="Посмотрите условие о неустойке в индивидуальных условиях договора."
               />
               <Field
-                label="Другие начисления из договора, ₽"
+                label="Платные услуги кредитора из договора, ₽"
                 value={otherChargesValue}
                 onChange={setOtherChargesValue}
                 min={0}
                 step="0.01"
                 placeholder="Не добавляем, если поле пустое"
-                hint="Добавляйте только сумму, прямо указанную в договоре или личном кабинете."
+                hint="Не вводите сюда госпошлину, судебные расходы и требования сторонних взыскателей."
                 alignLabel
               />
             </div>
@@ -513,13 +616,46 @@ export function OverdueLoanCalculator({
               <dl className="mt-4 grid gap-2">
                 <ResultRow label="Дата возврата по договору" value={formatDate(result.dueDate)} />
                 <ResultRow label="Срок займа" value={`${result.termDays} дней`} />
-                <ResultRow label="Проценты за срок займа" value={formatMoney(result.contractInterest)} />
-                <ResultRow label="Нужно было вернуть в срок" value={formatMoney(result.scheduledPayment)} strong />
+                {result.contractInterestDays !== result.termDays ? (
+                  <ResultRow
+                    label="Дней начисления процентов до даты возврата"
+                    value={String(result.contractInterestDays)}
+                  />
+                ) : null}
+                <ResultRow
+                  label={
+                    result.hasPartialPayments
+                      ? "Расчётные проценты по исходным условиям"
+                      : "Проценты за срок займа"
+                  }
+                  value={formatMoney(result.contractInterest)}
+                />
+                {result.hasPartialPayments ? (
+                  <>
+                    <ResultRow
+                      label="Остаток основного долга"
+                      value={formatMoney(result.outstandingPrincipal)}
+                    />
+                    <ResultRow
+                      label="Неоплаченные проценты на дату возврата"
+                      value={formatMoney(result.accruedInterestAtDueDate)}
+                    />
+                  </>
+                ) : null}
+                <ResultRow
+                  label={
+                    result.hasPartialPayments
+                      ? "Просроченный платёж после внесённых платежей"
+                      : "Нужно было вернуть в срок"
+                  }
+                  value={formatMoney(result.scheduledPayment)}
+                  strong
+                />
                 <ResultRow label="Дней просрочки" value={String(result.daysOverdue)} danger={result.daysOverdue > 0} />
                 <ResultRow label="Проценты за дни просрочки" value={formatMoney(result.overdueInterest)} danger={result.overdueInterest > 0} />
                 <ResultRow label={`Неустойка за ${result.penaltyDays} дн.`} value={formatMoney(result.penalty)} danger={result.penalty > 0} />
                 {result.otherCharges > 0 ? (
-                  <ResultRow label="Другие введённые начисления" value={formatMoney(result.otherCharges)} danger />
+                  <ResultRow label="Платные услуги кредитора" value={formatMoney(result.otherCharges)} danger />
                 ) : null}
                 <ResultRow label="Ориентировочно к выбранной дате" value={formatMoney(result.estimatedTotal)} strong />
               </dl>
@@ -576,8 +712,10 @@ export function OverdueLoanCalculator({
       <section className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-700">
         <h3 className="font-bold text-slate-950">Как считается результат</h3>
         <ul className="mt-3 grid gap-2">
-          <li>• Проценты за займ = сумма займа × ставка в день × срок займа.</li>
+          <li>• Проценты до возврата = сумма займа × ставка в день × число дней до даты возврата.</li>
           <li>• Просрочка начинается на следующий день после даты возврата.</li>
+          <li>• После частичных платежей проценты за просрочку считаются от введённого остатка основного долга.</li>
+          <li>• Для просрочки применяется отдельная ставка из договора; если она не указана — исходная ставка.</li>
           <li>• Проценты за просрочку и неустойка показываются отдельно красным.</li>
           <li>• Если расчёт превышает применимый общий предел начислений, итог ограничивается этим пределом.</li>
         </ul>
