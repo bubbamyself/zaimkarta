@@ -11,14 +11,14 @@
 
 ```bash
 sudo /usr/local/sbin/zaimkarta-health-check all
-docker compose -f /home/deploy/zaimkarta/deploy/docker-compose.prod.yml ps
-docker compose -f /home/deploy/zaimkarta/deploy/docker-compose.prod.yml logs --tail=200 app caddy db
+sudo docker compose -f /home/deploy/zaimkarta/deploy/docker-compose.prod.yml ps
+sudo docker compose -f /home/deploy/zaimkarta/deploy/docker-compose.prod.yml logs --tail=200 app caddy db
 df -h
 free -h
-tail -n 100 /var/log/zaimkarta-health.log
+sudo tail -n 100 /var/log/zaimkarta-health.log
 ```
 
-5. Записать время начала проблемы и сохранить текст ошибки. Не публиковать логи целиком: в access logs могут быть IP и URL-параметры.
+5. Записать время начала проблемы и сохранить текст ошибки. Не публиковать логи целиком: новые Caddy access logs не содержат query-параметры, но сохраняют IP, а старые записи до 5 августа 2026 года ещё могут содержать полный URL до удаления по ротации.
 
 Никогда не выполнять `docker compose down -v`, не удалять Docker volumes и не восстанавливать dump поверх production-базы без отдельного подтверждённого плана.
 
@@ -50,7 +50,7 @@ tail -n 100 /var/log/zaimkarta-health.log
 Проверить:
 
 ```bash
-docker compose -f /home/deploy/zaimkarta/deploy/docker-compose.prod.yml ps
+sudo docker compose -f /home/deploy/zaimkarta/deploy/docker-compose.prod.yml ps
 curl -I https://zaimkarta.ru/
 sudo /usr/local/sbin/zaimkarta-health-check quick
 ```
@@ -63,7 +63,7 @@ sudo /usr/local/sbin/zaimkarta-health-check quick
 
 Если ошибка возникает до запроса ключа или пароля (`banner exchange` или `kex_exchange_identification`), сначала отключить VPN и сделать одну попытку подключения с обычного домашнего IP. Общий VPN-IP может уже находиться в блокировке fail2ban или ограничениях SSH из-за действий других пользователей VPN.
 
-Не повторять подключение десятки раз подряд. Если без VPN вход работает, продолжать серверные работы в одной SSH-сессии и включать VPN только после `exit`. Если без VPN проблема остаётся, сайт не перезагружать циклически: сохранить текст ошибки и обратиться в Beget с просьбой проверить sshd, fail2ban, `MaxStartups` и активные соединения на порту 22.
+Не повторять подключение десятки раз подряд. Если без VPN вход работает, продолжать серверные работы в одной SSH-сессии и включать VPN только после `exit`. Если без VPN проблема остаётся, сайт не перезагружать циклически. Открыть сервер в панели Beget, запустить подтверждённую VNC-консоль, войти как `deploy` и выполнить локальные read-only проверки. Не нажимать кнопку `CTRL + ALT + DEL`: она может перезагрузить VPS. Если VNC также недоступна, сохранить текст ошибки и обратиться в Beget с просьбой проверить VPS, sshd, fail2ban, `MaxStartups` и активные соединения на порту 22.
 
 `Connection timed out during banner exchange` возникает до проверки пароля, поэтому смена пароля сама по себе такую ошибку не исправляет. Пароли `sudo` и `passwd` вводить руками в английской раскладке; скрытый ввод без символов на экране является нормальным.
 
@@ -74,11 +74,31 @@ sudo /usr/local/sbin/zaimkarta-health-check quick
 Проверить `caddy` и его последние логи:
 
 ```bash
-docker compose -f /home/deploy/zaimkarta/deploy/docker-compose.prod.yml ps caddy
-docker compose -f /home/deploy/zaimkarta/deploy/docker-compose.prod.yml logs --tail=200 caddy
+sudo docker compose -f /home/deploy/zaimkarta/deploy/docker-compose.prod.yml ps caddy
+sudo docker compose -f /home/deploy/zaimkarta/deploy/docker-compose.prod.yml logs --tail=200 caddy
 ```
 
 Проверить, что DNS всё ещё указывает на VPS и порты `80/443` открыты. Не отключать HTTPS и не принимать в браузере предупреждение «всё равно перейти». Если сертификат не обновляется или изменился DNS — обратиться к специалисту.
+
+## Динамический Open Graph перегружен или не отвечает
+
+Признаки: Telegram, MAX или VK перестали получать изображение расчёта; `/api/og/calculator` отвечает медленно; растут нагрузка или `5xx`, но обычные страницы ещё доступны.
+
+В приложении уже есть первый аварийный слой: проверка параметров, ограничение частоты и одновременной генерации, ограниченный кеш и статическая fallback-картинка. При невалидном запросе, превышении лимита или ошибке генерации маршрут должен вернуть безопасный PNG с `HTTP 200`, а не ронять сайт.
+
+Проверить один раз, не создавая собственную нагрузку:
+
+```bash
+curl -sS -o /dev/null -w "HTTP %{http_code} %{content_type}\n" "https://zaimkarta.ru/api/og/calculator?tool=overpayment&share=1&v=1&amount=10000&term=14&rate=0.8"
+sudo /usr/local/sbin/zaimkarta-health-check quick
+sudo docker compose -f /home/deploy/zaimkarta/deploy/docker-compose.prod.yml logs --since=10m --tail=200 app caddy
+```
+
+Нормальный результат первого запроса — `HTTP 200 image/png`. Не повторять его десятки раз и не проводить нагрузочный тест на production без отдельного окна.
+
+Если обычные страницы отвечают `200`, а проблема видна только в одном старом сообщении, сначала проверить новую нормализованную ссылку: Telegram и VK кешируют preview, и старое сообщение само по себе не доказывает аварию сайта.
+
+Если генератор продолжает создавать нагрузку или публичные страницы начинают падать, включить `ТЕХРАБОТЫ`. Это также временно остановит `/go`. Принудительный перевод всех метаданных на статическое изображение выполняется отдельным проверенным изменением приложения; не редактировать Caddy и production-код вслепую во время инцидента.
 
 ## Заканчивается диск
 
@@ -88,7 +108,7 @@ docker compose -f /home/deploy/zaimkarta/deploy/docker-compose.prod.yml logs --t
 
 ```bash
 df -h
-docker system df
+sudo docker system df
 sudo du -xhd1 /var/log /home/deploy/backups 2>/dev/null
 ```
 
@@ -101,8 +121,8 @@ sudo du -xhd1 /var/log /home/deploy/backups 2>/dev/null
 Проверить:
 
 ```bash
-docker compose -f /home/deploy/zaimkarta/deploy/docker-compose.prod.yml ps db app
-docker compose -f /home/deploy/zaimkarta/deploy/docker-compose.prod.yml logs --tail=200 db app
+sudo docker compose -f /home/deploy/zaimkarta/deploy/docker-compose.prod.yml ps db app
+sudo docker compose -f /home/deploy/zaimkarta/deploy/docker-compose.prod.yml logs --tail=200 db app
 df -h
 ```
 
@@ -115,7 +135,7 @@ df -h
 Проверить логи `app`, состояние `db`, свободную память и диск. Один ручной перезапуск `app` допустим только после сохранения ошибки и если база healthy:
 
 ```bash
-docker compose -f /home/deploy/zaimkarta/deploy/docker-compose.prod.yml restart app
+sudo docker compose -f /home/deploy/zaimkarta/deploy/docker-compose.prod.yml restart app
 ```
 
 Если контейнер снова упал, не повторять перезапуск циклически. Включить техработы, зафиксировать последний деплой/commit и обратиться к разработчику.
@@ -130,7 +150,7 @@ docker compose -f /home/deploy/zaimkarta/deploy/docker-compose.prod.yml restart 
 sudo /usr/local/sbin/zaimkarta-health-check quick
 ```
 
-В Caddy logs проверить время, URI и повторяющиеся источники, не публикуя IP и query strings. Рост `429` означает, что rate limit уже отсекает часть запросов; это не обязательно падение сайта. При продолжающемся всплеске включить техработы, временно остановив CPA-переходы, и обратиться к специалисту для provider/WAF rate limit. Не отключать приложение и не увеличивать лимиты вслепую.
+В Caddy logs проверить время, URI и повторяющиеся источники, не публикуя IP. Новые access logs сохраняют только путь без query-параметров. Рост `429` означает, что rate limit уже отсекает часть запросов; это не обязательно падение сайта. При продолжающемся всплеске включить техработы, временно остановив CPA-переходы, и обратиться к специалисту для provider/WAF rate limit. Не отключать приложение и не увеличивать лимиты вслепую.
 
 ## Подозрение на атаку
 
@@ -146,8 +166,8 @@ sudo /usr/local/sbin/zaimkarta-health-check quick
 
 ```bash
 sudo /usr/local/sbin/zaimkarta-backup check
-tail -n 100 /home/deploy/backups/zaimkarta/logs/cron.log
-tail -n 100 /var/log/zaimkarta-health.log
+sudo tail -n 100 /home/deploy/backups/zaimkarta/logs/cron.log
+sudo tail -n 100 /var/log/zaimkarta-health.log
 ```
 
 Если рабочий сайт и база исправны, сначала не требуется техработ. Устранить место на диске, доступ Google Drive или ошибку контейнера, затем вручную создать новый бэкап по `docs/production-backup-plan.md` и повторить `check`. Не удалять последнюю успешную копию.
