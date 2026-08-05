@@ -1,12 +1,17 @@
+import { Fragment } from "react";
 import type { SeoPageTool, SeoTool, SeoToolType } from "@prisma/client";
 import { FaqSection, type FaqItemWithLinkedPage } from "@/components/faq-section";
 import { ApplicationChecklist } from "@/components/seo-tools/application-checklist";
 import { FilterableOffers } from "@/components/seo-tools/filterable-offers";
 import { LoanComparison } from "@/components/seo-tools/loan-comparison";
-import { OverdueLoanCalculator } from "@/components/seo-tools/overdue-loan-calculator";
+import {
+  OverdueLoanCalculator,
+  OverdueLoanPostOffersInfo,
+} from "@/components/seo-tools/overdue-loan-calculator";
 import { OverpaymentCalculator } from "@/components/seo-tools/overpayment-calculator";
 import { RepaymentDateCalculator } from "@/components/seo-tools/repayment-date-calculator";
 import type { OfferCardData } from "@/lib/offers";
+import type { CalculatorShareData } from "@/lib/calculator-share";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -37,6 +42,7 @@ type SeoContentRendererProps = {
   selectedRegionCode?: string | null;
   riskNotice?: string | null;
   adminPreview?: boolean;
+  calculatorShare?: CalculatorShareData | null;
 };
 
 function isRecord(value: unknown): value is JsonRecord {
@@ -73,6 +79,8 @@ function renderToolByType({
   pageType,
   categorySlug,
   selectedRegionCode,
+  calculatorShare,
+  offerFilterTarget,
 }: {
   toolType: SeoToolType;
   title: string;
@@ -83,6 +91,8 @@ function renderToolByType({
   pageType: string;
   categorySlug: string;
   selectedRegionCode?: string | null;
+  calculatorShare?: CalculatorShareData | null;
+  offerFilterTarget?: string;
 }) {
   if (toolType === "OVERPAYMENT_CALCULATOR") {
     return (
@@ -95,6 +105,8 @@ function renderToolByType({
         pageType={pageType}
         categorySlug={categorySlug}
         selectedRegionCode={selectedRegionCode}
+        calculatorShare={calculatorShare}
+        offerFilterTarget={offerFilterTarget}
       />
     );
   }
@@ -110,6 +122,7 @@ function renderToolByType({
         pageType={pageType}
         categorySlug={categorySlug}
         selectedRegionCode={selectedRegionCode}
+        calculatorShare={calculatorShare}
       />
     );
   }
@@ -125,6 +138,8 @@ function renderToolByType({
         pageType={pageType}
         categorySlug={categorySlug}
         selectedRegionCode={selectedRegionCode}
+        calculatorShare={calculatorShare}
+        offerFilterTarget={offerFilterTarget}
       />
     );
   }
@@ -140,6 +155,8 @@ function renderToolByType({
         pageType={pageType}
         categorySlug={categorySlug}
         selectedRegionCode={selectedRegionCode}
+        calculatorShare={calculatorShare}
+        offerFilterTarget={offerFilterTarget}
       />
     );
   }
@@ -155,6 +172,7 @@ function renderToolByType({
         pageType={pageType}
         categorySlug={categorySlug}
         selectedRegionCode={selectedRegionCode}
+        calculatorShare={calculatorShare}
       />
     );
   }
@@ -172,6 +190,7 @@ export function SeoContentRenderer({
   selectedRegionCode,
   riskNotice,
   adminPreview = false,
+  calculatorShare,
 }: SeoContentRendererProps) {
   const parsedBlocks = parseBlocks(blocks);
   const pageToolsByBlockId = new Map(
@@ -179,6 +198,32 @@ export function SeoContentRenderer({
       .filter((pageTool) => pageTool.blockId)
       .map((pageTool) => [pageTool.blockId, pageTool]),
   );
+  const offerTargetByToolIndex = new Map<number, string>();
+  const initiallyHiddenOfferTargets = new Set<string>();
+
+  parsedBlocks.forEach((block, index) => {
+    if (block.type !== "tool" || !block.blockId) {
+      return;
+    }
+
+    const nextOffersIndex = parsedBlocks.findIndex(
+      (candidate, candidateIndex) =>
+        candidateIndex > index && candidate.type === "offers",
+    );
+
+    if (nextOffersIndex === -1) {
+      return;
+    }
+
+    const offersBlock = parsedBlocks[nextOffersIndex];
+    const target = offersBlock.id ?? `offers-${nextOffersIndex}`;
+    offerTargetByToolIndex.set(index, target);
+
+    const pageTool = pageToolsByBlockId.get(block.blockId);
+    if (pageTool?.tool.type === "OVERDUE_LOAN_CALCULATOR") {
+      initiallyHiddenOfferTargets.add(target);
+    }
+  });
 
   if (parsedBlocks.length === 0) {
     return null;
@@ -249,14 +294,25 @@ export function SeoContentRenderer({
         }
 
         if (block.type === "offers") {
+          const filterTarget = block.id ?? `offers-${index}`;
+
+          const belongsToOverdueCalculator =
+            initiallyHiddenOfferTargets.has(filterTarget);
+
           return (
-            <FilterableOffers
-              key={key}
-              title={block.title ?? "Предложения по теме"}
-              offers={offers}
-              pageType={pageType}
-              categorySlug={categorySlug}
-            />
+            <Fragment key={key}>
+              <FilterableOffers
+                title={block.title ?? "Предложения по теме"}
+                offers={offers}
+                pageType={pageType}
+                categorySlug={categorySlug}
+                filterTarget={filterTarget}
+                initiallyHidden={belongsToOverdueCalculator}
+              />
+              {belongsToOverdueCalculator ? (
+                <OverdueLoanPostOffersInfo />
+              ) : null}
+            </Fragment>
           );
         }
 
@@ -293,6 +349,8 @@ export function SeoContentRenderer({
             pageType,
             categorySlug,
             selectedRegionCode,
+            calculatorShare,
+            offerFilterTarget: offerTargetByToolIndex.get(index),
           });
 
           return renderedTool ? (

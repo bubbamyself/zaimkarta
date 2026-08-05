@@ -1,4 +1,5 @@
 import type { OfferCardData } from "@/lib/offers";
+import type { CalculatorShareData } from "@/lib/calculator-share";
 
 export type SeoToolVariant = "FULL" | "COMPACT" | "INLINE";
 
@@ -215,4 +216,6 @@ export type SeoToolRenderProps<TConfig> = {
   pageType: string;
   categorySlug: string;
   selectedRegionCode?: string | null;
+  calculatorShare?: CalculatorShareData | null;
+  offerFilterTarget?: string;
 };

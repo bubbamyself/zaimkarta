@@ -2,6 +2,11 @@
 
 import { useEffect, useRef } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
+import {
+  CALCULATOR_ANALYTICS_EVENT,
+  type CalculatorAnalyticsDetail,
+} from "@/lib/calculator-analytics";
+import { sanitizeCalculatorAnalyticsUrl } from "@/lib/calculator-share";
 
 const COOKIE_NOTICE_COOKIE_NAME = "zk_cookie_notice_accepted";
 const COOKIE_CONSENT_EVENT = "zk-cookie-consent-accepted";
@@ -70,7 +75,7 @@ export function YandexMetrika({ counterId }: { counterId: number }) {
         return;
       }
 
-      const currentUrl = window.location.href;
+      const currentUrl = sanitizeCalculatorAnalyticsUrl(window.location.href);
 
       if (previousUrl.current === currentUrl) {
         return;
@@ -80,7 +85,9 @@ export function YandexMetrika({ counterId }: { counterId: number }) {
 
       ym(counterId, "hit", currentUrl, {
         title: document.title,
-        referer: previousUrl.current ?? document.referrer,
+        referer:
+          previousUrl.current ??
+          sanitizeCalculatorAnalyticsUrl(document.referrer),
       });
 
       previousUrl.current = currentUrl;
@@ -93,6 +100,29 @@ export function YandexMetrika({ counterId }: { counterId: number }) {
       window.removeEventListener(COOKIE_CONSENT_EVENT, trackPageView);
     };
   }, [counterId, pathname, query]);
+
+  useEffect(() => {
+    function trackCalculatorGoal(event: Event) {
+      if (!hasCookieConsent()) {
+        return;
+      }
+
+      const detail = (event as CustomEvent<CalculatorAnalyticsDetail>).detail;
+
+      if (!detail?.goal || !detail.params) {
+        return;
+      }
+
+      const ym = initializeMetrika(counterId);
+      ym(counterId, "reachGoal", detail.goal, detail.params);
+    }
+
+    window.addEventListener(CALCULATOR_ANALYTICS_EVENT, trackCalculatorGoal);
+
+    return () => {
+      window.removeEventListener(CALCULATOR_ANALYTICS_EVENT, trackCalculatorGoal);
+    };
+  }, [counterId]);
 
   return null;
 }

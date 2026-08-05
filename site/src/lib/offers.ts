@@ -1,4 +1,5 @@
 import type { ApprovalTone, Offer } from "@prisma/client";
+import { hasActiveHttpsAffiliateOffer } from "@/lib/affiliate-offer-availability";
 import { prisma } from "@/lib/prisma";
 import { isRussianRegionCode } from "@/lib/russian-regions";
 
@@ -170,6 +171,9 @@ export async function getActiveOffers(): Promise<OfferCardData[]> {
 
 export async function getActiveOffersForRegion(
   regionCode: string | null,
+  options?: {
+    requireActiveAffiliateOffer?: boolean;
+  },
 ): Promise<OfferCardData[]> {
   const selectedRegionCode = regionCode && isRussianRegionCode(regionCode)
     ? regionCode
@@ -188,9 +192,25 @@ export async function getActiveOffersForRegion(
         : {}),
     },
     orderBy: [{ displayPriority: "asc" }, { rating: "desc" }, { brandName: "asc" }],
+    include: {
+      affiliateOffers: {
+        where: {
+          isActive: true,
+        },
+        select: {
+          trackingBaseUrl: true,
+        },
+      },
+    },
   });
 
-  return offers.map(mapOfferToCardData);
+  return offers
+    .filter(
+      (offer) =>
+        !options?.requireActiveAffiliateOffer ||
+        hasActiveHttpsAffiliateOffer(offer.affiliateOffers),
+    )
+    .map(mapOfferToCardData);
 }
 
 export async function getOfferDetails(

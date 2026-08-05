@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { publishCalculatorAnalytics } from "@/lib/calculator-analytics";
 import {
   addCalendarDays,
   calculateOverdueLoan,
@@ -10,6 +11,11 @@ import {
   type PenaltyBase,
   type PenaltyType,
 } from "@/lib/overdue-loan";
+import {
+  getOverdueLoanResultCopy,
+  getOverdueLoanTemplateState,
+} from "@/lib/overdue-loan-result-copy";
+import { publishOverdueOfferVisibility } from "./filterable-offers";
 import type {
   OverdueLoanCalculatorConfig,
   SeoToolRenderProps,
@@ -193,6 +199,8 @@ export function OverdueLoanCalculator({
   config,
   variant,
   pageType,
+  categorySlug,
+  offerFilterTarget,
 }: SeoToolRenderProps<OverdueLoanCalculatorConfig>) {
   const initialDates = useMemo(() => {
     const today = new Date();
@@ -222,6 +230,11 @@ export function OverdueLoanCalculator({
   const [penaltyStartDayValue, setPenaltyStartDayValue] = useState("");
   const [penaltyBase, setPenaltyBase] = useState<PenaltyBase | "">("");
   const [otherChargesValue, setOtherChargesValue] = useState("");
+  const [existingLoanMode, setExistingLoanMode] = useState<"yes" | "no" | "">(
+    "",
+  );
+  const [hasUserChanged, setHasUserChanged] = useState(false);
+  const trackedResults = useRef(new Set<string>());
   const showToolHeader = pageType !== "service" || variant !== "FULL";
   const limits = {
     loanAmountMin: config.limits?.principalDebtMin ?? 1,
@@ -254,8 +267,41 @@ export function OverdueLoanCalculator({
     Boolean(penaltyRateValue) &&
     Boolean(penaltyStartDayValue) &&
     Boolean(penaltyBase);
+  const resultCopy = result.ok
+    ? getOverdueLoanResultCopy({ result, contractDataComplete })
+    : null;
+
+  useEffect(() => {
+    if (!hasUserChanged || !result.ok) {
+      return;
+    }
+
+    const key = [
+      result.plannedPaymentDate.getTime(),
+      result.daysOverdue,
+      result.estimatedTotal,
+      result.assumptions.length,
+      result.hasPartialPayments,
+    ].join("|");
+
+    if (trackedResults.current.has(key)) {
+      return;
+    }
+
+    trackedResults.current.add(key);
+    publishCalculatorAnalytics("calculator_personalized_result_viewed", {
+      tool_type: "overdue",
+      page_slug: categorySlug,
+      template_state: getOverdueLoanTemplateState({
+        result,
+        contractDataComplete,
+      }),
+      source: "direct",
+    });
+  }, [categorySlug, contractDataComplete, hasUserChanged, result]);
 
   function changeReceivedDate(value: string) {
+    setHasUserChanged(true);
     setReceivedDateValue(value);
     const date = value ? new Date(`${value}T00:00:00`) : null;
     const term = Number(termDaysValue);
@@ -266,6 +312,7 @@ export function OverdueLoanCalculator({
   }
 
   function changeTerm(value: string, verified = true) {
+    setHasUserChanged(true);
     setTermDaysValue(value);
     setTermVerified(verified && Boolean(value));
     const date = receivedDateValue
@@ -278,8 +325,54 @@ export function OverdueLoanCalculator({
     }
   }
 
+  function changeExistingLoanMode(value: "yes" | "no") {
+    setExistingLoanMode(value);
+
+    if (!offerFilterTarget) {
+      return;
+    }
+
+    const visible = value === "yes";
+    publishCalculatorAnalytics("overdue_active_loan_answered", {
+      tool_type: "overdue",
+      page_slug: categorySlug,
+      scenario: "paid_only",
+      answer: value,
+      source: "direct",
+    });
+
+    if (visible) {
+      publishCalculatorAnalytics("calculator_offer_list_requested", {
+        tool_type: "overdue",
+        page_slug: categorySlug,
+        scenario: "paid_only",
+        source: "direct",
+      });
+    }
+
+    publishOverdueOfferVisibility({
+      visible,
+      target: offerFilterTarget,
+      source: "direct",
+    });
+
+    if (visible) {
+      window.setTimeout(() => {
+        const target = Array.from(
+          document.querySelectorAll<HTMLElement>("[data-offer-filter-target]"),
+        ).find(
+          (element) => element.dataset.offerFilterTarget === offerFilterTarget,
+        );
+        target?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 0);
+    }
+  }
+
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+    <section
+      onChangeCapture={() => setHasUserChanged(true)}
+      className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm"
+    >
       {showToolHeader ? (
         <div>
           <p className="text-sm font-semibold uppercase text-emerald-700">
@@ -709,17 +802,26 @@ export function OverdueLoanCalculator({
         </aside>
       </div>
 
-      <section className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-700">
-        <h3 className="font-bold text-slate-950">Как считается результат</h3>
-        <ul className="mt-3 grid gap-2">
-          <li>• Проценты до возврата = сумма займа × ставка в день × число дней до даты возврата.</li>
-          <li>• Просрочка начинается на следующий день после даты возврата.</li>
-          <li>• После частичных платежей проценты за просрочку считаются от введённого остатка основного долга.</li>
-          <li>• Для просрочки применяется отдельная ставка из договора; если она не указана — исходная ставка.</li>
-          <li>• Проценты за просрочку и неустойка показываются отдельно красным.</li>
-          <li>• Если расчёт превышает применимый общий предел начислений, итог ограничивается этим пределом.</li>
-        </ul>
-      </section>
+      {resultCopy ? (
+        <section className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 p-5 sm:p-6">
+          <p className="text-sm font-semibold uppercase tracking-wide text-emerald-700">
+            Персональный разбор
+          </p>
+          <h3 className="mt-2 text-xl font-bold text-slate-950">
+            {resultCopy.title}
+          </h3>
+          <div className="mt-4 grid max-w-4xl gap-4 text-base leading-7 text-slate-700">
+            {resultCopy.paragraphs.map((paragraph) => (
+              <p key={paragraph}>{paragraph}</p>
+            ))}
+          </div>
+          {resultCopy.warning ? (
+            <p className="mt-4 max-w-4xl rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm font-medium leading-6 text-amber-900">
+              {resultCopy.warning}
+            </p>
+          ) : null}
+        </section>
+      ) : null}
 
       {config.links?.length ? (
         <section className="mt-5 rounded-lg border border-slate-200 bg-white p-4">
@@ -738,10 +840,88 @@ export function OverdueLoanCalculator({
         </section>
       ) : null}
 
-      <p className="mt-5 rounded-lg border border-slate-300 bg-slate-50 p-4 text-sm leading-6 text-slate-700">
-        Калькулятор даёт ориентир, а не подтверждает точную задолженность. Частичные
-        платежи, продления, кредитные каникулы и отдельные решения суда могут изменить
-        сумму. Для точной сверки запросите у кредитора расчёт долга по дням.
+      {offerFilterTarget ? (
+        <section className="mt-5 rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
+          <h3 className="text-xl font-bold text-slate-950">
+            Проверить предложения
+          </h3>
+          <fieldset className="mt-4 grid gap-3">
+            <legend className="text-base font-semibold text-slate-800">
+              У вас уже есть действующий заём?
+            </legend>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { value: "yes" as const, label: "Да" },
+                { value: "no" as const, label: "Нет" },
+              ].map((item) => (
+                <label
+                  key={item.value}
+                  className={`inline-flex min-h-11 min-w-24 cursor-pointer items-center justify-center rounded-md border px-5 text-sm font-semibold transition ${
+                    existingLoanMode === item.value
+                      ? "border-emerald-700 bg-emerald-50 text-emerald-800"
+                      : "border-slate-300 bg-white text-slate-700 hover:border-emerald-600"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="existingLoanMode"
+                    value={item.value}
+                    checked={existingLoanMode === item.value}
+                    onChange={() => changeExistingLoanMode(item.value)}
+                    className="sr-only"
+                  />
+                  {item.label}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+
+          {existingLoanMode === "no" ? (
+            <p className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-700">
+              Предложения не показываются. Вы можете продолжить проверку расчёта
+              и материалов по теме.
+            </p>
+          ) : null}
+        </section>
+      ) : null}
+    </section>
+  );
+}
+
+export function OverdueLoanPostOffersInfo() {
+  return (
+    <section className="mx-auto grid max-w-6xl gap-5 px-5">
+      <section className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-700">
+        <h2 className="font-bold text-slate-950">Как считается результат</h2>
+        <ul className="mt-3 grid gap-2">
+          <li>
+            • Проценты до возврата = сумма займа × ставка в день × число дней до
+            даты возврата.
+          </li>
+          <li>• Просрочка начинается на следующий день после даты возврата.</li>
+          <li>
+            • После частичных платежей проценты за просрочку считаются от
+            введённого остатка основного долга.
+          </li>
+          <li>
+            • Для просрочки применяется отдельная ставка из договора; если она
+            не указана — исходная ставка.
+          </li>
+          <li>
+            • Проценты за просрочку и неустойка показываются отдельно красным.
+          </li>
+          <li>
+            • Если расчёт превышает применимый общий предел начислений, итог
+            ограничивается этим пределом.
+          </li>
+        </ul>
+      </section>
+
+      <p className="rounded-lg border border-slate-300 bg-slate-50 p-4 text-sm leading-6 text-slate-700">
+        Калькулятор даёт ориентир, а не подтверждает точную задолженность.
+        Частичные платежи, продления, кредитные каникулы и отдельные решения суда
+        могут изменить сумму. Для точной сверки запросите у кредитора расчёт
+        долга по дням.
       </p>
     </section>
   );

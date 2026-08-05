@@ -1,5 +1,6 @@
 import type { OfferCardData } from "@/lib/offers";
 import Link from "next/link";
+import { OfferCtaLink } from "@/components/offer-cta-link";
 
 type OfferCardProps = {
   offer: OfferCardData;
@@ -129,12 +130,12 @@ export function OfferCard({
       </div>
 
       <div className="mt-auto grid gap-3 pt-6">
-        <a
+        <OfferCtaLink
           href={`/go/${offer.slug}?${clickParams.toString()}`}
           className="inline-flex min-h-11 w-full items-center justify-center rounded-md bg-emerald-700 px-4 font-semibold text-white transition hover:bg-emerald-800"
         >
           {ctaText}
-        </a>
+        </OfferCtaLink>
         <Link
           href={`/offers/${offer.slug}`}
           className="inline-flex min-h-11 w-full items-center justify-center rounded-md border border-slate-300 bg-white px-4 font-semibold text-slate-800 transition hover:border-slate-500"

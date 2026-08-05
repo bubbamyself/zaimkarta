@@ -36,12 +36,12 @@ export default async function PublicLayout({
   if (!(await isMaintenanceModeEnabled())) {
     return (
       <>
-        {children}
         {counterId ? (
           <Suspense fallback={null}>
             <YandexMetrika counterId={counterId} />
           </Suspense>
         ) : null}
+        {children}
       </>
     );
   }

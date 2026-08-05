@@ -1,7 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { OfferCard } from "@/components/offer-card";
+import {
+  getOffersCountBucket,
+  publishCalculatorAnalytics,
+} from "@/lib/calculator-analytics";
 import type { OfferCardData } from "@/lib/offers";
 
 const OFFER_FILTER_EVENT = "zaimkarta:offer-filter";
@@ -13,6 +17,11 @@ type OfferFilterDetail = {
   dailyRate?: number;
   priority?: OfferPickerPriority;
   checklist?: ChecklistFilter;
+  visibility?: "show" | "hide";
+  paidOnly?: boolean;
+  sourceTool?: "overpayment" | "repayment_date" | "overdue";
+  source?: "direct" | "shared";
+  target?: string;
 };
 
 export type OfferPickerPriority = "lowRate" | "fast" | "zero" | "approval";
@@ -30,11 +39,17 @@ export function publishOfferAmountFilter({
   termDays,
   dailyRate,
   priority,
+  target,
+  sourceTool,
+  source,
 }: {
   amount: number;
   termDays?: number;
   dailyRate?: number;
   priority?: OfferPickerPriority;
+  target?: string;
+  sourceTool?: "overpayment";
+  source?: "direct" | "shared";
 }) {
   window.dispatchEvent(
     new CustomEvent<OfferFilterDetail>(OFFER_FILTER_EVENT, {
@@ -44,17 +59,32 @@ export function publishOfferAmountFilter({
         strictTerm: false,
         dailyRate,
         priority,
+        ...(sourceTool ? { visibility: "show", sourceTool } : {}),
+        target,
+        source,
       },
     }),
   );
 }
 
-export function publishOfferTermFilter(termDays: number) {
+export function publishOfferTermFilter(
+  termDays: number,
+  options?: {
+    target?: string;
+    sourceTool?: "repayment_date";
+    source?: "direct" | "shared";
+  },
+) {
   window.dispatchEvent(
     new CustomEvent<OfferFilterDetail>(OFFER_FILTER_EVENT, {
       detail: {
         termDays,
         strictTerm: true,
+        ...(options?.sourceTool
+          ? { visibility: "show" as const, sourceTool: options.sourceTool }
+          : {}),
+        target: options?.target,
+        source: options?.source,
       },
     }),
   );
@@ -68,6 +98,41 @@ export function publishOfferChecklistFilter(checklist: ChecklistFilter) {
       },
     }),
   );
+}
+
+export function publishOverdueOfferVisibility({
+  visible,
+  target,
+  source,
+}: {
+  visible: boolean;
+  target: string;
+  source: "direct" | "shared";
+}) {
+  window.dispatchEvent(
+    new CustomEvent<OfferFilterDetail>(OFFER_FILTER_EVENT, {
+      detail: {
+        visibility: visible ? "show" : "hide",
+        paidOnly: visible,
+        sourceTool: "overdue",
+        source,
+        target,
+      },
+    }),
+  );
+}
+
+export function offerFilterTargetsMatch(
+  eventTarget: string | undefined,
+  filterTarget: string | undefined,
+) {
+  return !eventTarget || eventTarget === filterTarget;
+}
+
+export function offerHasConfirmedPaidMinimumRate(
+  offer: Pick<OfferCardData, "dailyRateFrom">,
+) {
+  return offer.dailyRateFrom !== null && offer.dailyRateFrom > 0;
 }
 
 function normalize(value: string) {
@@ -139,12 +204,22 @@ function offerMatchesRiskReadiness(offer: OfferCardData, checklist: ChecklistFil
   return offer.approvalTone === "high";
 }
 
-function offerMatchesAmount(offer: OfferCardData, amount: number | null) {
-  return !amount || offer.maxAmount === null || offer.maxAmount >= amount;
+export function offerMatchesAmount(
+  offer: Pick<OfferCardData, "minAmount" | "maxAmount">,
+  amount: number | null,
+) {
+  if (amount === null) {
+    return true;
+  }
+
+  const minAmount = offer.minAmount ?? 0;
+  const maxAmount = offer.maxAmount ?? Number.POSITIVE_INFINITY;
+
+  return minAmount <= amount && maxAmount >= amount;
 }
 
-function offerMatchesTerm(
-  offer: OfferCardData,
+export function offerMatchesTerm(
+  offer: Pick<OfferCardData, "minTermDays" | "maxTermDays">,
   termDays: number | null,
   strictTerm: boolean,
 ) {
@@ -279,11 +354,15 @@ export function FilterableOffers({
   offers,
   pageType,
   categorySlug,
+  filterTarget,
+  initiallyHidden = false,
 }: {
   title: string;
   offers: OfferCardData[];
   pageType: string;
   categorySlug: string;
+  filterTarget?: string;
+  initiallyHidden?: boolean;
 }) {
   const [requestedAmount, setRequestedAmount] = useState<number | null>(null);
   const [requestedTermDays, setRequestedTermDays] = useState<number | null>(null);
@@ -291,10 +370,51 @@ export function FilterableOffers({
   const [requestedDailyRate, setRequestedDailyRate] = useState<number | null>(null);
   const [pickerPriority, setPickerPriority] = useState<OfferPickerPriority | null>(null);
   const [checklistFilter, setChecklistFilter] = useState<ChecklistFilter | null>(null);
+  const [isVisible, setIsVisible] = useState(!initiallyHidden);
+  const [paidOnly, setPaidOnly] = useState(false);
+  const [sourceTool, setSourceTool] =
+    useState<OfferFilterDetail["sourceTool"]>();
+  const [source, setSource] = useState<"direct" | "shared">("direct");
+  const trackedCommercialResults = useRef(new Set<string>());
 
   useEffect(() => {
     function handleOfferFilter(event: Event) {
       const detail = (event as CustomEvent<OfferFilterDetail>).detail;
+
+      if (!offerFilterTargetsMatch(detail?.target, filterTarget)) {
+        return;
+      }
+
+      if (detail?.visibility) {
+        setIsVisible(detail.visibility === "show");
+      }
+
+      if (typeof detail?.paidOnly === "boolean") {
+        setPaidOnly(detail.paidOnly);
+      }
+
+      if (detail?.sourceTool) {
+        setSourceTool(detail.sourceTool);
+
+        if (detail.sourceTool === "overpayment") {
+          setRequestedDailyRate(null);
+        }
+
+        if (detail.sourceTool === "repayment_date") {
+          setRequestedAmount(null);
+          setRequestedDailyRate(null);
+        }
+
+        if (detail.sourceTool === "overdue") {
+          setRequestedAmount(null);
+          setRequestedTermDays(null);
+          setRequestedDailyRate(null);
+        }
+      }
+
+      if (detail?.source) {
+        setSource(detail.source);
+      }
 
       if (typeof detail?.amount === "number" && Number.isFinite(detail.amount)) {
         setRequestedAmount(detail.amount);
@@ -326,11 +446,12 @@ export function FilterableOffers({
     return () => {
       window.removeEventListener(OFFER_FILTER_EVENT, handleOfferFilter);
     };
-  }, []);
+  }, [filterTarget]);
 
   const filteredOffers = useMemo(() => {
     const filteredByCalculation = offers.filter(
       (offer) =>
+        (!paidOnly || offerHasConfirmedPaidMinimumRate(offer)) &&
         offerMatchesAmount(offer, requestedAmount) &&
         offerMatchesTerm(offer, requestedTermDays, strictTerm) &&
         offerMatchesDailyRate(offer, requestedDailyRate) &&
@@ -374,7 +495,40 @@ export function FilterableOffers({
     strictTerm,
     pickerPriority,
     checklistFilter,
+    paidOnly,
   ]);
+
+  useEffect(() => {
+    if (!isVisible || !sourceTool) {
+      return;
+    }
+
+    const scenario =
+      sourceTool === "overpayment"
+        ? "amount_term"
+        : sourceTool === "repayment_date"
+          ? "term"
+          : "paid_only";
+    const key = `${sourceTool}|${scenario}|${filteredOffers.map(({ offer }) => offer.slug).join(",")}`;
+
+    if (trackedCommercialResults.current.has(key)) {
+      return;
+    }
+
+    trackedCommercialResults.current.add(key);
+    publishCalculatorAnalytics(
+      filteredOffers.length > 0
+        ? "calculator_offer_list_shown"
+        : "calculator_offer_list_empty",
+      {
+        tool_type: sourceTool,
+        page_slug: categorySlug,
+        scenario,
+        offers_count_bucket: getOffersCountBucket(filteredOffers.length),
+        source,
+      },
+    );
+  }, [categorySlug, filteredOffers, isVisible, source, sourceTool]);
 
   const hasChecklistAnswers =
     checklistFilter && Object.values(checklistFilter).some(Boolean);
@@ -390,13 +544,33 @@ export function FilterableOffers({
       : null,
   ].filter(Boolean);
 
+  if (!isVisible) {
+    return null;
+  }
+
   return (
-    <section id="offers" className="mx-auto max-w-6xl px-5">
+    <section
+      id="offers"
+      data-offer-filter-target={filterTarget}
+      className="mx-auto max-w-6xl px-5"
+    >
       <div className="mb-6">
         <h2 className="text-2xl font-bold text-slate-950">{title}</h2>
+        {sourceTool === "overdue" ? (
+          <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
+            Ниже — займы, которые могут подойти, если вы рассматриваете новый
+            заём для погашения текущего долга. Помните: новый заём увеличит
+            долговую нагрузку, поэтому заранее проверьте полную стоимость и
+            возможность возврата.
+          </p>
+        ) : null}
         {calculationFilterLabels.length > 0 ? (
           <p className="mt-2 text-sm leading-6 text-slate-600">
-            Показываем предложения, где подходят: {calculationFilterLabels.join(", ")}.
+            {sourceTool === "overpayment"
+              ? `Подходят по сумме ${requestedAmount?.toLocaleString("ru-RU")} ₽ и сроку ${requestedTermDays} дней.`
+              : sourceTool === "repayment_date"
+                ? `Подходят по сроку ${requestedTermDays} дней.`
+                : `Показываем предложения, где подходят: ${calculationFilterLabels.join(", ")}.`}
           </p>
         ) : null}
         {hasChecklistAnswers ? (
@@ -428,8 +602,13 @@ export function FilterableOffers({
         </div>
       ) : (
         <p className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
-          Для выбранных условий в этой подборке нет подходящих офферов. Можно
-          изменить ответы или проверить другие категории.
+          {sourceTool === "overdue"
+            ? "Сейчас среди доступных для вашего региона офферов нет предложений с подтверждённой платной минимальной ставкой."
+            : sourceTool === "overpayment"
+              ? "По выбранным сумме, сроку и региону подходящих предложений не найдено."
+              : sourceTool === "repayment_date"
+                ? "На выбранный срок и для вашего региона подходящих предложений не найдено."
+            : "Для выбранных условий в этой подборке нет подходящих офферов. Можно изменить ответы или проверить другие категории."}
         </p>
       )}
     </section>

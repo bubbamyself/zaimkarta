@@ -7,9 +7,23 @@ import { SeoContentRenderer } from "@/components/seo-content-renderer";
 import { FilterableOffers } from "@/components/seo-tools/filterable-offers";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
-import { getActiveOffersForRegion, mapOfferToCardData } from "@/lib/offers";
+import {
+  getActiveOffersForRegion,
+  mapOfferToCardData,
+} from "@/lib/offers";
+import { hasActiveHttpsAffiliateOffer } from "@/lib/affiliate-offer-availability";
 import { prisma } from "@/lib/prisma";
 import { getSelectedRegionCode } from "@/lib/region-cookie";
+import {
+  getOverpaymentSharePreview,
+  getRepaymentSharePreview,
+  OVERPAYMENT_SLUG,
+  parseOverpaymentShareParams,
+  parseRepaymentShareParams,
+  REPAYMENT_DATE_SLUG,
+  type CalculatorSearchParams,
+  type CalculatorShareData,
+} from "@/lib/calculator-share";
 import {
   getBreadcrumbListJsonLd,
   getSeoPageBreadcrumbs,
@@ -25,6 +39,7 @@ type CategoryPageProps = {
   params: Promise<{
     slug: string;
   }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
 type JsonRecord = Record<string, unknown>;
@@ -298,10 +313,27 @@ function getArticleToolBlocks(
     }));
 }
 
+function getCalculatorShare(
+  slug: string,
+  searchParams: CalculatorSearchParams,
+): CalculatorShareData | null {
+  if (slug === REPAYMENT_DATE_SLUG) {
+    return parseRepaymentShareParams(searchParams);
+  }
+
+  if (slug === OVERPAYMENT_SLUG) {
+    return parseOverpaymentShareParams(searchParams);
+  }
+
+  return null;
+}
+
 export async function generateMetadata({
   params,
+  searchParams,
 }: CategoryPageProps): Promise<Metadata> {
   const { slug } = await params;
+  const resolvedSearchParams = await searchParams;
   const seoPage = await prisma.seoPage.findFirst({
     where: {
       slug,
@@ -317,17 +349,58 @@ export async function generateMetadata({
     return {};
   }
 
+  const canonical = getAbsoluteUrl(`/${slug}`);
+  const calculatorShare = getCalculatorShare(slug, resolvedSearchParams);
+
+  if (calculatorShare) {
+    const preview =
+      calculatorShare.tool === "repayment_date"
+        ? getRepaymentSharePreview(calculatorShare, getAbsoluteUrl("/"))
+        : getOverpaymentSharePreview(calculatorShare, getAbsoluteUrl("/"));
+
+    return {
+      title: preview.title,
+      description: preview.description,
+      alternates: { canonical },
+      robots: { index: false, follow: true },
+      openGraph: {
+        type: "website",
+        title: preview.title,
+        description: preview.description,
+        url: preview.sharedUrl,
+        images: [
+          {
+            url: preview.imageUrl,
+            width: 1200,
+            height: 630,
+            alt: preview.title,
+          },
+        ],
+      },
+      twitter: {
+        card: "summary_large_image",
+        title: preview.title,
+        description: preview.description,
+        images: [preview.imageUrl],
+      },
+    };
+  }
+
   return {
     title: seoPage.title,
     description: seoPage.description,
     alternates: {
-      canonical: getAbsoluteUrl(`/${slug}`),
+      canonical,
     },
   };
 }
 
-export default async function CategoryPage({ params }: CategoryPageProps) {
+export default async function CategoryPage({
+  params,
+  searchParams,
+}: CategoryPageProps) {
   const { slug } = await params;
+  const calculatorShare = getCalculatorShare(slug, await searchParams);
   const selectedRegionCode = await getSelectedRegionCode();
   const seoPage = await prisma.seoPage.findFirst({
     where: {
@@ -357,7 +430,18 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
         },
         orderBy: [{ position: "asc" }, { createdAt: "asc" }],
         include: {
-          offer: true,
+          offer: {
+            include: {
+              affiliateOffers: {
+                where: {
+                  isActive: true,
+                },
+                select: {
+                  trackingBaseUrl: true,
+                },
+              },
+            },
+          },
         },
       },
       tools: {
@@ -373,11 +457,20 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
     notFound();
   }
 
-  const availableSeoPageOffers = selectedRegionCode
-    ? seoPage.offers.filter(
-        (item) => !item.offer.restrictedRegionCodes.includes(selectedRegionCode),
-      )
-    : seoPage.offers;
+  const requiresCpaReadyOffers = seoPage.tools.some((pageTool) =>
+    [
+      "OVERPAYMENT_CALCULATOR",
+      "REPAYMENT_DATE_CALCULATOR",
+      "OVERDUE_LOAN_CALCULATOR",
+    ].includes(pageTool.tool.type),
+  );
+  const availableSeoPageOffers = seoPage.offers.filter(
+    (item) =>
+      (!selectedRegionCode ||
+        !item.offer.restrictedRegionCodes.includes(selectedRegionCode)) &&
+      (!requiresCpaReadyOffers ||
+        hasActiveHttpsAffiliateOffer(item.offer.affiliateOffers)),
+  );
   const selectedOffers = availableSeoPageOffers.map((item) =>
     ({
       ...mapOfferToCardData(item.offer),
@@ -390,7 +483,9 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
   const offers =
     seoPage.offers.length > 0
       ? selectedOffers
-      : await getActiveOffersForRegion(selectedRegionCode);
+      : await getActiveOffersForRegion(selectedRegionCode, {
+          requireActiveAffiliateOffer: requiresCpaReadyOffers,
+        });
   const contentBlocks = seoPage.content
     ?.split(/\n{2,}/)
     .map((block) => block.trim())
@@ -824,6 +919,7 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
             categorySlug={slug}
             selectedRegionCode={selectedRegionCode}
             riskNotice={seoPage.riskNotice}
+            calculatorShare={calculatorShare}
           />
         ) : (
           <>
