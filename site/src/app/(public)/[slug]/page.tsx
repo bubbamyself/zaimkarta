@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { FaqSection } from "@/components/faq-section";
 import { OfferCard } from "@/components/offer-card";
+import { PublicPageShareButton } from "@/components/public-page-share-button";
 import { SeoContentRenderer } from "@/components/seo-content-renderer";
 import { FilterableOffers } from "@/components/seo-tools/filterable-offers";
 import { SiteFooter } from "@/components/site-footer";
@@ -29,6 +30,7 @@ import {
   getSeoPageBreadcrumbs,
 } from "@/lib/seo-breadcrumbs";
 import { getAbsoluteUrl } from "@/lib/site-url";
+import { buildPublicShareImageUrl } from "@/lib/public-page-share";
 import {
   getArticleJsonLd,
   getFaqPageJsonLd,
@@ -342,6 +344,8 @@ export async function generateMetadata({
     select: {
       title: true,
       description: true,
+      h1: true,
+      pageType: true,
     },
   });
 
@@ -386,12 +390,45 @@ export async function generateMetadata({
     };
   }
 
+  const categoryImageUrl =
+    seoPage.pageType === "CATEGORY"
+      ? buildPublicShareImageUrl({
+          origin: getAbsoluteUrl("/"),
+          pageType: "category",
+          pageSlug: slug,
+        })
+      : null;
+
   return {
     title: seoPage.title,
     description: seoPage.description,
     alternates: {
       canonical,
     },
+    ...(categoryImageUrl
+      ? {
+          openGraph: {
+            type: "website" as const,
+            title: `${seoPage.h1} — подборка займов`,
+            description: seoPage.description,
+            url: canonical,
+            images: [
+              {
+                url: categoryImageUrl,
+                width: 1200,
+                height: 630,
+                alt: `${seoPage.h1} — ZaimKarta`,
+              },
+            ],
+          },
+          twitter: {
+            card: "summary_large_image" as const,
+            title: `${seoPage.h1} — подборка займов`,
+            description: seoPage.description,
+            images: [categoryImageUrl],
+          },
+        }
+      : {}),
   };
 }
 
@@ -608,6 +645,16 @@ export default async function CategoryPage({
               <span className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-amber-900">
                 Решение принимает кредитор после проверки заявки
               </span>
+              <PublicPageShareButton
+                pageType="category"
+                pageSlug={slug}
+                pathname={`/${slug}`}
+                title={`${seoPage.h1} — подборка займов`}
+                text={`Посмотрите подборку «${seoPage.h1}» на ZaimKarta.`}
+                label="Поделиться подборкой"
+                copiedLabel="Ссылка на подборку скопирована"
+                className="w-full sm:w-auto"
+              />
             </div>
           </div>
         </section>

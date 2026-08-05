@@ -1,12 +1,14 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Breadcrumbs, type BreadcrumbItem } from "@/components/breadcrumbs";
+import { PublicPageShareButton } from "@/components/public-page-share-button";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { getOfferDetails } from "@/lib/offers";
 import { getSelectedRegionCode } from "@/lib/region-cookie";
 import { getBreadcrumbListJsonLd } from "@/lib/seo-breadcrumbs";
 import { getAbsoluteUrl } from "@/lib/site-url";
+import { buildPublicShareImageUrl } from "@/lib/public-page-share";
 import { serializeJsonLd } from "@/lib/structured-data";
 
 type OfferPageProps = {
@@ -25,11 +27,40 @@ export async function generateMetadata({
     return {};
   }
 
+  const canonical = getAbsoluteUrl(`/offers/${slug}`);
+  const title = `${offer.name}: условия займа, сумма, срок и ставка — ZaimKarta`;
+  const description = `Подробные условия ${offer.name}: ${offer.amount}, срок ${offer.term}, ставка ${offer.rate}, рассмотрение ${offer.decisionTime}.`;
+  const imageUrl = buildPublicShareImageUrl({
+    origin: getAbsoluteUrl("/"),
+    pageType: "offer",
+    pageSlug: slug,
+  });
+
   return {
-    title: `${offer.name}: условия займа, сумма, срок и ставка — ZaimKarta`,
-    description: `Подробные условия ${offer.name}: ${offer.amount}, срок ${offer.term}, ставка ${offer.rate}, рассмотрение ${offer.decisionTime}.`,
+    title,
+    description,
     alternates: {
-      canonical: getAbsoluteUrl(`/offers/${slug}`),
+      canonical,
+    },
+    openGraph: {
+      type: "website",
+      title,
+      description,
+      url: canonical,
+      images: [
+        {
+          url: imageUrl,
+          width: 1200,
+          height: 630,
+          alt: `${offer.name} — условия предложения на ZaimKarta`,
+        },
+      ],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: [imageUrl],
     },
   };
 }
@@ -148,6 +179,16 @@ export default async function OfferPage({ params }: OfferPageProps) {
             >
               Оформить заем
             </a>
+            <PublicPageShareButton
+              pageType="offer"
+              pageSlug={offer.slug}
+              pathname={`/offers/${offer.slug}`}
+              title={`${offer.name} — условия займа`}
+              text={`Посмотрите условия ${offer.name} на ZaimKarta: ${offer.amount}, срок ${offer.term}, ставка ${offer.rate}.`}
+              label="Поделиться предложением"
+              copiedLabel="Ссылка на предложение скопирована"
+              className="mt-3"
+            />
           </aside>
         </div>
       </section>

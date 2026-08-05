@@ -7,6 +7,10 @@ import {
   type CalculatorAnalyticsDetail,
 } from "@/lib/calculator-analytics";
 import { sanitizeCalculatorAnalyticsUrl } from "@/lib/calculator-share";
+import {
+  PUBLIC_SHARE_ANALYTICS_EVENT,
+  type PublicShareAnalyticsDetail,
+} from "@/lib/public-page-share";
 
 const COOKIE_NOTICE_COOKIE_NAME = "zk_cookie_notice_accepted";
 const COOKIE_CONSENT_EVENT = "zk-cookie-consent-accepted";
@@ -121,6 +125,32 @@ export function YandexMetrika({ counterId }: { counterId: number }) {
 
     return () => {
       window.removeEventListener(CALCULATOR_ANALYTICS_EVENT, trackCalculatorGoal);
+    };
+  }, [counterId]);
+
+  useEffect(() => {
+    function trackPublicShareGoal(event: Event) {
+      if (!hasCookieConsent()) {
+        return;
+      }
+
+      const detail = (event as CustomEvent<PublicShareAnalyticsDetail>).detail;
+
+      if (!detail?.goal || !detail.params) {
+        return;
+      }
+
+      const ym = initializeMetrika(counterId);
+      ym(counterId, "reachGoal", detail.goal, detail.params);
+    }
+
+    window.addEventListener(PUBLIC_SHARE_ANALYTICS_EVENT, trackPublicShareGoal);
+
+    return () => {
+      window.removeEventListener(
+        PUBLIC_SHARE_ANALYTICS_EVENT,
+        trackPublicShareGoal,
+      );
     };
   }, [counterId]);
 
