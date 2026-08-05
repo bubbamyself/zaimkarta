@@ -32,7 +32,7 @@ let fallbackImagePromise: Promise<Uint8Array> | null = null;
 
 function getFallbackImage() {
   fallbackImagePromise ??= readFile(
-    join(process.cwd(), "src", "app", "opengraph-image.png"),
+    join(process.cwd(), "public", "opengraph-image.png"),
   )
     .then((buffer) => new Uint8Array(buffer))
     .catch(async () => {

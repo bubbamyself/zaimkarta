@@ -2,11 +2,34 @@ import type { Metadata } from "next";
 import { getSiteUrl } from "@/lib/site-url";
 import "./globals.css";
 
+const DEFAULT_TITLE = "ZaimKarta — подбор микрозаймов на карту онлайн";
+const DEFAULT_DESCRIPTION =
+  "Сравнение кредитных предложений: займы на карту, срочные займы, первый заем под 0%, условия, сроки и ставки.";
+
 export const metadata: Metadata = {
   metadataBase: new URL(getSiteUrl()),
-  title: "ZaimKarta — подбор микрозаймов на карту онлайн",
-  description:
-    "Сравнение кредитных предложений: займы на карту, срочные займы, первый заем под 0%, условия, сроки и ставки.",
+  title: DEFAULT_TITLE,
+  description: DEFAULT_DESCRIPTION,
+  openGraph: {
+    type: "website",
+    title: DEFAULT_TITLE,
+    description: DEFAULT_DESCRIPTION,
+    url: "/",
+    images: [
+      {
+        url: "/opengraph-image.png",
+        width: 1200,
+        height: 630,
+        alt: "ZaimKarta",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: DEFAULT_TITLE,
+    description: DEFAULT_DESCRIPTION,
+    images: ["/twitter-image.png"],
+  },
   icons: {
     icon: [
       {
