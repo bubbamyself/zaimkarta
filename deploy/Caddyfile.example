@@ -23,7 +23,11 @@ zaimkarta.ru {
 
 	log {
 		output stdout
-		format json
+		# Сохраняем путь для мониторинга, но не пишем query-параметры с расчётами и атрибуцией.
+		format filter {
+			request>uri regexp `\?.*$` ""
+			wrap json
+		}
 	}
 }
 
