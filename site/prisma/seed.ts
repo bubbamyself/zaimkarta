@@ -437,7 +437,7 @@ async function main() {
 
   const servicePages = [
     {
-      slug: "kalkulyator-pereplaty-po-zaymu",
+      slug: "raschet-pereplati",
       title: "Калькулятор переплаты по займу — ZaimKarta",
       description:
         "Оцените примерную переплату по сумме, сроку и дневной ставке перед переходом к предложениям кредиторов.",

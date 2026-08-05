@@ -70,7 +70,7 @@ test("строит ссылку только из allowlist и фиксиров�
     }),
   );
 
-  assert.equal(url.pathname, "/kalkulyator-pereplaty-po-zaymu");
+  assert.equal(url.pathname, "/raschet-pereplati");
   assert.equal(url.searchParams.get("utm_source"), "calculator_share");
   assert.equal(url.searchParams.has("lead_id"), false);
   assert.equal(url.searchParams.has("click_id"), false);
@@ -101,7 +101,7 @@ test("одинаковый нормализованный ввод даёт од
 test("Метрика не получает расчётные параметры shared URL, но сохраняет UTM", () => {
   const sanitized = new URL(
     sanitizeCalculatorAnalyticsUrl(
-      "https://zaimkarta.ru/kalkulyator-pereplaty-po-zaymu?share=1&v=1&amount=15000&term=20&rate=0.8&utm_source=calculator_share&utm_campaign=overpayment",
+      "https://zaimkarta.ru/raschet-pereplati?share=1&v=1&amount=15000&term=20&rate=0.8&utm_source=calculator_share&utm_campaign=overpayment",
     ),
   );
 

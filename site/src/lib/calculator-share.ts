@@ -4,7 +4,7 @@ import {
 } from "@/lib/repayment-date";
 
 export const REPAYMENT_DATE_SLUG = "kalkulyator-daty-vozvrata-zayma";
-export const OVERPAYMENT_SLUG = "kalkulyator-pereplaty-po-zaymu";
+export const OVERPAYMENT_SLUG = "raschet-pereplati";
 export const CALCULATOR_SHARE_VERSION = "1";
 
 const CALCULATOR_PRIVATE_QUERY_PARAMS = [

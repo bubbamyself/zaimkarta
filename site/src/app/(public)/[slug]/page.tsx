@@ -361,7 +361,7 @@ export async function generateMetadata({
     return {
       title: preview.title,
       description: preview.description,
-      alternates: { canonical },
+      alternates: { canonical: preview.sharedUrl },
       robots: { index: false, follow: true },
       openGraph: {
         type: "website",
