@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { OfferCard } from "@/components/offer-card";
+import {
+  OfferCard,
+  OFFER_GRID_CLASS_NAME,
+} from "@/components/offer-card";
 import {
   getOffersCountBucket,
   publishCalculatorAnalytics,
@@ -588,7 +591,7 @@ export function FilterableOffers({
       </div>
 
       {filteredOffers.length > 0 ? (
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className={OFFER_GRID_CLASS_NAME}>
           {filteredOffers.map(({ offer, match }, offerIndex) => (
             <OfferCard
               key={offer.slug}

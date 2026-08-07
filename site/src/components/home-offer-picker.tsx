@@ -52,15 +52,15 @@ export function HomeOfferPicker() {
   return (
     <form
       onSubmit={handleSubmit}
-      className="rounded-lg border border-slate-200 bg-slate-50 p-5"
+      className="min-w-0 rounded-lg border border-slate-200 bg-slate-50 p-5"
     >
-      <div className="grid gap-4">
-        <label className="grid gap-2">
+      <div className="min-w-0 grid gap-4">
+        <label className="min-w-0 grid gap-2">
           <span className="text-sm font-medium text-slate-700">Сумма займа</span>
           <select
             value={amount}
             onChange={(event) => setAmount(Number(event.target.value))}
-            className="h-12 rounded-md border border-slate-300 bg-white px-3 text-slate-900"
+            className="h-12 min-w-0 w-full rounded-md border border-slate-300 bg-white px-3 text-slate-900"
           >
             {AMOUNT_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
@@ -70,12 +70,12 @@ export function HomeOfferPicker() {
           </select>
         </label>
 
-        <label className="grid gap-2">
+        <label className="min-w-0 grid gap-2">
           <span className="text-sm font-medium text-slate-700">Срок</span>
           <select
             value={termDays}
             onChange={(event) => setTermDays(Number(event.target.value))}
-            className="h-12 rounded-md border border-slate-300 bg-white px-3 text-slate-900"
+            className="h-12 min-w-0 w-full rounded-md border border-slate-300 bg-white px-3 text-slate-900"
           >
             {TERM_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
@@ -85,14 +85,14 @@ export function HomeOfferPicker() {
           </select>
         </label>
 
-        <label className="grid gap-2">
+        <label className="min-w-0 grid gap-2">
           <span className="text-sm font-medium text-slate-700">Что важно</span>
           <select
             value={priority}
             onChange={(event) =>
               setPriority(event.target.value as OfferPickerPriority)
             }
-            className="h-12 rounded-md border border-slate-300 bg-white px-3 text-slate-900"
+            className="h-12 min-w-0 w-full rounded-md border border-slate-300 bg-white px-3 text-slate-900"
           >
             {PRIORITY_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>

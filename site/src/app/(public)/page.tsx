@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { HomeOfferPicker } from "@/components/home-offer-picker";
 import { HomepageFeaturedOfferCard } from "@/components/homepage-featured-offer-card";
+import { DEFAULT_OFFER_RISK_NOTICE } from "@/components/offer-card";
 import { FilterableOffers } from "@/components/seo-tools/filterable-offers";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
@@ -94,7 +95,7 @@ export default async function Home() {
       />
 
       <section className="border-b border-slate-200 bg-white">
-        <div className="mx-auto grid max-w-6xl gap-10 px-5 py-10 md:grid-cols-[1.1fr_0.9fr] md:py-14">
+        <div className="mx-auto grid max-w-6xl grid-cols-[minmax(0,1fr)] gap-10 px-5 py-10 md:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] md:py-14">
           <div className="flex flex-col justify-center">
             <h1 className="max-w-3xl text-4xl font-bold leading-tight text-slate-950 md:text-5xl">
               Подбор микрозаймов на карту онлайн
@@ -157,6 +158,11 @@ export default async function Home() {
           pageType="home"
           categorySlug="home"
         />
+        <div className="mx-auto mt-6 max-w-6xl px-5">
+          <p className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
+            {DEFAULT_OFFER_RISK_NOTICE}
+          </p>
+        </div>
       </section>
 
       <section id="services" className="mx-auto max-w-6xl px-5 py-12">

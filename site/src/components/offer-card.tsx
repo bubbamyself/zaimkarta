@@ -10,6 +10,12 @@ type OfferCardProps = {
   matchReasons?: string[];
 };
 
+export const OFFER_GRID_CLASS_NAME =
+  "-mx-3 grid grid-cols-1 gap-2 min-[350px]:grid-cols-2 sm:mx-0 sm:gap-3 md:grid-cols-3 xl:grid-cols-4";
+
+export const DEFAULT_OFFER_RISK_NOTICE =
+  "Решение по заявке принимает кредитор. Перед оформлением проверьте полную стоимость займа и условия договора.";
+
 export function OfferCard({
   offer,
   pageType = "home",
@@ -35,117 +41,120 @@ export function OfferCard({
 
   return (
     <article
-      className={`flex h-full flex-col rounded-lg border bg-white p-5 shadow-sm ${
+      className={`flex h-full min-w-0 flex-col rounded-lg border bg-white p-2 shadow-sm sm:p-3 lg:p-4 ${
         offer.pageHighlight ? "border-emerald-300 ring-2 ring-emerald-100" : "border-slate-200"
       }`}
     >
-      <div className="flex min-h-16 items-start gap-4">
-        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-emerald-50 text-2xl font-black text-emerald-700">
+      <div className="flex min-h-10 items-start gap-2 sm:min-h-11 sm:gap-2.5">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-emerald-50 text-base font-black text-emerald-700 sm:h-11 sm:w-11 sm:text-lg">
           {offer.logoUrl ? (
             <img
               src={offer.logoUrl}
               alt={`Логотип ${offer.name}`}
-              className="h-full w-full rounded-lg bg-white object-contain p-1.5"
+              className="h-full w-full rounded-md bg-white object-contain p-1"
             />
           ) : (
             offer.logoText
           )}
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-lg font-bold text-slate-950">{offer.name}</h3>
-            <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">
+          <h3 className="whitespace-nowrap text-[14px] font-bold leading-4 text-slate-950 sm:line-clamp-2 sm:whitespace-normal sm:break-words sm:text-base sm:leading-5">
+            {offer.name}
+          </h3>
+          <div className="mt-1 flex flex-wrap items-start gap-1 sm:mt-1.5">
+            <span className="whitespace-nowrap rounded bg-slate-100 px-1 py-0.5 text-[9px] font-semibold leading-3 tracking-tight text-slate-700 sm:max-w-full sm:whitespace-normal sm:break-words sm:px-1.5 sm:text-[11px] sm:leading-4 sm:tracking-normal">
               {badge}
             </span>
             {offer.pageHighlight ? (
-              <span className="rounded-md bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-800">
+              <span className="whitespace-nowrap rounded bg-emerald-50 px-1 py-0.5 text-[9px] font-semibold leading-3 tracking-tight text-emerald-800 sm:px-1.5 sm:text-[11px] sm:leading-4 sm:tracking-normal">
                 выделено
               </span>
             ) : null}
           </div>
-          <p className="mt-2 text-sm text-slate-500">
+          <p className="mt-1 whitespace-nowrap text-[8.5px] leading-3 tracking-tight text-slate-500 min-[390px]:text-[10px] sm:mt-1.5 sm:whitespace-normal sm:text-xs sm:leading-4 sm:tracking-normal">
             Рейтинг {offer.rating} · отзывов {offer.reviewsCount}
           </p>
         </div>
       </div>
 
-      <dl className="mt-5 grid grid-cols-2 gap-3 text-sm">
-        <div>
-          <dt className="text-slate-500">Сумма</dt>
-          <dd className="mt-1 font-semibold text-slate-900">{offer.amount}</dd>
+      <dl className="mt-2 grid gap-1 text-[11px] leading-4 min-[390px]:text-xs sm:mt-3 sm:gap-1.5">
+        <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] sm:gap-1.5">
+          <dt className="whitespace-nowrap text-slate-500 sm:whitespace-normal">Сумма</dt>
+          <dd className="whitespace-nowrap text-right font-semibold text-slate-900 sm:whitespace-normal sm:break-words">
+            {offer.amount}
+          </dd>
         </div>
-        <div>
-          <dt className="text-slate-500">Срок</dt>
-          <dd className="mt-1 font-semibold text-slate-900">{offer.term}</dd>
+        <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] sm:gap-1.5">
+          <dt className="whitespace-nowrap text-slate-500 sm:whitespace-normal">Срок</dt>
+          <dd className="whitespace-nowrap text-right font-semibold text-slate-900 sm:whitespace-normal sm:break-words">
+            {offer.term}
+          </dd>
         </div>
-        <div>
-          <dt className="text-slate-500">ПСК</dt>
-          <dd className="mt-1 font-semibold text-slate-900">{offer.psk}</dd>
+        <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] sm:gap-1.5">
+          <dt className="whitespace-nowrap text-slate-500 sm:whitespace-normal">ПСК</dt>
+          <dd className="whitespace-nowrap text-right font-semibold text-slate-900 sm:whitespace-normal sm:break-words">
+            {offer.psk}
+          </dd>
         </div>
-        <div>
-          <dt className="text-slate-500">Ставка в день</dt>
-          <dd className="mt-1 font-semibold text-slate-900">{offer.rate}</dd>
+        <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] sm:gap-1.5">
+          <dt className="whitespace-nowrap text-slate-500 sm:whitespace-normal">
+            <span className="sm:hidden">% в день</span>
+            <span className="hidden sm:inline">Ставка в день</span>
+          </dt>
+          <dd className="whitespace-nowrap text-right font-semibold text-slate-900 sm:whitespace-normal sm:break-words">
+            {offer.rate}
+          </dd>
         </div>
-        <div>
-          <dt className="text-slate-500">Рассмотрение</dt>
-          <dd className="mt-1 font-semibold text-slate-900">
+        <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] sm:gap-1.5">
+          <dt className="whitespace-nowrap text-slate-500 sm:whitespace-normal">Рассмотрение</dt>
+          <dd className="whitespace-nowrap text-right font-semibold text-slate-900 sm:whitespace-normal sm:break-words">
             {offer.decisionTime}
           </dd>
         </div>
-        <div>
-          <dt className="text-slate-500">Одобрение</dt>
-          <dd className={`mt-1 font-semibold ${approvalClass}`}>
+        <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] sm:gap-1.5">
+          <dt className="whitespace-nowrap text-slate-500 sm:whitespace-normal">Одобрение</dt>
+          <dd className={`whitespace-nowrap text-right font-semibold sm:whitespace-normal sm:break-words ${approvalClass}`}>
             {offer.approval}
           </dd>
         </div>
       </dl>
 
-      <p className="mt-4 text-sm text-slate-600">
+      <p className="mt-2 whitespace-nowrap text-[9px] leading-4 tracking-tight text-slate-600 min-[390px]:text-[10px] sm:mt-3 sm:whitespace-normal sm:break-words sm:text-xs sm:leading-5 sm:tracking-normal">
         Получение: {offer.payoutMethods.join(", ")}
       </p>
 
       {offer.pageNote ? (
-        <p className="mt-3 rounded-md bg-slate-50 p-3 text-sm leading-6 text-slate-700">
+        <p className="mt-2 rounded-md bg-slate-50 p-2 text-xs leading-5 text-slate-700">
           {offer.pageNote}
         </p>
       ) : null}
 
-      <div className="mt-5 flex flex-wrap gap-2">
-        {matchReasons.map((reason) => (
-          <span
-            key={reason}
-            className="rounded-md bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800"
-          >
-            {reason}
-          </span>
-        ))}
-        {offer.tags.map((tag) => (
-          <span
-            key={tag}
-            className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700"
-          >
-            {tag}
-          </span>
-        ))}
-      </div>
+      {matchReasons.length > 0 ? (
+        <div className="mt-2 flex flex-wrap gap-1">
+          {matchReasons.map((reason) => (
+            <span
+              key={reason}
+              className="max-w-full break-words rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold leading-4 text-emerald-800 sm:text-[11px]"
+            >
+              {reason}
+            </span>
+          ))}
+        </div>
+      ) : null}
 
-      <div className="mt-auto grid gap-3 pt-6">
+      <div className="mt-auto grid gap-1.5 pt-3 sm:gap-2 sm:pt-4">
         <OfferCtaLink
           href={`/go/${offer.slug}?${clickParams.toString()}`}
-          className="inline-flex min-h-11 w-full items-center justify-center rounded-md bg-emerald-700 px-4 font-semibold text-white transition hover:bg-emerald-800"
+          className="inline-flex min-h-11 w-full items-center justify-center rounded-md bg-emerald-700 px-2 py-2 text-center text-sm font-semibold leading-5 text-white transition hover:bg-emerald-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
         >
           {ctaText}
         </OfferCtaLink>
         <Link
           href={`/offers/${offer.slug}`}
-          className="inline-flex min-h-11 w-full items-center justify-center rounded-md border border-slate-300 bg-white px-4 font-semibold text-slate-800 transition hover:border-slate-500"
+          className="inline-flex min-h-11 w-full items-center justify-center rounded-md border border-slate-300 bg-white px-2 py-2 text-center text-sm font-semibold leading-5 text-slate-800 transition hover:border-slate-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
         >
           Подробнее
         </Link>
-        <p className="mt-3 text-xs leading-5 text-slate-500">
-          Решение по заявке принимает кредитор. Перед оформлением проверьте полную
-          стоимость займа и условия договора.
-        </p>
       </div>
     </article>
   );

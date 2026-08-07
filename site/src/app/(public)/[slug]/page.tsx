@@ -2,7 +2,11 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { FaqSection } from "@/components/faq-section";
-import { OfferCard } from "@/components/offer-card";
+import {
+  DEFAULT_OFFER_RISK_NOTICE,
+  OfferCard,
+  OFFER_GRID_CLASS_NAME,
+} from "@/components/offer-card";
 import { PublicPageShareButton } from "@/components/public-page-share-button";
 import { SeoContentRenderer } from "@/components/seo-content-renderer";
 import { FilterableOffers } from "@/components/seo-tools/filterable-offers";
@@ -584,6 +588,18 @@ export default async function CategoryPage({
   const hasFaqContentBlock = articleContentBlocks.some(
     (block) => isRecord(block) && block.type === "faq",
   );
+  const hasRiskNoticeContentBlock = articleContentBlocks.some((block) => {
+    if (!isRecord(block) || block.type !== "riskNotice") {
+      return false;
+    }
+
+    const text = block.text ?? seoPage.riskNotice;
+
+    return typeof text === "string" && text.trim().length > 0;
+  });
+  const hasOffersContentBlock = articleContentBlocks.some(
+    (block) => isRecord(block) && block.type === "offers",
+  );
   const faqIsVisible =
     seoPage.pageType !== "SERVICE" ||
     !seoPage.contentBlocks ||
@@ -746,10 +762,10 @@ export default async function CategoryPage({
           <FaqSection items={seoPage.faqItems} />
         ) : null}
 
-        {seoPage.riskNotice ? (
+        {seoPage.riskNotice || offers.length > 0 ? (
           <section className="mx-auto max-w-6xl px-5 pb-12">
             <p className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
-              {seoPage.riskNotice}
+              {seoPage.riskNotice ?? DEFAULT_OFFER_RISK_NOTICE}
             </p>
           </section>
         ) : null}
@@ -891,7 +907,7 @@ export default async function CategoryPage({
                 проверьте условия на стороне кредитора.
               </p>
             </div>
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className={OFFER_GRID_CLASS_NAME}>
               {selectedOffers.map((offer, index) => (
                 <OfferCard
                   key={offer.name}
@@ -909,10 +925,11 @@ export default async function CategoryPage({
           <FaqSection items={seoPage.faqItems} />
         ) : null}
 
-        {seoPage.riskNotice ? (
+        {!hasRiskNoticeContentBlock &&
+        (seoPage.riskNotice || selectedOffers.length > 0) ? (
           <section className="mx-auto max-w-6xl px-5 pb-12">
             <p className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
-              {seoPage.riskNotice}
+              {seoPage.riskNotice ?? DEFAULT_OFFER_RISK_NOTICE}
             </p>
           </section>
         ) : null}
@@ -980,7 +997,7 @@ export default async function CategoryPage({
               </p>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className={OFFER_GRID_CLASS_NAME}>
               {offers.map((offer, index) => (
                 <OfferCard
                   key={offer.name}
@@ -1042,10 +1059,13 @@ export default async function CategoryPage({
         <FaqSection items={seoPage.faqItems} />
       ) : null}
 
-      {!seoPage.contentBlocks && seoPage.riskNotice ? (
+      {!hasRiskNoticeContentBlock &&
+      (seoPage.riskNotice ||
+        (offers.length > 0 &&
+          (!seoPage.contentBlocks || hasOffersContentBlock))) ? (
         <section className="mx-auto max-w-6xl px-5 pb-12">
           <p className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
-            {seoPage.riskNotice}
+            {seoPage.riskNotice ?? DEFAULT_OFFER_RISK_NOTICE}
           </p>
         </section>
       ) : null}
