@@ -45,7 +45,7 @@ export function OfferCard({
         offer.pageHighlight ? "border-emerald-300 ring-2 ring-emerald-100" : "border-slate-200"
       }`}
     >
-      <div className="flex min-h-10 items-start gap-2 sm:min-h-11 sm:gap-2.5">
+      <div className="flex min-h-10 items-center gap-2 sm:min-h-11 sm:items-start sm:gap-2.5">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-emerald-50 text-base font-black text-emerald-700 sm:h-11 sm:w-11 sm:text-lg">
           {offer.logoUrl ? (
             <img
@@ -58,10 +58,10 @@ export function OfferCard({
           )}
         </div>
         <div className="min-w-0 flex-1">
-          <h3 className="whitespace-nowrap text-[14px] font-bold leading-4 text-slate-950 sm:line-clamp-2 sm:whitespace-normal sm:break-words sm:text-base sm:leading-5">
+          <h3 className="line-clamp-2 break-normal text-[11px] font-bold leading-3 text-slate-950 min-[390px]:text-[14px] min-[390px]:leading-4 sm:break-words sm:text-base sm:leading-5">
             {offer.name}
           </h3>
-          <div className="mt-1 flex flex-wrap items-start gap-1 sm:mt-1.5">
+          <div className="mt-1.5 hidden flex-wrap items-start gap-1 sm:flex">
             <span className="whitespace-nowrap rounded bg-slate-100 px-1 py-0.5 text-[9px] font-semibold leading-3 tracking-tight text-slate-700 sm:max-w-full sm:whitespace-normal sm:break-words sm:px-1.5 sm:text-[11px] sm:leading-4 sm:tracking-normal">
               {badge}
             </span>
@@ -71,13 +71,28 @@ export function OfferCard({
               </span>
             ) : null}
           </div>
-          <p className="mt-1 whitespace-nowrap text-[8.5px] leading-3 tracking-tight text-slate-500 min-[390px]:text-[10px] sm:mt-1.5 sm:whitespace-normal sm:text-xs sm:leading-4 sm:tracking-normal">
+          <p className="mt-1 hidden text-xs leading-4 text-slate-500 sm:block">
             Рейтинг {offer.rating} · отзывов {offer.reviewsCount}
           </p>
         </div>
       </div>
 
-      <dl className="mt-2 grid gap-1 text-[11px] leading-4 min-[390px]:text-xs sm:mt-3 sm:gap-1.5">
+      <div className="mt-1 flex flex-wrap items-start gap-1 sm:hidden">
+        <span className="whitespace-nowrap rounded bg-slate-100 px-1 py-0.5 text-[8px] font-semibold leading-3 tracking-tight text-slate-700 min-[390px]:text-[9px]">
+          {badge}
+        </span>
+        {offer.pageHighlight ? (
+          <span className="whitespace-nowrap rounded bg-emerald-50 px-1 py-0.5 text-[8px] font-semibold leading-3 tracking-tight text-emerald-800 min-[390px]:text-[9px]">
+            выделено
+          </span>
+        ) : null}
+      </div>
+
+      <p className="mt-1 whitespace-nowrap text-[9px] leading-3 tracking-tight text-slate-500 min-[390px]:text-[11px] sm:hidden">
+        Рейтинг {offer.rating} · отзывов {offer.reviewsCount}
+      </p>
+
+      <dl className="mt-2 grid gap-1 text-[10px] leading-4 min-[390px]:text-xs sm:mt-3 sm:gap-1.5">
         <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] sm:gap-1.5">
           <dt className="whitespace-nowrap text-slate-500 sm:whitespace-normal">Сумма</dt>
           <dd className="whitespace-nowrap text-right font-semibold text-slate-900 sm:whitespace-normal sm:break-words">
@@ -119,10 +134,6 @@ export function OfferCard({
         </div>
       </dl>
 
-      <p className="mt-2 whitespace-nowrap text-[9px] leading-4 tracking-tight text-slate-600 min-[390px]:text-[10px] sm:mt-3 sm:whitespace-normal sm:break-words sm:text-xs sm:leading-5 sm:tracking-normal">
-        Получение: {offer.payoutMethods.join(", ")}
-      </p>
-
       {offer.pageNote ? (
         <p className="mt-2 rounded-md bg-slate-50 p-2 text-xs leading-5 text-slate-700">
           {offer.pageNote}
@@ -145,13 +156,13 @@ export function OfferCard({
       <div className="mt-auto grid gap-1.5 pt-3 sm:gap-2 sm:pt-4">
         <OfferCtaLink
           href={`/go/${offer.slug}?${clickParams.toString()}`}
-          className="inline-flex min-h-11 w-full items-center justify-center rounded-md bg-emerald-700 px-2 py-2 text-center text-sm font-semibold leading-5 text-white transition hover:bg-emerald-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
+          className="inline-flex min-h-11 w-full items-center justify-center rounded-md bg-emerald-700 px-2 py-2 text-center text-xs font-semibold leading-5 text-white transition hover:bg-emerald-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 min-[390px]:text-sm"
         >
           {ctaText}
         </OfferCtaLink>
         <Link
           href={`/offers/${offer.slug}`}
-          className="inline-flex min-h-11 w-full items-center justify-center rounded-md border border-slate-300 bg-white px-2 py-2 text-center text-sm font-semibold leading-5 text-slate-800 transition hover:border-slate-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
+          className="inline-flex min-h-11 w-full items-center justify-center rounded-md border border-slate-300 bg-white px-2 py-2 text-center text-xs font-semibold leading-5 text-slate-800 transition hover:border-slate-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 min-[390px]:text-sm"
         >
           Подробнее
         </Link>
