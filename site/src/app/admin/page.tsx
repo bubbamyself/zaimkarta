@@ -467,6 +467,13 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
             createdAt: "desc",
           },
         },
+        replacementOffer: {
+          select: {
+            brandName: true,
+            slug: true,
+            status: true,
+          },
+        },
       },
     }),
     prisma.offerClick.count({
@@ -1099,7 +1106,15 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
               </p>
             </div>
             <div className="p-5">
-              <OfferEditor />
+              <OfferEditor
+                replacementOptions={offers
+                  .filter((offer) => offer.status === "ACTIVE")
+                  .map((offer) => ({
+                    id: offer.id,
+                    brandName: offer.brandName,
+                    slug: offer.slug,
+                  }))}
+              />
             </div>
           </section>
         ) : null}
@@ -1204,6 +1219,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                         <tr>
                           <th className="px-5 py-3 font-semibold">Бренд</th>
                           <th className="px-5 py-3 font-semibold">Статус</th>
+                          <th className="px-5 py-3 font-semibold">Старый URL</th>
                           <th className="px-5 py-3 font-semibold">CPA-ссылка</th>
                           {canManageOffers ? (
                             <th className="px-5 py-3 font-semibold">Правка</th>
@@ -1225,6 +1241,11 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                                 >
                                   {getOfferStatusLabel(offer.status)}
                                 </span>
+                              </td>
+                              <td className="px-5 py-4 text-slate-700">
+                                {offer.replacementOffer?.status === "ACTIVE"
+                                  ? `301 → ${offer.replacementOffer.brandName}`
+                                  : "410 Gone"}
                               </td>
                               <td className="max-w-xs truncate px-5 py-4 text-slate-700">
                                 {affiliateOffer?.trackingBaseUrl ?? "не подключена"}

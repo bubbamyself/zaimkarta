@@ -44,7 +44,7 @@ export default async function EditOfferPage({
 
   const { id } = await params;
   const resolvedSearchParams = await searchParams;
-  const [offer, homepageFeaturedSetting] = await Promise.all([
+  const [offer, homepageFeaturedSetting, replacementOptions] = await Promise.all([
     prisma.offer.findUnique({
       where: { id },
       include: {
@@ -57,6 +57,18 @@ export default async function EditOfferPage({
     prisma.systemSetting.findUnique({
       where: { key: HOMEPAGE_FEATURED_OFFER_KEY },
       select: { value: true },
+    }),
+    prisma.offer.findMany({
+      where: {
+        id: { not: id },
+        status: "ACTIVE",
+      },
+      orderBy: [{ displayPriority: "asc" }, { brandName: "asc" }],
+      select: {
+        id: true,
+        brandName: true,
+        slug: true,
+      },
     }),
   ]);
 
@@ -107,6 +119,7 @@ export default async function EditOfferPage({
         <OfferEditor
           offer={offer}
           isHomepageFeatured={homepageFeaturedSetting?.value === offer.id}
+          replacementOptions={replacementOptions}
         />
       </div>
     </main>

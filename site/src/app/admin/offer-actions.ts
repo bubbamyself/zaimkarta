@@ -9,6 +9,7 @@ import path from "path";
 import { getAdminSession } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 import { normalizeRegionCodes } from "@/lib/russian-regions";
+import { getReplacementOfferValidationError } from "@/lib/offer-archive-policy";
 import {
   getFeaturedOfferValidationError,
   HOMEPAGE_FEATURED_OFFER_KEY,
@@ -266,6 +267,7 @@ async function requireOfferManager() {
 async function collectOfferData(formData: FormData) {
   const slug = readString(formData, "slug");
   const officialSite = readOptionalString(formData, "officialSite");
+  const status = readEnum(formData, "status", OFFER_STATUSES, "PAUSED");
 
   validateSlug(slug);
   validateHttpsUrl(officialSite, "Официальный сайт");
@@ -273,7 +275,11 @@ async function collectOfferData(formData: FormData) {
 
   return {
     slug,
-    status: readEnum(formData, "status", OFFER_STATUSES, "PAUSED"),
+    status,
+    replacementOfferId:
+      status === "ARCHIVED"
+        ? readOptionalString(formData, "replacementOfferId")
+        : null,
     brandName: readString(formData, "brandName"),
     legalName: readOptionalString(formData, "legalName"),
     logoText: readOptionalString(formData, "logoText"),
@@ -308,6 +314,39 @@ async function collectOfferData(formData: FormData) {
     conditionsCheckedAt: readDate(formData, "conditionsCheckedAt"),
     updatedByUserAt: new Date(),
   };
+}
+
+async function validateReplacementOffer(
+  sourceOfferId: string | null,
+  offerData: Awaited<ReturnType<typeof collectOfferData>>,
+) {
+  if (!offerData.replacementOfferId) {
+    return;
+  }
+
+  const replacement = await prisma.offer.findUnique({
+    where: { id: offerData.replacementOfferId },
+    select: {
+      id: true,
+      status: true,
+    },
+  });
+
+  if (!replacement) {
+    throw actionError("Выбранный оффер-замена не найден", [
+      "replacementOfferId",
+    ]);
+  }
+
+  const validationError = getReplacementOfferValidationError({
+    sourceOfferId,
+    sourceStatus: offerData.status,
+    replacement,
+  });
+
+  if (validationError) {
+    throw actionError(validationError, ["replacementOfferId"]);
+  }
 }
 
 function collectAffiliateData(formData: FormData) {
@@ -563,6 +602,7 @@ export async function createOffer(
 
     const offerData = await collectOfferData(formData);
     const affiliateData = collectAffiliateData(formData);
+    await validateReplacementOffer(null, offerData);
     validateOfferPublication(offerData, affiliateData);
     validateFeaturedPlacement(formData, offerData, affiliateData);
 
@@ -607,12 +647,14 @@ export async function updateOffer(
     const affiliateOfferId = readOptionalString(formData, "affiliateOfferId");
     const offerData = await collectOfferData(formData);
     const affiliateData = collectAffiliateData(formData);
-    validateOfferPublication(offerData, affiliateData);
-    validateFeaturedPlacement(formData, offerData, affiliateData);
 
     if (!offerId) {
       throw actionError("Не найден ID оффера");
     }
+
+    await validateReplacementOffer(offerId, offerData);
+    validateOfferPublication(offerData, affiliateData);
+    validateFeaturedPlacement(formData, offerData, affiliateData);
 
     await prisma.$transaction(async (db) => {
       await db.offer.update({

@@ -126,13 +126,18 @@ model Offer {
   restrictedRegionCodes String[]     @default([])
   conditionsCheckedAt DateTime?
   updatedByUserAt DateTime?
+  replacementOfferId String?
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
 
+  replacementOffer Offer?           @relation("OfferReplacement", fields: [replacementOfferId], references: [id], onDelete: SetNull)
+  replacedOffers   Offer[]           @relation("OfferReplacement")
   affiliateOffers AffiliateOffer[]
   offerClicks     OfferClick[]
   conversions     AffiliateConversion[]
   seoPageOffers   SeoPageOffer[]
+
+  @@index([replacementOfferId])
 }
 
 model AffiliateOffer {

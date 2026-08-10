@@ -8,6 +8,11 @@ export type OfferWithAffiliate = Offer & {
   affiliateOffers: AffiliateOffer[];
 };
 
+export type ReplacementOfferOption = Pick<
+  Offer,
+  "id" | "brandName" | "slug"
+>;
+
 function toInputDate(value: Date | null) {
   return value ? value.toISOString().slice(0, 10) : "";
 }
@@ -283,9 +288,11 @@ function SelectField({
 export function OfferEditor({
   offer,
   isHomepageFeatured = false,
+  replacementOptions = [],
 }: {
   offer?: OfferWithAffiliate;
   isHomepageFeatured?: boolean;
+  replacementOptions?: ReplacementOfferOption[];
 }) {
   const affiliateOffer = offer?.affiliateOffers.at(0);
   const isEdit = Boolean(offer);
@@ -370,6 +377,19 @@ export function OfferEditor({
             { value: "PAUSED", label: "На паузе" },
             { value: "ARCHIVED", label: "Архив" },
           ]}
+        />
+        <SelectField
+          label="Точная замена после архивации"
+          name="replacementOfferId"
+          defaultValue={offer?.replacementOfferId ?? ""}
+          options={[
+            { value: "", label: "Нет замены — вернуть 410 Gone" },
+            ...replacementOptions.map((replacement) => ({
+              value: replacement.id,
+              label: `${replacement.brandName} · /offers/${replacement.slug}`,
+            })),
+          ]}
+          hint="Используется только для статуса «Архив». Выбирай только настоящий новый вариант того же предложения — тогда старый URL даст 301."
         />
         <Field label="Юр. название" name="legalName" defaultValue={offer?.legalName} />
         <Field label="Официальный сайт" name="officialSite" defaultValue={offer?.officialSite} />
