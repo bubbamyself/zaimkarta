@@ -7,6 +7,7 @@ import {
 } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getProductionSecret } from "@/lib/production-secret";
+import { buildMetrikaOfflineEvents } from "@/lib/metrika-offline-events";
 
 const SUPPORTED_PARAMETER_NAMES = new Set([
   "secret",
@@ -65,15 +66,28 @@ function normalizeStatusKey(value: string) {
 export function normalizeLeadGidStatus(value: string): ConversionStatus {
   const normalized = normalizeStatusKey(value);
 
-  if (normalized === "на проверке" || normalized === "pending") {
+  if (
+    normalized === "на проверке" ||
+    normalized === "pending" ||
+    normalized === "hold"
+  ) {
     return ConversionStatus.PENDING;
   }
 
-  if (normalized === "подлежит оплате" || normalized === "approved") {
+  if (
+    normalized === "подлежит оплате" ||
+    normalized === "approved" ||
+    normalized === "success" ||
+    normalized === "loan_issued"
+  ) {
     return ConversionStatus.APPROVED;
   }
 
-  if (normalized === "отклонен" || normalized === "rejected") {
+  if (
+    normalized === "отклонен" ||
+    normalized === "rejected" ||
+    normalized === "reject"
+  ) {
     return ConversionStatus.REJECTED;
   }
 
@@ -216,6 +230,46 @@ function getEventType({
   return ConversionEventType.STATUS_UPDATE;
 }
 
+async function enqueueMetrikaOfflineEvents({
+  transaction,
+  affiliateConversionId,
+  offerClickId,
+  clientId,
+  events,
+}: {
+  transaction: Prisma.TransactionClient;
+  affiliateConversionId: string;
+  offerClickId: string;
+  clientId: string | null;
+  events: ReturnType<typeof buildMetrikaOfflineEvents>;
+}) {
+  const skipped = !clientId;
+
+  for (const event of events) {
+    await transaction.metrikaOfflineConversion.upsert({
+      where: {
+        affiliateConversionId_target: {
+          affiliateConversionId,
+          target: event.target,
+        },
+      },
+      update: {},
+      create: {
+        affiliateConversionId,
+        offerClickId,
+        clientId,
+        target: event.target,
+        eventAt: event.eventAt,
+        price: event.price,
+        currency: event.currency,
+        status: skipped ? "SKIPPED" : "PENDING",
+        completedAt: skipped ? event.eventAt : null,
+        lastError: skipped ? "missing_client_id" : null,
+      },
+    });
+  }
+}
+
 async function processInTransaction(
   input: LeadGidPostbackInput,
 ): Promise<ProcessResult> {
@@ -259,13 +313,14 @@ async function processInTransaction(
     const nextSignature = stateSignature(input);
 
     if (!existing) {
+      const eventAt = new Date();
       const eventKey = createEventKey(
         input.externalConversionId,
         "initial",
         nextSignature,
       );
 
-      await transaction.affiliateConversion.create({
+      const conversion = await transaction.affiliateConversion.create({
         data: {
           network: AffiliateNetwork.LEADGID,
           externalConversionId: input.externalConversionId,
@@ -288,6 +343,20 @@ async function processInTransaction(
             },
           },
         },
+      });
+
+      await enqueueMetrikaOfflineEvents({
+        transaction,
+        affiliateConversionId: conversion.id,
+        offerClickId: click.id,
+        clientId: click.metrikaClientId,
+        events: buildMetrikaOfflineEvents({
+          isNewConversion: true,
+          normalizedStatus: input.normalizedStatus,
+          payoutAmount: input.payoutAmount,
+          currency: input.currency,
+          eventAt,
+        }),
       });
 
       return { outcome: "created" };
@@ -321,6 +390,8 @@ async function processInTransaction(
       nextSignature,
     );
 
+    const eventAt = new Date();
+
     await transaction.affiliateConversion.update({
       where: { id: existing.id },
       data: {
@@ -342,6 +413,22 @@ async function processInTransaction(
         },
       },
     });
+
+    if (statusChanged) {
+      await enqueueMetrikaOfflineEvents({
+        transaction,
+        affiliateConversionId: existing.id,
+        offerClickId: click.id,
+        clientId: click.metrikaClientId,
+        events: buildMetrikaOfflineEvents({
+          isNewConversion: false,
+          normalizedStatus: input.normalizedStatus,
+          payoutAmount: input.payoutAmount,
+          currency: input.currency,
+          eventAt,
+        }),
+      });
+    }
 
     return { outcome: "updated" };
   });

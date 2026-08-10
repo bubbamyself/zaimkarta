@@ -6,6 +6,10 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import { REGION_COOKIE_NAME } from "@/lib/region-cookie-config";
 import { getRussianRegionByCode } from "@/lib/russian-regions";
 import { getAbsoluteUrl } from "@/lib/site-url";
+import {
+  isValidMetrikaClientId,
+  METRIKA_CLIENT_ID_PARAM,
+} from "@/lib/metrika-client";
 
 const LEAD_COOKIE_NAME = "zk_lead_id";
 const OFFER_FALLBACK_PATH = "/?offer_unavailable=1";
@@ -23,6 +27,14 @@ const UUID_PATTERN =
 function readSearchParam(request: NextRequest, key: string) {
   const value = request.nextUrl.searchParams.get(key);
   return value && value.trim().length > 0 ? value.trim() : null;
+}
+
+function readMetrikaClientId(request: NextRequest) {
+  const values = request.nextUrl.searchParams.getAll(METRIKA_CLIENT_ID_PARAM);
+
+  return values.length === 1 && isValidMetrikaClientId(values[0])
+    ? values[0]
+    : null;
 }
 
 function getLeadIpHashSalt() {
@@ -264,6 +276,7 @@ export async function redirectToAffiliateOffer({
         typeof cardPosition === "number" && Number.isFinite(cardPosition)
           ? cardPosition
           : null,
+      metrikaClientId: readMetrikaClientId(request),
       redirectUrl,
     },
   });

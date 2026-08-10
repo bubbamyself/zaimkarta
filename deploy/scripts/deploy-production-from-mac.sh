@@ -20,6 +20,7 @@ EXPECTED_BRANCH=main
 HEALTH_URL=https://zaimkarta.ru/api/health/server
 HEALTH_MARKER_FILE=/tmp/zaimkarta-health-ok
 HEALTH_LOG=/var/log/zaimkarta-health.log
+METRIKA_INSTALLER=$PROJECT_DIR/deploy/scripts/install-metrika-offline-sync.sh
 APP_URL=https://zaimkarta.ru/
 ADMIN_URL=https://zaimkarta.ru/admin/login
 LOCK_FILE=$HOME/.zaimkarta-production-deploy.lock
@@ -39,6 +40,7 @@ cleanup() {
 redact_logs() {
   sed -E \
     -e 's/(ZAIMKARTA_MAIL_PASSWORD=)[^[:space:]]+/\1[СКРЫТО]/g' \
+    -e 's/(YANDEX_METRIKA_OAUTH_TOKEN=)[^[:space:]]+/\1[СКРЫТО]/g' \
     -e 's#(postgresql://[^:/@]+:)[^@]+@#\1[СКРЫТО]@#g'
 }
 
@@ -58,6 +60,15 @@ command -v curl >/dev/null 2>&1 || fail 'на VPS не найдена коман
 [ -d "$PROJECT_DIR/.git" ] || fail "не найден Git-проект $PROJECT_DIR."
 [ -f "$DEPLOY_DIR/$COMPOSE_FILE" ] || fail "не найден production Compose $DEPLOY_DIR/$COMPOSE_FILE."
 [ -f "$DEPLOY_DIR/production.env.server" ] || fail 'не найден закрытый production.env.server.'
+
+metrika_counter=$(sed -n 's/^YANDEX_METRIKA_COUNTER_ID=//p' "$DEPLOY_DIR/production.env.server" | tail -n 1)
+metrika_enabled=$(sed -n 's/^YANDEX_METRIKA_OFFLINE_EXPORT_ENABLED=//p' "$DEPLOY_DIR/production.env.server" | tail -n 1)
+[ "$metrika_counter" = '110922978' ] \
+  || fail 'YANDEX_METRIKA_COUNTER_ID отсутствует или не равен 110922978.'
+case "$metrika_enabled" in
+  true|false) : ;;
+  *) fail 'YANDEX_METRIKA_OFFLINE_EXPORT_ENABLED должен быть true или false.' ;;
+esac
 
 exec 9>"$LOCK_FILE"
 flock -n 9 || fail 'другой production-деплой уже выполняется.'
@@ -137,6 +148,7 @@ cd "$PROJECT_DIR"
 printf '%s\n' 'Применяю ровно тот fast-forward commit, который был показан перед DEPLOY...'
 git merge --ff-only "$target_commit"
 [ "$(git rev-parse HEAD)" = "$target_commit" ] || fail 'установлен неожиданный commit.'
+[ -x "$METRIKA_INSTALLER" ] || fail "не найден исполняемый установщик $METRIKA_INSTALLER."
 
 cd "$DEPLOY_DIR"
 printf '%s\n' 'Пересобираю только app...'
@@ -149,6 +161,9 @@ esac
 
 printf '%s\n' 'Заменяю только app без запуска и пересоздания зависимостей...'
 sudo -n docker compose -f "$COMPOSE_FILE" up -d --no-deps app
+
+printf '%s\n' 'Устанавливаю или обновляю cron офлайн-конверсий Метрики...'
+sudo -n "$METRIKA_INSTALLER"
 
 db_after=$(sudo -n docker compose -f "$COMPOSE_FILE" ps -q db)
 caddy_after=$(sudo -n docker compose -f "$COMPOSE_FILE" ps -q caddy)
@@ -231,6 +246,7 @@ printf '\n%s\n' 'DEPLOY SUCCESS'
 printf 'Установлен commit: %s\n' "$(git -C "$PROJECT_DIR" log -1 --oneline)"
 printf '%s\n' 'PostgreSQL и Caddy не пересоздавались.'
 printf '%s\n' 'Миграции, app=healthy, главная, админка и внешний health-check проверены.'
+printf 'Cron Метрики установлен; автоматический экспорт в env: %s.\n' "$metrika_enabled"
 REMOTE_SCRIPT_EOF
 
 printf '%s\n' 'Запускаю безопасный production-деплой ZaimKarta.'

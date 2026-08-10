@@ -8,6 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test:overdue": "tsx --test src/lib/overdue-loan.test.ts",
+    "test:metrika": "tsx --test src/lib/metrika-client.test.ts src/lib/leadgid-postback-status.test.ts src/lib/metrika-offline-events.test.ts src/lib/metrika-offline-sync.test.ts",
+    "metrika:offline:sync": "tsx scripts/sync-metrika-offline.ts",
     "check": "npm run lint && npm run build",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",

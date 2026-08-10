@@ -11,20 +11,16 @@ import {
   PUBLIC_SHARE_ANALYTICS_EVENT,
   type PublicShareAnalyticsDetail,
 } from "@/lib/public-page-share";
+import {
+  isValidMetrikaClientId,
+  OFFER_CLICK_ANALYTICS_EVENT,
+  OFFER_CLICK_GOAL,
+  type OfferClickAnalyticsDetail,
+  type YandexMetrika as YandexMetrikaFunction,
+} from "@/lib/metrika-client";
 
 const COOKIE_NOTICE_COOKIE_NAME = "zk_cookie_notice_accepted";
 const COOKIE_CONSENT_EVENT = "zk-cookie-consent-accepted";
-
-type YandexMetrika = ((...args: unknown[]) => void) & {
-  a?: unknown[][];
-  l?: number;
-};
-
-declare global {
-  interface Window {
-    ym?: YandexMetrika;
-  }
-}
 
 function hasCookieConsent() {
   return document.cookie
@@ -40,7 +36,7 @@ function initializeMetrika(counterId: number) {
 
   const tagUrl = `https://mc.yandex.ru/metrika/tag.js?id=${counterId}`;
 
-  const ym: YandexMetrika = (...args: unknown[]) => {
+  const ym: YandexMetrikaFunction = (...args: unknown[]) => {
     (ym.a ??= []).push(args);
   };
 
@@ -104,6 +100,55 @@ export function YandexMetrika({ counterId }: { counterId: number }) {
       window.removeEventListener(COOKIE_CONSENT_EVENT, trackPageView);
     };
   }, [counterId, pathname, query]);
+
+  useEffect(() => {
+    function trackOfferClick(event: Event) {
+      const detail = (event as CustomEvent<OfferClickAnalyticsDetail>).detail;
+
+      if (!detail?.params || typeof detail.complete !== "function") {
+        return;
+      }
+
+      detail.accept();
+
+      if (!hasCookieConsent()) {
+        detail.complete(null);
+        return;
+      }
+
+      try {
+        const ym = initializeMetrika(counterId);
+        let clientId: string | null = null;
+        let clientIdReceived = false;
+        let goalSent = false;
+        let completed = false;
+        const completeWhenReady = () => {
+          if (!completed && clientIdReceived && goalSent) {
+            completed = true;
+            detail.complete(clientId);
+          }
+        };
+
+        ym(counterId, "getClientID", (value: unknown) => {
+          clientId = isValidMetrikaClientId(value) ? value : null;
+          clientIdReceived = true;
+          completeWhenReady();
+        });
+        ym(counterId, "reachGoal", OFFER_CLICK_GOAL, detail.params, () => {
+          goalSent = true;
+          completeWhenReady();
+        });
+      } catch {
+        detail.complete(null);
+      }
+    }
+
+    window.addEventListener(OFFER_CLICK_ANALYTICS_EVENT, trackOfferClick);
+
+    return () => {
+      window.removeEventListener(OFFER_CLICK_ANALYTICS_EVENT, trackOfferClick);
+    };
+  }, [counterId]);
 
   useEffect(() => {
     function trackCalculatorGoal(event: Event) {

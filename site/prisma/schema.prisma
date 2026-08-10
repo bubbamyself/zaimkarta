@@ -37,6 +37,14 @@ enum ConversionEventType {
   STATUS_AND_PAYOUT_UPDATE
 }
 
+enum MetrikaOfflineConversionStatus {
+  PENDING
+  UPLOADED
+  PROCESSED
+  SKIPPED
+  FAILED
+}
+
 enum ApprovalTone {
   LOW
   MEDIUM
@@ -92,50 +100,50 @@ enum SeoPageIntent {
 }
 
 model Offer {
-  id              String            @id @default(cuid())
-  slug            String            @unique
-  status          OfferStatus       @default(PAUSED)
-  brandName       String
-  legalName       String?
-  logoText        String?
-  logoUrl         String?
-  officialSite    String?
-  shortDescription String?
-  badge           String?
-  rating          Decimal?          @db.Decimal(3, 2)
-  reviewsCount    Int               @default(0)
-  minAmount       Int?
-  maxAmount       Int?
-  minTermDays     Int?
-  maxTermDays     Int?
-  dailyRateFrom   Decimal?          @db.Decimal(5, 2)
-  dailyRateTo     Decimal?          @db.Decimal(5, 2)
-  pskFrom         Decimal?          @db.Decimal(6, 2)
-  pskTo           Decimal?          @db.Decimal(6, 2)
-  approvalLabel   String?
-  approvalTone    ApprovalTone      @default(MEDIUM)
-  decisionTime    String?
-  payoutMethods   String[]          @default([])
-  repaymentMethods String[]         @default([])
-  requirements    String[]          @default([])
-  documents       String[]          @default([])
-  advantages      String[]          @default([])
-  warnings        String[]          @default([])
-  legalDisclosure String?
-  displayPriority Int               @default(100)
+  id                    String       @id @default(cuid())
+  slug                  String       @unique
+  status                OfferStatus  @default(PAUSED)
+  brandName             String
+  legalName             String?
+  logoText              String?
+  logoUrl               String?
+  officialSite          String?
+  shortDescription      String?
+  badge                 String?
+  rating                Decimal?     @db.Decimal(3, 2)
+  reviewsCount          Int          @default(0)
+  minAmount             Int?
+  maxAmount             Int?
+  minTermDays           Int?
+  maxTermDays           Int?
+  dailyRateFrom         Decimal?     @db.Decimal(5, 2)
+  dailyRateTo           Decimal?     @db.Decimal(5, 2)
+  pskFrom               Decimal?     @db.Decimal(6, 2)
+  pskTo                 Decimal?     @db.Decimal(6, 2)
+  approvalLabel         String?
+  approvalTone          ApprovalTone @default(MEDIUM)
+  decisionTime          String?
+  payoutMethods         String[]     @default([])
+  repaymentMethods      String[]     @default([])
+  requirements          String[]     @default([])
+  documents             String[]     @default([])
+  advantages            String[]     @default([])
+  warnings              String[]     @default([])
+  legalDisclosure       String?
+  displayPriority       Int          @default(100)
   restrictedRegionCodes String[]     @default([])
-  conditionsCheckedAt DateTime?
-  updatedByUserAt DateTime?
-  replacementOfferId String?
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
+  conditionsCheckedAt   DateTime?
+  updatedByUserAt       DateTime?
+  replacementOfferId    String?
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
 
-  replacementOffer Offer?           @relation("OfferReplacement", fields: [replacementOfferId], references: [id], onDelete: SetNull)
-  replacedOffers   Offer[]           @relation("OfferReplacement")
-  affiliateOffers AffiliateOffer[]
-  offerClicks     OfferClick[]
-  conversions     AffiliateConversion[]
-  seoPageOffers   SeoPageOffer[]
+  replacementOffer Offer?                @relation("OfferReplacement", fields: [replacementOfferId], references: [id], onDelete: SetNull)
+  replacedOffers   Offer[]               @relation("OfferReplacement")
+  affiliateOffers  AffiliateOffer[]
+  offerClicks      OfferClick[]
+  conversions      AffiliateConversion[]
+  seoPageOffers    SeoPageOffer[]
 
   @@index([replacementOfferId])
 }
@@ -163,8 +171,8 @@ model AffiliateOffer {
   createdAt              DateTime         @default(now())
   updatedAt              DateTime         @updatedAt
 
-  offer                  Offer            @relation(fields: [offerId], references: [id], onDelete: Cascade)
-  offerClicks            OfferClick[]
+  offer       Offer        @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  offerClicks OfferClick[]
 
   @@index([offerId])
   @@index([network])
@@ -172,29 +180,29 @@ model AffiliateOffer {
 }
 
 model Lead {
-  id               String         @id @default(cuid())
-  leadId           String         @unique
-  landingPageUrl   String?
-  referrer         String?
-  utmSource        String?
-  utmMedium        String?
-  utmCampaign      String?
-  utmContent       String?
-  utmTerm          String?
-  userAgent        String?
-  ipHash           String?
-  firstSeenAt      DateTime       @default(now())
-  lastSeenAt       DateTime       @updatedAt
-  createdAt        DateTime       @default(now())
+  id             String   @id @default(cuid())
+  leadId         String   @unique
+  landingPageUrl String?
+  referrer       String?
+  utmSource      String?
+  utmMedium      String?
+  utmCampaign    String?
+  utmContent     String?
+  utmTerm        String?
+  userAgent      String?
+  ipHash         String?
+  firstSeenAt    DateTime @default(now())
+  lastSeenAt     DateTime @updatedAt
+  createdAt      DateTime @default(now())
 
-  offerClicks      OfferClick[]
+  offerClicks OfferClick[]
 
   @@index([createdAt])
   @@index([leadId])
 }
 
 model OfferClick {
-  id               String          @id @default(cuid())
+  id               String   @id @default(cuid())
   leadId           String
   offerId          String
   affiliateOfferId String?
@@ -202,13 +210,15 @@ model OfferClick {
   pageType         String?
   categorySlug     String?
   cardPosition     Int?
+  metrikaClientId  String?
   redirectUrl      String
-  createdAt        DateTime        @default(now())
+  createdAt        DateTime @default(now())
 
-  lead             Lead            @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  offer            Offer           @relation(fields: [offerId], references: [id], onDelete: Cascade)
-  affiliateOffer   AffiliateOffer? @relation(fields: [affiliateOfferId], references: [id], onDelete: SetNull)
-  conversions      AffiliateConversion[]
+  lead                      Lead                       @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  offer                     Offer                      @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  affiliateOffer            AffiliateOffer?            @relation(fields: [affiliateOfferId], references: [id], onDelete: SetNull)
+  conversions               AffiliateConversion[]
+  metrikaOfflineConversions MetrikaOfflineConversion[]
 
   @@index([leadId])
   @@index([offerId])
@@ -218,28 +228,57 @@ model OfferClick {
 }
 
 model AffiliateConversion {
-  id                   String            @id @default(cuid())
-  network              AffiliateNetwork  @default(LEADGID)
+  id                   String           @id @default(cuid())
+  network              AffiliateNetwork @default(LEADGID)
   externalConversionId String
   networkTransactionId String?
   offerClickId         String
   offerId              String
   networkOfferId       String?
   rawStatus            String
-  normalizedStatus     ConversionStatus  @default(UNKNOWN)
-  payoutAmount         Decimal           @default(0) @db.Decimal(12, 2)
+  normalizedStatus     ConversionStatus @default(UNKNOWN)
+  payoutAmount         Decimal          @default(0) @db.Decimal(12, 2)
   currency             String
-  createdAt            DateTime          @default(now())
-  updatedAt            DateTime          @updatedAt
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
 
-  offerClick           OfferClick        @relation(fields: [offerClickId], references: [id], onDelete: Restrict)
-  offer                Offer             @relation(fields: [offerId], references: [id], onDelete: Restrict)
-  events               AffiliateConversionEvent[]
+  offerClick                OfferClick                 @relation(fields: [offerClickId], references: [id], onDelete: Restrict)
+  offer                     Offer                      @relation(fields: [offerId], references: [id], onDelete: Restrict)
+  events                    AffiliateConversionEvent[]
+  metrikaOfflineConversions MetrikaOfflineConversion[]
 
   @@unique([network, externalConversionId])
   @@index([offerClickId])
   @@index([offerId, createdAt])
   @@index([normalizedStatus, createdAt])
+}
+
+model MetrikaOfflineConversion {
+  id                    String                         @id @default(cuid())
+  affiliateConversionId String
+  offerClickId          String
+  clientId              String?
+  target                String
+  eventAt               DateTime
+  price                 Decimal?                       @db.Decimal(12, 2)
+  currency              String?
+  status                MetrikaOfflineConversionStatus @default(PENDING)
+  attempts              Int                            @default(0)
+  nextAttemptAt         DateTime?
+  uploadId              String?
+  sentAt                DateTime?
+  completedAt           DateTime?
+  lastError             String?
+  createdAt             DateTime                       @default(now())
+  updatedAt             DateTime                       @updatedAt
+
+  affiliateConversion AffiliateConversion @relation(fields: [affiliateConversionId], references: [id], onDelete: Cascade)
+  offerClick          OfferClick          @relation(fields: [offerClickId], references: [id], onDelete: Restrict)
+
+  @@unique([affiliateConversionId, target])
+  @@index([status, nextAttemptAt])
+  @@index([uploadId])
+  @@index([eventAt])
 }
 
 model AffiliateConversionEvent {
@@ -253,21 +292,21 @@ model AffiliateConversionEvent {
   currency         String
   receivedAt       DateTime            @default(now())
 
-  conversion       AffiliateConversion @relation(fields: [conversionId], references: [id], onDelete: Cascade)
+  conversion AffiliateConversion @relation(fields: [conversionId], references: [id], onDelete: Cascade)
 
   @@index([conversionId, receivedAt])
   @@index([receivedAt])
 }
 
 model AdminUser {
-  id           String     @id @default(cuid())
-  username     String     @unique
+  id           String    @id @default(cuid())
+  username     String    @unique
   passwordHash String
-  role         AdminRole  @default(ADMIN)
-  permissions  String[]   @default([])
-  isActive     Boolean    @default(true)
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  role         AdminRole @default(ADMIN)
+  permissions  String[]  @default([])
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   @@index([role])
   @@index([isActive])
@@ -280,10 +319,10 @@ model SystemSetting {
 }
 
 model SeoPage {
-  id              String           @id @default(cuid())
-  slug            String           @unique
-  status          SeoPageStatus    @default(DRAFT)
-  pageType        SeoPageType      @default(CATEGORY)
+  id              String         @id @default(cuid())
+  slug            String         @unique
+  status          SeoPageStatus  @default(DRAFT)
+  pageType        SeoPageType    @default(CATEGORY)
   intent          SeoPageIntent?
   title           String
   description     String
@@ -293,16 +332,16 @@ model SeoPage {
   contentBlocks   Json?
   riskNotice      String?
   editorNote      String?
-  displayPriority Int              @default(100)
+  displayPriority Int            @default(100)
   publishedAt     DateTime?
   updatedByUserAt DateTime?
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 
-  offers          SeoPageOffer[]
-  faqItems        SeoPageFaqItem[] @relation("SeoPageFaqItems")
-  linkedFaqItems  SeoPageFaqItem[] @relation("SeoPageFaqLinks")
-  tools           SeoPageTool[]
+  offers         SeoPageOffer[]
+  faqItems       SeoPageFaqItem[] @relation("SeoPageFaqItems")
+  linkedFaqItems SeoPageFaqItem[] @relation("SeoPageFaqLinks")
+  tools          SeoPageTool[]
 
   @@index([status])
   @@index([pageType])
@@ -320,8 +359,8 @@ model SeoPageOffer {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  seoPage   SeoPage  @relation(fields: [seoPageId], references: [id], onDelete: Cascade)
-  offer     Offer    @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  seoPage SeoPage @relation(fields: [seoPageId], references: [id], onDelete: Cascade)
+  offer   Offer   @relation(fields: [offerId], references: [id], onDelete: Cascade)
 
   @@unique([seoPageId, offerId])
   @@index([seoPageId, position])
@@ -338,8 +377,8 @@ model SeoPageFaqItem {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  seoPage          SeoPage  @relation("SeoPageFaqItems", fields: [seoPageId], references: [id], onDelete: Cascade)
-  linkedSeoPage    SeoPage? @relation("SeoPageFaqLinks", fields: [linkedSeoPageId], references: [id], onDelete: SetNull)
+  seoPage       SeoPage  @relation("SeoPageFaqItems", fields: [seoPageId], references: [id], onDelete: Cascade)
+  linkedSeoPage SeoPage? @relation("SeoPageFaqLinks", fields: [linkedSeoPageId], references: [id], onDelete: SetNull)
 
   @@index([seoPageId, position])
   @@index([linkedSeoPageId])
@@ -358,7 +397,7 @@ model SeoTool {
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
-  pageTools    SeoPageTool[]
+  pageTools SeoPageTool[]
 
   @@index([type])
   @@index([status])
@@ -377,10 +416,10 @@ model SeoPageTool {
   createdAt DateTime       @default(now())
   updatedAt DateTime       @updatedAt
 
-  page      SeoPage        @relation(fields: [pageId], references: [id], onDelete: Cascade)
-  tool      SeoTool        @relation(fields: [toolId], references: [id], onDelete: Restrict)
+  page SeoPage @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  tool SeoTool @relation(fields: [toolId], references: [id], onDelete: Restrict)
 
+  @@unique([pageId, blockId])
   @@index([pageId, position])
   @@index([toolId])
-  @@unique([pageId, blockId])
 }

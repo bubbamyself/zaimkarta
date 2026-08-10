@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import type { Offer, SeoPageType, SeoTool } from "@prisma/client";
+import { Prisma, type Offer, type SeoPageType, type SeoTool } from "@prisma/client";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
@@ -23,6 +23,7 @@ import { getAdminSession } from "@/lib/admin-auth";
 import { isMaintenanceModeEnabled } from "@/lib/maintenance-mode";
 import { prisma } from "@/lib/prisma";
 import { HOMEPAGE_FEATURED_OFFER_KEY } from "@/lib/homepage-featured-offer";
+import { METRIKA_LAST_SUCCESS_SETTING_KEY } from "@/lib/metrika-offline-sync";
 
 export const metadata: Metadata = {
   title: "Админка — ZaimKarta",
@@ -458,6 +459,11 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     seoCategoryClickCounts,
     seoTools,
     homepageFeaturedSetting,
+    metrikaQueueCounts,
+    oldestPendingMetrikaEvent,
+    recentMetrikaErrors,
+    metrikaLastSuccessSetting,
+    databaseClock,
   ] = await Promise.all([
     prisma.offer.findMany({
       orderBy: [{ displayPriority: "asc" }, { status: "asc" }, { brandName: "asc" }],
@@ -584,7 +590,53 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       where: { key: HOMEPAGE_FEATURED_OFFER_KEY },
       select: { value: true },
     }),
+    prisma.metrikaOfflineConversion.groupBy({
+      by: ["status"],
+      _count: { id: true },
+    }),
+    prisma.metrikaOfflineConversion.findFirst({
+      where: { status: "PENDING" },
+      orderBy: { eventAt: "asc" },
+      select: { eventAt: true },
+    }),
+    prisma.metrikaOfflineConversion.findMany({
+      where: {
+        status: "FAILED",
+        lastError: { not: null },
+      },
+      orderBy: { updatedAt: "desc" },
+      take: 5,
+      select: {
+        id: true,
+        target: true,
+        lastError: true,
+        updatedAt: true,
+      },
+    }),
+    prisma.systemSetting.findUnique({
+      where: { key: METRIKA_LAST_SUCCESS_SETTING_KEY },
+      select: { value: true },
+    }),
+    prisma.$queryRaw<Array<{ now: Date }>>(Prisma.sql`SELECT NOW() AS "now"`),
   ]);
+
+  const metrikaCounts = new Map(
+    metrikaQueueCounts.map((item) => [item.status, item._count.id]),
+  );
+  const oldestPendingMetrikaAgeHours = oldestPendingMetrikaEvent
+    ? Math.max(
+        0,
+        Math.floor(
+          ((databaseClock.at(0)?.now.getTime() ??
+            oldestPendingMetrikaEvent.eventAt.getTime()) -
+            oldestPendingMetrikaEvent.eventAt.getTime()) /
+            (60 * 60 * 1000),
+        ),
+      )
+    : null;
+  const metrikaLastSuccess = metrikaLastSuccessSetting?.value
+    ? new Date(metrikaLastSuccessSetting.value)
+    : null;
 
   const activeOffersCount = offers.filter((offer) => offer.status === "ACTIVE").length;
   const pausedOffersCount = offers.filter(
@@ -917,6 +969,47 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                 показаны последние {Math.min(latestClicks.length, ANALYTICS_TABLE_LIMIT)} из{" "}
                 {clicksCount} кликов за период.
               </p>
+            </section>
+
+            <section className="rounded-lg border border-slate-200 bg-white p-5">
+              <h2 className="text-xl font-bold text-slate-950">
+                Выгрузка конверсий в Яндекс Метрику
+              </h2>
+              <p className="mt-2 text-sm text-slate-500">
+                Техническое состояние постоянной очереди. ClientID и OAuth-токен
+                здесь не показываются.
+              </p>
+              <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                <StatCard label="Ожидают отправки" value={metrikaCounts.get("PENDING") ?? 0} />
+                <StatCard label="Ждут обработки" value={metrikaCounts.get("UPLOADED") ?? 0} />
+                <StatCard label="Обработаны" value={metrikaCounts.get("PROCESSED") ?? 0} />
+                <StatCard label="Пропущены" value={metrikaCounts.get("SKIPPED") ?? 0} />
+                <StatCard label="Ошибки" value={metrikaCounts.get("FAILED") ?? 0} />
+              </div>
+              <div className="mt-4 grid gap-2 text-sm text-slate-600 sm:grid-cols-2">
+                <p>
+                  Последняя успешная синхронизация: {metrikaLastSuccess && !Number.isNaN(metrikaLastSuccess.getTime())
+                    ? formatDate(metrikaLastSuccess)
+                    : "ещё не запускалась"}
+                </p>
+                <p>
+                  Самое старое ожидание: {oldestPendingMetrikaAgeHours === null
+                    ? "очередь пуста"
+                    : `${oldestPendingMetrikaAgeHours} ч.`}
+                </p>
+              </div>
+              {recentMetrikaErrors.length > 0 ? (
+                <div className="mt-4 rounded-md bg-rose-50 p-4 text-sm text-rose-800">
+                  <p className="font-semibold">Последние безопасные сообщения об ошибках</p>
+                  <ul className="mt-2 space-y-1">
+                    {recentMetrikaErrors.map((error) => (
+                      <li key={error.id}>
+                        {formatDate(error.updatedAt)} · {error.target} · {error.lastError}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
             </section>
 
             <section className="rounded-lg border border-slate-200 bg-white">
