@@ -1,5 +1,6 @@
-import type { ApprovalTone, Offer } from "@prisma/client";
+import type { ApprovalTone, Offer, OfferStatus } from "@prisma/client";
 import { hasActiveHttpsAffiliateOffer } from "@/lib/affiliate-offer-availability";
+import { PUBLIC_OFFER_STATUSES } from "@/lib/offer-publication";
 import { prisma } from "@/lib/prisma";
 import { isRussianRegionCode } from "@/lib/russian-regions";
 
@@ -42,6 +43,8 @@ export type OfferCardData = {
 };
 
 export type OfferDetailsData = OfferCardData & {
+  status: OfferStatus;
+  hasActiveAffiliateOffer: boolean;
   legalName: string | null;
   officialSite: string | null;
   shortDescription: string | null;
@@ -215,24 +218,23 @@ export async function getActiveOffersForRegion(
 
 export async function getOfferDetails(
   slug: string,
-  regionCode?: string | null,
 ): Promise<OfferDetailsData | null> {
-  const selectedRegionCode = regionCode && isRussianRegionCode(regionCode)
-    ? regionCode
-    : null;
   const offer = await prisma.offer.findFirst({
     where: {
       slug,
-      status: "ACTIVE",
-      ...(selectedRegionCode
-        ? {
-            NOT: {
-              restrictedRegionCodes: {
-                has: selectedRegionCode,
-              },
-            },
-          }
-        : {}),
+      status: {
+        in: [...PUBLIC_OFFER_STATUSES],
+      },
+    },
+    include: {
+      affiliateOffers: {
+        where: {
+          isActive: true,
+        },
+        select: {
+          trackingBaseUrl: true,
+        },
+      },
     },
   });
 
@@ -241,6 +243,10 @@ export async function getOfferDetails(
   }
 
   return {
+    status: offer.status,
+    hasActiveAffiliateOffer: hasActiveHttpsAffiliateOffer(
+      offer.affiliateOffers,
+    ),
     name: offer.brandName,
     slug: offer.slug,
     logoText: offer.logoText ?? offer.brandName.slice(0, 1),

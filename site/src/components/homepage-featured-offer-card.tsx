@@ -1,4 +1,5 @@
 import type { HomepageFeaturedOffer } from "@/lib/homepage-featured-offer";
+import { OfferCtaLink } from "@/components/offer-cta-link";
 
 function formatMoney(value: number) {
   return new Intl.NumberFormat("ru-RU").format(value) + " ₽";
@@ -6,8 +7,10 @@ function formatMoney(value: number) {
 
 export function HomepageFeaturedOfferCard({
   offer,
+  regionSelected,
 }: {
   offer: HomepageFeaturedOffer;
+  regionSelected: boolean;
 }) {
   const dateLabel = new Intl.DateTimeFormat("ru-RU", {
     day: "numeric",
@@ -86,12 +89,13 @@ export function HomepageFeaturedOfferCard({
       </p>
 
       <div className="mt-auto grid gap-2 pt-5">
-        <a
+        <OfferCtaLink
           href={`/go/${offer.slug}?page_type=home&category=home&position=1`}
+          regionSelected={regionSelected}
           className="inline-flex min-h-12 w-full items-center justify-center rounded-md bg-emerald-700 px-4 text-center font-semibold text-white transition hover:bg-emerald-800"
         >
           Получить предложение
-        </a>
+        </OfferCtaLink>
         <p className="text-xs leading-5 text-slate-500">
           Оценивайте свои финансовые возможности и риски.
         </p>

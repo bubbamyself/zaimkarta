@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { PUBLIC_OFFER_STATUSES } from "@/lib/offer-publication";
 import { prisma } from "@/lib/prisma";
 import { getAbsoluteUrl } from "@/lib/site-url";
 
@@ -17,7 +18,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }),
     prisma.offer.findMany({
       where: {
-        status: "ACTIVE",
+        status: {
+          in: [...PUBLIC_OFFER_STATUSES],
+        },
       },
       select: {
         slug: true,

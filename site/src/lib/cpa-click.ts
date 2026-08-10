@@ -198,10 +198,12 @@ export async function redirectToAffiliateOffer({
     return getFallbackResponse();
   }
 
-  if (
-    selectedRegionCode &&
-    offer.restrictedRegionCodes.includes(selectedRegionCode)
-  ) {
+  if (!selectedRegionCode) {
+    warnBlockedClick("region_required", slug);
+    return getFallbackResponse(REGION_FALLBACK_PATH);
+  }
+
+  if (offer.restrictedRegionCodes.includes(selectedRegionCode)) {
     warnBlockedClick("region_restricted", slug);
     return getFallbackResponse(REGION_FALLBACK_PATH);
   }

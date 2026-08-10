@@ -1,10 +1,23 @@
+"use client";
+
 import Link from "next/link";
 import Image from "next/image";
+import { useState } from "react";
 import { RegionRegistrationControl } from "@/components/region-registration-control";
 
-export function SiteHeader() {
+export function SiteHeader({
+  requireRegionSelection = false,
+}: {
+  requireRegionSelection?: boolean;
+}) {
+  const [isRegionDeferred, setIsRegionDeferred] = useState(false);
+
   return (
-    <header className="border-b border-slate-200 bg-white">
+    <header
+      className={`border-b border-slate-200 bg-white ${
+        isRegionDeferred ? "sticky top-0 z-40 shadow-sm" : ""
+      }`}
+    >
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-5 py-4">
         <Link href="/" className="inline-flex items-center">
           <Image
@@ -30,7 +43,10 @@ export function SiteHeader() {
             Статьи
           </Link>
         </nav>
-        <RegionRegistrationControl />
+        <RegionRegistrationControl
+          requireRegionSelection={requireRegionSelection}
+          onDeferredChange={setIsRegionDeferred}
+        />
       </div>
     </header>
   );

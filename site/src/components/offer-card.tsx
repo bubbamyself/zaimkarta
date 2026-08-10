@@ -8,6 +8,7 @@ type OfferCardProps = {
   categorySlug?: string;
   position?: number;
   matchReasons?: string[];
+  regionSelected: boolean;
 };
 
 export const OFFER_GRID_CLASS_NAME =
@@ -22,6 +23,7 @@ export function OfferCard({
   categorySlug,
   position,
   matchReasons = [],
+  regionSelected,
 }: OfferCardProps) {
   const approvalClass =
     offer.approvalTone === "high" ? "text-emerald-700" : "text-amber-600";
@@ -156,6 +158,7 @@ export function OfferCard({
       <div className="mt-auto grid gap-1.5 pt-3 sm:gap-2 sm:pt-4">
         <OfferCtaLink
           href={`/go/${offer.slug}?${clickParams.toString()}`}
+          regionSelected={regionSelected}
           className="inline-flex min-h-11 w-full items-center justify-center rounded-md bg-emerald-700 px-2 py-2 text-center text-xs font-semibold leading-5 text-white transition hover:bg-emerald-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 min-[390px]:text-sm"
         >
           {ctaText}

@@ -6,6 +6,8 @@ import {
   LEGACY_REGION_COOKIE_NAME,
   REGION_COOKIE_MAX_AGE_SECONDS,
   REGION_COOKIE_NAME,
+  REGION_PROMPT_DEFERRED_SESSION_KEY,
+  REGION_SELECTOR_OPEN_EVENT,
 } from "@/lib/region-cookie-config";
 import {
   getRussianRegionByCode,
@@ -13,6 +15,7 @@ import {
 } from "@/lib/russian-regions";
 
 const COOKIE_NOTICE_COOKIE_NAME = "zk_cookie_notice_accepted";
+type DialogStep = "closed" | "prompt" | "selector";
 
 function readCookie(name: string) {
   return document.cookie
@@ -28,14 +31,27 @@ function normalizeSearch(value: string) {
   return value.trim().toLowerCase().replaceAll("ё", "е");
 }
 
-export function RegionRegistrationControl() {
-  const [isOpen, setIsOpen] = useState(false);
+export function RegionRegistrationControl({
+  requireRegionSelection = false,
+  onDeferredChange,
+}: {
+  requireRegionSelection?: boolean;
+  onDeferredChange?: (isDeferred: boolean) => void;
+}) {
+  const [dialogStep, setDialogStep] = useState<DialogStep>("closed");
   const [selectedCode, setSelectedCode] = useState<string | null>(null);
-  const [draftCode, setDraftCode] = useState("55");
+  const [draftCode, setDraftCode] = useState("");
   const [query, setQuery] = useState("");
+  const [isDeferredForVisit, setIsDeferredForVisit] = useState(false);
   const [isCookieNoticeVisible, setIsCookieNoticeVisible] = useState(false);
 
   useEffect(() => {
+    function openRegionSelector() {
+      setDialogStep("selector");
+    }
+
+    window.addEventListener(REGION_SELECTOR_OPEN_EVENT, openRegionSelector);
+
     const timeoutId = window.setTimeout(() => {
       const cookieCode = readCookie(REGION_COOKIE_NAME);
       const region = getRussianRegionByCode(cookieCode);
@@ -43,6 +59,9 @@ export function RegionRegistrationControl() {
       if (region) {
         setSelectedCode(region.code);
         setDraftCode(region.code);
+        setIsDeferredForVisit(false);
+        window.sessionStorage.removeItem(REGION_PROMPT_DEFERRED_SESSION_KEY);
+        onDeferredChange?.(false);
         setIsCookieNoticeVisible(
           readCookie(COOKIE_NOTICE_COOKIE_NAME) !== "1",
         );
@@ -50,11 +69,29 @@ export function RegionRegistrationControl() {
       }
 
       setIsCookieNoticeVisible(false);
-      setIsOpen(true);
+      if (requireRegionSelection) {
+        setDialogStep("selector");
+        setIsDeferredForVisit(false);
+        onDeferredChange?.(false);
+        return;
+      }
+
+      const deferredForVisit =
+        window.sessionStorage.getItem(REGION_PROMPT_DEFERRED_SESSION_KEY) ===
+        "1";
+      setIsDeferredForVisit(deferredForVisit);
+      onDeferredChange?.(deferredForVisit);
+      setDialogStep(deferredForVisit ? "closed" : "prompt");
     }, 0);
 
-    return () => window.clearTimeout(timeoutId);
-  }, []);
+    return () => {
+      window.clearTimeout(timeoutId);
+      window.removeEventListener(
+        REGION_SELECTOR_OPEN_EVENT,
+        openRegionSelector,
+      );
+    };
+  }, [onDeferredChange, requireRegionSelection]);
 
   const selectedRegion = getRussianRegionByCode(selectedCode);
   const normalizedQuery = normalizeSearch(query);
@@ -81,11 +118,33 @@ export function RegionRegistrationControl() {
       return;
     }
 
-    document.cookie = `${LEGACY_REGION_COOKIE_NAME}=; Max-Age=0; Path=/; SameSite=Lax`;
-    document.cookie = `${REGION_COOKIE_NAME}=${region.code}; Max-Age=${REGION_COOKIE_MAX_AGE_SECONDS}; Path=/; SameSite=Lax`;
+    const secureAttribute =
+      window.location.protocol === "https:" ? "; Secure" : "";
+
+    document.cookie = `${LEGACY_REGION_COOKIE_NAME}=; Max-Age=0; Path=/; SameSite=Lax${secureAttribute}`;
+    document.cookie = `${REGION_COOKIE_NAME}=${region.code}; Max-Age=${REGION_COOKIE_MAX_AGE_SECONDS}; Path=/; SameSite=Lax${secureAttribute}`;
+    window.sessionStorage.removeItem(REGION_PROMPT_DEFERRED_SESSION_KEY);
     setSelectedCode(region.code);
-    setIsOpen(false);
+    setIsDeferredForVisit(false);
+    onDeferredChange?.(false);
+    setDialogStep("closed");
     window.location.reload();
+  }
+
+  function deferRegionForVisit() {
+    window.sessionStorage.setItem(REGION_PROMPT_DEFERRED_SESSION_KEY, "1");
+    setIsDeferredForVisit(true);
+    onDeferredChange?.(true);
+    setDialogStep("closed");
+  }
+
+  function closeSelector() {
+    if (selectedRegion) {
+      setDialogStep("closed");
+      return;
+    }
+
+    deferRegionForVisit();
   }
 
   function acceptCookieNotice() {
@@ -101,15 +160,64 @@ export function RegionRegistrationControl() {
     <div className="flex items-center">
       <button
         type="button"
-        onClick={() => setIsOpen(true)}
-        className="rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-emerald-700 hover:text-emerald-800"
+        onClick={() => setDialogStep("selector")}
+        className={`rounded-md border px-3 py-2 text-xs font-semibold transition ${
+          isDeferredForVisit && !selectedRegion
+            ? "border-amber-400 bg-amber-50 text-amber-950 shadow-sm ring-2 ring-amber-100 hover:border-amber-500"
+            : "border-slate-200 bg-white text-slate-700 hover:border-emerald-700 hover:text-emerald-800"
+        }`}
       >
         {selectedRegion
           ? `Регион регистрации: ${selectedRegion.name}`
-          : "Выбрать регион регистрации"}
+          : isDeferredForVisit
+            ? "Регион не выбран — проверить"
+            : "Выбрать регион регистрации"}
       </button>
 
-      {isOpen ? (
+      {dialogStep === "prompt" ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 px-4 py-6">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="region-prompt-title"
+            className="w-full max-w-md overflow-hidden rounded-lg bg-white shadow-xl"
+          >
+            <div className="p-6">
+              <p className="text-sm font-semibold uppercase tracking-wide text-emerald-700">
+                ZaimKarta
+              </p>
+              <p
+                id="region-prompt-title"
+                className="mt-2 text-2xl font-bold leading-tight text-slate-950"
+              >
+                Укажите регион регистрации, покажем доступные предложения
+              </p>
+              <p className="mt-3 text-sm leading-6 text-slate-600">
+                У разных кредиторов отличаются регионы работы. Выбор поможет не
+                показывать варианты, на которые нельзя подать заявку.
+              </p>
+            </div>
+            <div className="grid gap-3 border-t border-slate-200 p-5 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => setDialogStep("selector")}
+                className="inline-flex min-h-12 items-center justify-center rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white transition hover:bg-emerald-800"
+              >
+                Указать регион
+              </button>
+              <button
+                type="button"
+                onClick={deferRegionForVisit}
+                className="inline-flex min-h-12 items-center justify-center rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 transition hover:border-slate-500"
+              >
+                Позже
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {dialogStep === "selector" ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 px-4 py-6">
           <section
             role="dialog"
@@ -176,19 +284,20 @@ export function RegionRegistrationControl() {
             </div>
 
             <div className="flex flex-col-reverse gap-3 border-t border-slate-200 p-5 sm:flex-row sm:justify-end">
-              {selectedRegion ? (
+              {selectedRegion || !requireRegionSelection ? (
                 <button
                   type="button"
-                  onClick={() => setIsOpen(false)}
+                  onClick={closeSelector}
                   className="inline-flex min-h-11 items-center justify-center rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800"
                 >
-                  Закрыть
+                  {selectedRegion ? "Закрыть" : "Позже"}
                 </button>
               ) : null}
               <button
                 type="button"
                 onClick={saveRegion}
-                className="inline-flex min-h-11 items-center justify-center rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white transition hover:bg-emerald-800"
+                disabled={!getRussianRegionByCode(draftCode)}
+                className="inline-flex min-h-11 items-center justify-center rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300"
               >
                 Показать подходящие предложения
               </button>
@@ -197,7 +306,7 @@ export function RegionRegistrationControl() {
         </div>
       ) : null}
 
-      {isCookieNoticeVisible && !isOpen ? (
+      {isCookieNoticeVisible && dialogStep === "closed" ? (
         <aside
           aria-label="Уведомление об использовании cookie"
           aria-live="polite"

@@ -308,6 +308,7 @@ export function SeoContentRenderer({
                 categorySlug={categorySlug}
                 filterTarget={filterTarget}
                 initiallyHidden={belongsToOverdueCalculator}
+                regionSelected={Boolean(selectedRegionCode)}
               />
               {belongsToOverdueCalculator ? (
                 <OverdueLoanPostOffersInfo />

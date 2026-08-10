@@ -696,6 +696,7 @@ export default async function CategoryPage({
               offers={offers}
               pageType="category"
               categorySlug={slug}
+              regionSelected={Boolean(selectedRegionCode)}
             />
             {categoryPostOffersText ? (
               <p className="mt-5 max-w-3xl text-base leading-7 text-slate-700">
@@ -915,6 +916,7 @@ export default async function CategoryPage({
                   pageType="article"
                   categorySlug={slug}
                   position={index + 1}
+                  regionSelected={Boolean(selectedRegionCode)}
                 />
               ))}
             </div>
@@ -1005,6 +1007,7 @@ export default async function CategoryPage({
                   pageType={seoPage.pageType.toLowerCase()}
                   categorySlug={slug}
                   position={index + 1}
+                  regionSelected={Boolean(selectedRegionCode)}
                 />
               ))}
             </div>

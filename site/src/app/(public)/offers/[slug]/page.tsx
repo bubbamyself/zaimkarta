@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Breadcrumbs, type BreadcrumbItem } from "@/components/breadcrumbs";
 import { PublicPageShareButton } from "@/components/public-page-share-button";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
-import { getOfferDetails } from "@/lib/offers";
+import { getOfferApplicationAvailability } from "@/lib/offer-publication";
+import { getActiveOffersForRegion, getOfferDetails } from "@/lib/offers";
 import { getSelectedRegionCode } from "@/lib/region-cookie";
 import { getBreadcrumbListJsonLd } from "@/lib/seo-breadcrumbs";
 import { getAbsoluteUrl } from "@/lib/site-url";
@@ -103,11 +105,33 @@ function TextList({ title, items }: { title: string; items: string[] }) {
 export default async function OfferPage({ params }: OfferPageProps) {
   const { slug } = await params;
   const selectedRegionCode = await getSelectedRegionCode();
-  const offer = await getOfferDetails(slug, selectedRegionCode);
+  const offer = await getOfferDetails(slug);
 
   if (!offer) {
     notFound();
   }
+
+  const availability = getOfferApplicationAvailability({
+    status: offer.status,
+    restrictedRegionCodes: offer.restrictedRegionCodes,
+    selectedRegionCode,
+    hasActiveAffiliateOffer: offer.hasActiveAffiliateOffer,
+  });
+  const alternatives = availability.isAvailable || !selectedRegionCode
+    ? []
+    : (
+        await getActiveOffersForRegion(selectedRegionCode, {
+          requireActiveAffiliateOffer: true,
+        })
+      )
+        .filter((alternative) => alternative.slug !== offer.slug)
+        .slice(0, 3);
+  const unavailableTitle =
+    availability.reason === "REGION_REQUIRED"
+      ? "Сначала укажите регион регистрации"
+      : availability.reason === "REGION_RESTRICTED"
+      ? "Недоступно в выбранном регионе"
+      : "Предложение временно недоступно";
 
   const approvalClass =
     offer.approvalTone === "high" ? "text-emerald-700" : "text-amber-600";
@@ -123,7 +147,7 @@ export default async function OfferPage({ params }: OfferPageProps) {
 
   return (
     <main className="min-h-screen bg-[#f6f8fb] text-slate-950">
-      <SiteHeader />
+      <SiteHeader requireRegionSelection={!selectedRegionCode} />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
@@ -166,29 +190,54 @@ export default async function OfferPage({ params }: OfferPageProps) {
             </p>
           </div>
 
-          <aside className="rounded-lg border border-slate-200 bg-slate-50 p-5">
-            <p className="text-sm font-semibold uppercase text-emerald-700">
-              Переход к заявке
-            </p>
-            <p className="mt-3 text-sm leading-6 text-slate-600">
-              Кнопка ниже откроет страницу заявки на сайте партнера.
-            </p>
-            <a
-              href={`/go/${offer.slug}?page_type=offer&position=1`}
-              className="mt-5 inline-flex min-h-12 w-full items-center justify-center rounded-md bg-emerald-700 px-5 text-base font-semibold text-white transition hover:bg-emerald-800"
-            >
-              Оформить заем
-            </a>
-            <PublicPageShareButton
-              pageType="offer"
-              pageSlug={offer.slug}
-              pathname={`/offers/${offer.slug}`}
-              title={`${offer.name} — условия займа`}
-              text={`Посмотрите условия ${offer.name} на ZaimKarta: ${offer.amount}, срок ${offer.term}, ставка ${offer.rate}.`}
-              label="Поделиться предложением"
-              copiedLabel="Ссылка на предложение скопирована"
-              className="mt-3"
-            />
+          <aside
+            className={`rounded-lg border p-5 ${
+              availability.isAvailable
+                ? "border-slate-200 bg-slate-50"
+                : "border-amber-200 bg-amber-50"
+            }`}
+          >
+            {availability.isAvailable ? (
+              <>
+                <p className="text-sm font-semibold uppercase text-emerald-700">
+                  Переход к заявке
+                </p>
+                <p className="mt-3 text-sm leading-6 text-slate-600">
+                  Кнопка ниже откроет страницу заявки на сайте партнера.
+                </p>
+                <a
+                  href={`/go/${offer.slug}?page_type=offer&position=1`}
+                  className="mt-5 inline-flex min-h-12 w-full items-center justify-center rounded-md bg-emerald-700 px-5 text-base font-semibold text-white transition hover:bg-emerald-800"
+                >
+                  Оформить заем
+                </a>
+              </>
+            ) : (
+              <>
+                <p className="text-sm font-semibold uppercase text-amber-800">
+                  {unavailableTitle}
+                </p>
+                <p className="mt-3 text-sm leading-6 text-amber-950">
+                  {availability.reason === "REGION_RESTRICTED"
+                    ? "Это предложение не работает в выбранном регионе. Ниже покажем доступные альтернативы без бесполезного перехода на сайт кредитора."
+                    : availability.reason === "REGION_REQUIRED"
+                      ? "Выберите регион регистрации — после этого мы сразу проверим доступность предложения."
+                      : "Сейчас перейти к оформлению нельзя. Мы сохраняем условия для сравнения и покажем доступные альтернативы ниже."}
+                </p>
+              </>
+            )}
+            {availability.isAvailable ? (
+              <PublicPageShareButton
+                pageType="offer"
+                pageSlug={offer.slug}
+                pathname={`/offers/${offer.slug}`}
+                title={`${offer.name} — условия займа`}
+                text={`Посмотрите условия ${offer.name} на ZaimKarta: ${offer.amount}, срок ${offer.term}, ставка ${offer.rate}.`}
+                label="Поделиться предложением"
+                copiedLabel="Ссылка на предложение скопирована"
+                className="mt-3"
+              />
+            ) : null}
           </aside>
         </div>
       </section>
@@ -211,6 +260,58 @@ export default async function OfferPage({ params }: OfferPageProps) {
           <TextList title="Требования к заемщику" items={offer.requirements} />
           <TextList title="Документы" items={offer.documents} />
           <TextList title="Способы погашения" items={offer.repaymentMethods} />
+
+          {alternatives.length > 0 ? (
+            <section className="rounded-lg border border-emerald-200 bg-emerald-50 p-5">
+              <h2 className="text-xl font-bold text-slate-950">
+                Доступные альтернативы
+              </h2>
+              <p className="mt-2 leading-7 text-slate-700">
+                Эти предложения сейчас доступны в выбранном регионе.
+              </p>
+              <ul className="mt-4 grid gap-3 sm:grid-cols-3">
+                {alternatives.map((alternative) => (
+                  <li key={alternative.slug}>
+                    <Link
+                      href={`/offers/${alternative.slug}`}
+                      className="block h-full rounded-lg border border-emerald-200 bg-white p-4 transition hover:border-emerald-400"
+                    >
+                      <span className="font-bold text-slate-950">
+                        {alternative.name}
+                      </span>
+                      <span className="mt-2 block text-sm leading-6 text-slate-600">
+                        {alternative.amount} · {alternative.term} · ставка {alternative.rate}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+              <Link
+                href="/#offers"
+                className="mt-5 inline-flex min-h-11 items-center justify-center rounded-md border border-emerald-700 bg-white px-4 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-100"
+              >
+                Перейти ко всем предложениям
+              </Link>
+            </section>
+          ) : null}
+
+          {!availability.isAvailable && alternatives.length === 0 && selectedRegionCode ? (
+            <section className="rounded-lg border border-slate-200 bg-white p-5">
+              <h2 className="text-xl font-bold text-slate-950">
+                Посмотреть другие варианты
+              </h2>
+              <p className="mt-2 leading-7 text-slate-700">
+                На главной странице собраны остальные доступные разделы и
+                предложения.
+              </p>
+              <Link
+                href="/#offers"
+                className="mt-4 inline-flex min-h-11 items-center justify-center rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white transition hover:bg-emerald-800"
+              >
+                Перейти к основным предложениям
+              </Link>
+            </section>
+          ) : null}
 
           <section className="rounded-lg border border-slate-200 bg-white p-5">
             <h2 className="text-xl font-bold text-slate-950">

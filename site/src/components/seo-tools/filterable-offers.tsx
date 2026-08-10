@@ -359,6 +359,7 @@ export function FilterableOffers({
   categorySlug,
   filterTarget,
   initiallyHidden = false,
+  regionSelected,
 }: {
   title: string;
   offers: OfferCardData[];
@@ -366,6 +367,7 @@ export function FilterableOffers({
   categorySlug: string;
   filterTarget?: string;
   initiallyHidden?: boolean;
+  regionSelected: boolean;
 }) {
   const [requestedAmount, setRequestedAmount] = useState<number | null>(null);
   const [requestedTermDays, setRequestedTermDays] = useState<number | null>(null);
@@ -600,6 +602,7 @@ export function FilterableOffers({
               categorySlug={categorySlug}
               position={offerIndex + 1}
               matchReasons={match.reasons}
+              regionSelected={regionSelected}
             />
           ))}
         </div>

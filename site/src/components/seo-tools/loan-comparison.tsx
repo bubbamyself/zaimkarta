@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
+import { OfferCtaLink } from "@/components/offer-cta-link";
 import type { OfferCardData } from "@/lib/offers";
 import { REGION_COOKIE_NAME } from "@/lib/region-cookie-config";
 import type {
@@ -537,12 +538,14 @@ function ComparedOffer({
   categorySlug,
   position,
   ctaText,
+  regionSelected,
 }: {
   evaluation: OfferEvaluation;
   pageType: string;
   categorySlug: string;
   position: number;
   ctaText: string;
+  regionSelected: boolean;
 }) {
   const clickParams = new URLSearchParams({
     page_type: pageType,
@@ -637,12 +640,13 @@ function ComparedOffer({
       ) : null}
 
       {evaluation.isEligible ? (
-        <a
+        <OfferCtaLink
           href={`/go/${evaluation.offer.slug}?${clickParams.toString()}`}
+          regionSelected={regionSelected}
           className="inline-flex min-h-11 items-center justify-center rounded-md bg-emerald-700 px-4 font-semibold text-white transition hover:bg-emerald-800"
         >
           {ctaText}
-        </a>
+        </OfferCtaLink>
       ) : (
         <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-semibold leading-6 text-amber-900">
           {evaluation.ctaBlockedReason}
@@ -999,6 +1003,7 @@ export function LoanComparison({
               categorySlug={categorySlug}
               position={1}
               ctaText={config.cta?.text ?? "Перейти к предложению"}
+              regionSelected={Boolean(currentRegionCode)}
             />
             <ComparedOffer
               evaluation={secondEvaluation}
@@ -1006,6 +1011,7 @@ export function LoanComparison({
               categorySlug={categorySlug}
               position={2}
               ctaText={config.cta?.text ?? "Перейти к предложению"}
+              regionSelected={Boolean(currentRegionCode)}
             />
           </div>
 

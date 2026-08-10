@@ -122,7 +122,10 @@ export default async function Home() {
           </div>
 
           {featuredOffer ? (
-            <HomepageFeaturedOfferCard offer={featuredOffer} />
+            <HomepageFeaturedOfferCard
+              offer={featuredOffer}
+              regionSelected={Boolean(selectedRegionCode)}
+            />
           ) : (
             <HomeOfferPicker />
           )}
@@ -157,6 +160,7 @@ export default async function Home() {
           offers={offers}
           pageType="home"
           categorySlug="home"
+          regionSelected={Boolean(selectedRegionCode)}
         />
         <div className="mx-auto mt-6 max-w-6xl px-5">
           <p className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
