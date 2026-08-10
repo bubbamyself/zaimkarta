@@ -33,9 +33,11 @@ function normalizeSearch(value: string) {
 
 export function RegionRegistrationControl({
   requireRegionSelection = false,
+  promptOnFirstVisit = true,
   onDeferredChange,
 }: {
   requireRegionSelection?: boolean;
+  promptOnFirstVisit?: boolean;
   onDeferredChange?: (isDeferred: boolean) => void;
 }) {
   const [dialogStep, setDialogStep] = useState<DialogStep>("closed");
@@ -69,8 +71,15 @@ export function RegionRegistrationControl({
       }
 
       setIsCookieNoticeVisible(false);
-      if (requireRegionSelection) {
+      if (requireRegionSelection && promptOnFirstVisit) {
         setDialogStep("selector");
+        setIsDeferredForVisit(false);
+        onDeferredChange?.(false);
+        return;
+      }
+
+      if (!promptOnFirstVisit) {
+        setDialogStep("closed");
         setIsDeferredForVisit(false);
         onDeferredChange?.(false);
         return;
@@ -91,7 +100,7 @@ export function RegionRegistrationControl({
         openRegionSelector,
       );
     };
-  }, [onDeferredChange, requireRegionSelection]);
+  }, [onDeferredChange, promptOnFirstVisit, requireRegionSelection]);
 
   const selectedRegion = getRussianRegionByCode(selectedCode);
   const normalizedQuery = normalizeSearch(query);

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Breadcrumbs, type BreadcrumbItem } from "@/components/breadcrumbs";
+import { OfferCtaLink } from "@/components/offer-cta-link";
 import { PublicPageShareButton } from "@/components/public-page-share-button";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
@@ -147,7 +148,10 @@ export default async function OfferPage({ params }: OfferPageProps) {
 
   return (
     <main className="min-h-screen bg-[#f6f8fb] text-slate-950">
-      <SiteHeader requireRegionSelection={!selectedRegionCode} />
+      <SiteHeader
+        requireRegionSelection
+        promptForRegionOnFirstVisit={false}
+      />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
@@ -224,6 +228,16 @@ export default async function OfferPage({ params }: OfferPageProps) {
                       ? "Выберите регион регистрации — после этого мы сразу проверим доступность предложения."
                       : "Сейчас перейти к оформлению нельзя. Мы сохраняем условия для сравнения и покажем доступные альтернативы ниже."}
                 </p>
+                {availability.reason === "REGION_REQUIRED" ? (
+                  <OfferCtaLink
+                    href={`/go/${offer.slug}?page_type=offer&position=1`}
+                    regionSelected={false}
+                    regionRequiredText="Проверить актуальность"
+                    className="mt-5 inline-flex min-h-12 w-full items-center justify-center rounded-md bg-emerald-700 px-5 text-base font-semibold text-white transition hover:bg-emerald-800"
+                  >
+                    Оформить заем
+                  </OfferCtaLink>
+                ) : null}
               </>
             )}
             {availability.isAvailable ? (
@@ -239,30 +253,9 @@ export default async function OfferPage({ params }: OfferPageProps) {
               />
             ) : null}
           </aside>
-        </div>
-      </section>
-
-      <section className="mx-auto grid max-w-6xl gap-6 px-5 py-10 lg:grid-cols-[1fr_360px]">
-        <div className="grid gap-6">
-          <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <DetailItem label="Сумма" value={offer.amount} />
-            <DetailItem label="Срок" value={offer.term} />
-            <DetailItem label="Ставка в день" value={offer.rate} />
-            <DetailItem label="ПСК" value={offer.psk} />
-            <DetailItem label="Рассмотрение" value={offer.decisionTime} />
-            <DetailItem
-              label="Вероятность одобрения"
-              value={offer.approval}
-            />
-          </dl>
-
-          <TextList title="Преимущества" items={offer.advantages} />
-          <TextList title="Требования к заемщику" items={offer.requirements} />
-          <TextList title="Документы" items={offer.documents} />
-          <TextList title="Способы погашения" items={offer.repaymentMethods} />
 
           {alternatives.length > 0 ? (
-            <section className="rounded-lg border border-emerald-200 bg-emerald-50 p-5">
+            <section className="rounded-lg border border-emerald-200 bg-emerald-50 p-5 lg:col-span-2">
               <h2 className="text-xl font-bold text-slate-950">
                 Доступные альтернативы
               </h2>
@@ -296,7 +289,7 @@ export default async function OfferPage({ params }: OfferPageProps) {
           ) : null}
 
           {!availability.isAvailable && alternatives.length === 0 && selectedRegionCode ? (
-            <section className="rounded-lg border border-slate-200 bg-white p-5">
+            <section className="rounded-lg border border-slate-200 bg-white p-5 lg:col-span-2">
               <h2 className="text-xl font-bold text-slate-950">
                 Посмотреть другие варианты
               </h2>
@@ -312,6 +305,27 @@ export default async function OfferPage({ params }: OfferPageProps) {
               </Link>
             </section>
           ) : null}
+        </div>
+      </section>
+
+      <section className="mx-auto grid max-w-6xl gap-6 px-5 py-10 lg:grid-cols-[1fr_360px]">
+        <div className="grid gap-6">
+          <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <DetailItem label="Сумма" value={offer.amount} />
+            <DetailItem label="Срок" value={offer.term} />
+            <DetailItem label="Ставка в день" value={offer.rate} />
+            <DetailItem label="ПСК" value={offer.psk} />
+            <DetailItem label="Рассмотрение" value={offer.decisionTime} />
+            <DetailItem
+              label="Вероятность одобрения"
+              value={offer.approval}
+            />
+          </dl>
+
+          <TextList title="Преимущества" items={offer.advantages} />
+          <TextList title="Требования к заемщику" items={offer.requirements} />
+          <TextList title="Документы" items={offer.documents} />
+          <TextList title="Способы погашения" items={offer.repaymentMethods} />
 
           <section className="rounded-lg border border-slate-200 bg-white p-5">
             <h2 className="text-xl font-bold text-slate-950">

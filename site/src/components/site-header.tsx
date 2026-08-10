@@ -7,8 +7,10 @@ import { RegionRegistrationControl } from "@/components/region-registration-cont
 
 export function SiteHeader({
   requireRegionSelection = false,
+  promptForRegionOnFirstVisit = true,
 }: {
   requireRegionSelection?: boolean;
+  promptForRegionOnFirstVisit?: boolean;
 }) {
   const [isRegionDeferred, setIsRegionDeferred] = useState(false);
 
@@ -45,6 +47,7 @@ export function SiteHeader({
         </nav>
         <RegionRegistrationControl
           requireRegionSelection={requireRegionSelection}
+          promptOnFirstVisit={promptForRegionOnFirstVisit}
           onDeferredChange={setIsRegionDeferred}
         />
       </div>
