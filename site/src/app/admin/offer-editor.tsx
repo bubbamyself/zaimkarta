@@ -68,8 +68,6 @@ function getPublicationChecklist(
     ["Ставка до", offer?.dailyRateTo],
     ["ПСК от", offer?.pskFrom],
     ["ПСК до", offer?.pskTo],
-    ["Рейтинг", offer?.rating],
-    ["Отзывы", offer?.reviewsCount],
     ["Одобрение", offer?.approvalLabel],
     ["Время решения", offer?.decisionTime],
     ["Способы получения", offer?.payoutMethods],
@@ -420,8 +418,6 @@ export function OfferEditor({
         <Field label="Ставка до, %/день" name="dailyRateTo" defaultValue={offer?.dailyRateTo} />
         <Field label="ПСК от, %" name="pskFrom" defaultValue={offer?.pskFrom} />
         <Field label="ПСК до, %" name="pskTo" defaultValue={offer?.pskTo} />
-        <Field label="Рейтинг" name="rating" defaultValue={offer?.rating} />
-        <Field label="Отзывы" name="reviewsCount" type="number" defaultValue={offer?.reviewsCount ?? 0} />
         <Field label="Одобрение" name="approvalLabel" defaultValue={offer?.approvalLabel} />
         <SelectField
           label="Тон одобрения"

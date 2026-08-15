@@ -182,9 +182,6 @@ export default async function OfferPage({ params }: OfferPageProps) {
                 <h1 className="text-4xl font-bold leading-tight text-slate-950 md:text-5xl">
                   {offer.name}
                 </h1>
-                <p className="mt-3 text-slate-500">
-                  Рейтинг {offer.rating} · отзывов {offer.reviewsCount}
-                </p>
               </div>
             </div>
 

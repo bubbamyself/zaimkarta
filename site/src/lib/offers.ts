@@ -10,8 +10,6 @@ export type OfferCardData = {
   logoText: string;
   logoUrl: string | null;
   badge: string;
-  rating: string;
-  reviewsCount: number;
   minAmount: number | null;
   maxAmount: number | null;
   minTermDays: number | null;
@@ -76,11 +74,9 @@ type OfferForCard = Pick<
   | "payoutMethods"
   | "pskFrom"
   | "pskTo"
-  | "rating"
   | "repaymentMethods"
   | "requirements"
   | "restrictedRegionCodes"
-  | "reviewsCount"
   | "slug"
   | "warnings"
   | "conditionsCheckedAt"
@@ -134,8 +130,6 @@ export function mapOfferToCardData(offer: OfferForCard): OfferCardData {
     logoText: offer.logoText ?? offer.brandName.slice(0, 1),
     logoUrl: offer.logoUrl,
     badge: offer.badge ?? "онлайн заем",
-    rating: offer.rating?.toString() ?? "0",
-    reviewsCount: offer.reviewsCount,
     minAmount: offer.minAmount,
     maxAmount: offer.maxAmount,
     minTermDays: offer.minTermDays,
@@ -194,7 +188,7 @@ export async function getActiveOffersForRegion(
           }
         : {}),
     },
-    orderBy: [{ displayPriority: "asc" }, { rating: "desc" }, { brandName: "asc" }],
+    orderBy: [{ displayPriority: "asc" }, { brandName: "asc" }],
     include: {
       affiliateOffers: {
         where: {
@@ -252,8 +246,6 @@ export async function getOfferDetails(
     logoText: offer.logoText ?? offer.brandName.slice(0, 1),
     logoUrl: offer.logoUrl,
     badge: offer.badge ?? "онлайн заем",
-    rating: offer.rating?.toString() ?? "0",
-    reviewsCount: offer.reviewsCount,
     minAmount: offer.minAmount,
     maxAmount: offer.maxAmount,
     minTermDays: offer.minTermDays,

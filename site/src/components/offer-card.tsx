@@ -73,9 +73,6 @@ export function OfferCard({
               </span>
             ) : null}
           </div>
-          <p className="mt-1 hidden text-xs leading-4 text-slate-500 sm:block">
-            Рейтинг {offer.rating} · отзывов {offer.reviewsCount}
-          </p>
         </div>
       </div>
 
@@ -89,10 +86,6 @@ export function OfferCard({
           </span>
         ) : null}
       </div>
-
-      <p className="mt-1 whitespace-nowrap text-[9px] leading-3 tracking-tight text-slate-500 min-[390px]:text-[11px] sm:hidden">
-        Рейтинг {offer.rating} · отзывов {offer.reviewsCount}
-      </p>
 
       <dl className="mt-2 grid gap-1 text-[10px] leading-4 min-[390px]:text-xs sm:mt-3 sm:gap-1.5">
         <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] sm:gap-1.5">
