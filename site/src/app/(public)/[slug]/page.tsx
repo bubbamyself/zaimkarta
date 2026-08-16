@@ -207,9 +207,16 @@ function sanitizeArticleHtml(value?: string | null) {
         href.startsWith("http://") ||
         href.startsWith("mailto:");
 
-      return isSafeHref
-        ? `<a href="${escapeHtml(href)}" rel="nofollow noopener">`
-        : "<a>";
+      if (!isSafeHref) {
+        return "<a>";
+      }
+
+      const escapedHref = escapeHtml(href);
+      const isInternalHref = href.startsWith("/") || href.startsWith("#");
+
+      return isInternalHref
+        ? `<a href="${escapedHref}">`
+        : `<a href="${escapedHref}" rel="nofollow noopener">`;
     });
 }
 

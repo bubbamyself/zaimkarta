@@ -109,6 +109,22 @@ function formatMoney(value: number | null) {
     : `${new Intl.NumberFormat("ru-RU").format(value)} ₽`;
 }
 
+function formatDays(value: number) {
+  const absoluteValue = Math.abs(value);
+  const lastTwoDigits = absoluteValue % 100;
+  const lastDigit = absoluteValue % 10;
+  const unit =
+    lastTwoDigits >= 11 && lastTwoDigits <= 14
+      ? "дней"
+      : lastDigit === 1
+        ? "день"
+        : lastDigit >= 2 && lastDigit <= 4
+          ? "дня"
+          : "дней";
+
+  return `${value} ${unit}`;
+}
+
 function formatCheckedDate(value: string | null) {
   if (!value) {
     return "не указана";
@@ -363,7 +379,7 @@ export default async function OfferPage({ params }: OfferPageProps) {
                     <div className="rounded-md bg-white p-3">
                       <dt className="text-sm text-slate-500">Срок ставки 0%</dt>
                       <dd className="mt-1 font-bold text-slate-950">
-                        {offer.promoZeroTermDays} дней
+                        {formatDays(offer.promoZeroTermDays!)}
                       </dd>
                     </div>
                     <div className="rounded-md bg-white p-3">
@@ -416,6 +432,34 @@ export default async function OfferPage({ params }: OfferPageProps) {
                   подменяем их стандартными условиями.
                 </p>
               )}
+            </section>
+          ) : null}
+
+          {offer.promoReady && offer.promoCollections.length > 0 ? (
+            <section className="rounded-lg border border-emerald-200 bg-emerald-50 p-5">
+              <p className="text-sm font-semibold uppercase tracking-wide text-emerald-700">
+                Входит в подборку ZaimKarta
+              </p>
+              <h2 className="mt-2 text-xl font-bold text-slate-950">
+                Сравните акцию {offer.name} с другими предложениями под 0%
+              </h2>
+              <p className="mt-3 leading-7 text-slate-700">
+                Этот оффер участвует в подборке первого займа без процентов.
+                Там можно сопоставить сумму, срок ставки 0%, ПСК и условия
+                сохранения льготы.
+              </p>
+              <ul className="mt-4 grid gap-3">
+                {offer.promoCollections.map((collection) => (
+                  <li key={collection.slug}>
+                    <Link
+                      href={`/${collection.slug}`}
+                      className="inline-flex min-h-11 items-center justify-center rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white transition hover:bg-emerald-800"
+                    >
+                      Перейти в подборку «{collection.title}»
+                    </Link>
+                  </li>
+                ))}
+              </ul>
             </section>
           ) : null}
 

@@ -58,6 +58,10 @@ export type OfferCardData = {
 export type OfferDetailsData = OfferCardData & {
   status: OfferStatus;
   hasActiveAffiliateOffer: boolean;
+  promoCollections: Array<{
+    slug: string;
+    title: string;
+  }>;
   legalName: string | null;
   officialSite: string | null;
   shortDescription: string | null;
@@ -132,6 +136,22 @@ function formatMoneyRange(from: number | null, to: number | null) {
   }
 
   return formatMoney(from ?? to);
+}
+
+function formatDays(value: number) {
+  const absoluteValue = Math.abs(value);
+  const lastTwoDigits = absoluteValue % 100;
+  const lastDigit = absoluteValue % 10;
+  const unit =
+    lastTwoDigits >= 11 && lastTwoDigits <= 14
+      ? "дней"
+      : lastDigit === 1
+        ? "день"
+        : lastDigit >= 2 && lastDigit <= 4
+          ? "дня"
+          : "дней";
+
+  return `${value} ${unit}`;
 }
 
 function formatPercentRange(
@@ -210,7 +230,7 @@ export function mapOfferToCardData(
     term: promoUnavailable
       ? "условия акции уточняются"
       : usePromo
-        ? `${offer.promoZeroTermDays} дней по акции`
+        ? `${formatDays(offer.promoZeroTermDays!)} по акции`
         : offer.minTermDays && offer.maxTermDays
           ? `${offer.minTermDays}-${offer.maxTermDays} дней`
           : "индивидуально",
@@ -308,6 +328,27 @@ export async function getOfferDetails(
           trackingBaseUrl: true,
         },
       },
+      seoPageOffers: {
+        where: {
+          usePromo: true,
+          seoPage: {
+            slug: "0-procentov-na-pervii-zaem",
+            status: "PUBLISHED",
+            pageType: "CATEGORY",
+          },
+        },
+        orderBy: {
+          position: "asc",
+        },
+        select: {
+          seoPage: {
+            select: {
+              slug: true,
+              h1: true,
+            },
+          },
+        },
+      },
     },
   });
 
@@ -320,6 +361,10 @@ export async function getOfferDetails(
     hasActiveAffiliateOffer: hasActiveHttpsAffiliateOffer(
       offer.affiliateOffers,
     ),
+    promoCollections: offer.seoPageOffers.map((item) => ({
+      slug: item.seoPage.slug,
+      title: item.seoPage.h1,
+    })),
     ...mapOfferToCardData(offer),
     legalName: offer.legalName,
     officialSite: offer.officialSite,

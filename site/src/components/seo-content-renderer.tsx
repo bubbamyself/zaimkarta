@@ -1,5 +1,6 @@
 import { Fragment } from "react";
 import type { SeoPageTool, SeoTool, SeoToolType } from "@prisma/client";
+import Link from "next/link";
 import { FaqSection, type FaqItemWithLinkedPage } from "@/components/faq-section";
 import { ApplicationChecklist } from "@/components/seo-tools/application-checklist";
 import { FilterableOffers } from "@/components/seo-tools/filterable-offers";
@@ -23,6 +24,10 @@ type ContentBlock = {
   title?: string;
   level?: number;
   items?: string[];
+  links?: Array<{
+    text?: string;
+    href?: string;
+  }>;
   tone?: "info" | "warning" | "success";
   ctaText?: string;
   href?: string;
@@ -268,6 +273,43 @@ export function SeoContentRenderer({
                 ))}
               </ul>
             </section>
+          );
+        }
+
+        if (block.type === "links" && block.links?.length) {
+          const links = block.links.filter(
+            (item): item is { text: string; href: string } =>
+              Boolean(item.text?.trim() && item.href?.trim()),
+          );
+
+          if (links.length === 0) {
+            return null;
+          }
+
+          return (
+            <nav
+              key={key}
+              aria-label={block.title ?? "Связанные материалы"}
+              className="mx-auto w-full max-w-3xl px-5"
+            >
+              {block.title ? (
+                <h2 className="text-2xl font-bold text-slate-950">
+                  {block.title}
+                </h2>
+              ) : null}
+              <ul className="mt-4 grid gap-3 sm:grid-cols-2">
+                {links.map((item) => (
+                  <li key={`${item.href}-${item.text}`}>
+                    <Link
+                      href={item.href}
+                      className="block rounded-lg border border-slate-200 bg-white px-4 py-3 font-semibold text-emerald-700 transition hover:border-emerald-200 hover:bg-emerald-50"
+                    >
+                      {item.text}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </nav>
           );
         }
 
