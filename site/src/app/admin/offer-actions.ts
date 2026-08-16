@@ -1,6 +1,6 @@
 "use server";
 
-import type { ApprovalTone, OfferStatus, Prisma } from "@prisma/client";
+import { Prisma, type ApprovalTone, type OfferStatus } from "@prisma/client";
 import { randomUUID } from "crypto";
 import { mkdir, writeFile } from "fs/promises";
 import { revalidatePath } from "next/cache";
@@ -10,6 +10,8 @@ import { getAdminSession } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 import { normalizeRegionCodes } from "@/lib/russian-regions";
 import { getReplacementOfferValidationError } from "@/lib/offer-archive-policy";
+import { getPromoFieldErrors, isPromoReady } from "@/lib/offer-promo";
+import { getOfferCopySlugCandidate } from "@/lib/offer-copy";
 import {
   getFeaturedOfferValidationError,
   HOMEPAGE_FEATURED_OFFER_KEY,
@@ -28,15 +30,22 @@ const APPROVAL_TONES: ApprovalTone[] = ["LOW", "MEDIUM", "HIGH"];
 export type OfferActionState = {
   error?: string;
   missingFieldNames?: string[];
+  fieldErrors?: Record<string, string>;
 };
 
 class OfferFormError extends Error {
   missingFieldNames: string[];
+  fieldErrors: Record<string, string>;
 
-  constructor(message: string, missingFieldNames: string[] = []) {
+  constructor(
+    message: string,
+    missingFieldNames: string[] = [],
+    fieldErrors: Record<string, string> = {},
+  ) {
     super(message);
     this.name = "OfferFormError";
     this.missingFieldNames = missingFieldNames;
+    this.fieldErrors = fieldErrors;
   }
 }
 
@@ -44,8 +53,12 @@ function readString(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
 }
 
-function actionError(message: string, missingFieldNames: string[] = []) {
-  return new OfferFormError(message, missingFieldNames);
+function actionError(
+  message: string,
+  missingFieldNames: string[] = [],
+  fieldErrors: Record<string, string> = {},
+) {
+  return new OfferFormError(message, missingFieldNames, fieldErrors);
 }
 
 function isRedirectError(error: unknown) {
@@ -63,6 +76,7 @@ function toOfferActionState(error: unknown): OfferActionState {
     return {
       error: error.message,
       missingFieldNames: error.missingFieldNames,
+      fieldErrors: error.fieldErrors,
     };
   }
 
@@ -102,6 +116,22 @@ function readDecimal(formData: FormData, key: string) {
 
   if (!/^\d+(\.\d+)?$/.test(value)) {
     throw new Error(`Некорректное число в поле ${key}`);
+  }
+
+  return value;
+}
+
+function readSignedDecimal(formData: FormData, key: string) {
+  const value = readString(formData, key).replace(",", ".");
+
+  if (!value) {
+    return null;
+  }
+
+  if (!/^-?\d+(\.\d+)?$/.test(value)) {
+    throw actionError("Укажите число в корректном формате", [key], {
+      [key]: "Введите число, например 0 или 0,8.",
+    });
   }
 
   return value;
@@ -272,6 +302,9 @@ async function collectOfferData(formData: FormData) {
   validateSlug(slug);
   validateHttpsUrl(officialSite, "Официальный сайт");
   const logoUrl = await saveLogoUpload(formData, slug);
+  const standardDailyRate = readDecimal(formData, "standardDailyRate");
+  const existingDailyRateFrom = readDecimal(formData, "existingDailyRateFrom");
+  const existingDailyRateTo = readDecimal(formData, "existingDailyRateTo");
 
   return {
     slug,
@@ -291,10 +324,27 @@ async function collectOfferData(formData: FormData) {
     maxAmount: readInt(formData, "maxAmount"),
     minTermDays: readInt(formData, "minTermDays"),
     maxTermDays: readInt(formData, "maxTermDays"),
-    dailyRateFrom: readDecimal(formData, "dailyRateFrom"),
-    dailyRateTo: readDecimal(formData, "dailyRateTo"),
+    dailyRateFrom: standardDailyRate ?? existingDailyRateFrom,
+    dailyRateTo: standardDailyRate ?? existingDailyRateTo,
     pskFrom: readDecimal(formData, "pskFrom"),
     pskTo: readDecimal(formData, "pskTo"),
+    promoEnabled: readString(formData, "promoEnabled") === "on",
+    promoTitle: readOptionalString(formData, "promoTitle"),
+    promoDailyRate: readSignedDecimal(formData, "promoDailyRate"),
+    promoPsk: readSignedDecimal(formData, "promoPsk"),
+    promoMinAmount: readInt(formData, "promoMinAmount"),
+    promoMaxAmount: readInt(formData, "promoMaxAmount"),
+    promoZeroTermDays: readInt(formData, "promoZeroTermDays"),
+    promoNewClientsOnly:
+      readString(formData, "promoNewClientsOnly") === "on",
+    promoConditions: readOptionalString(formData, "promoConditions"),
+    promoLateConsequences: readOptionalString(
+      formData,
+      "promoLateConsequences",
+    ),
+    promoPaidServices: readOptionalString(formData, "promoPaidServices"),
+    promoSourceUrl: readOptionalString(formData, "promoSourceUrl"),
+    promoCheckedAt: readDate(formData, "promoCheckedAt"),
     approvalLabel: readOptionalString(formData, "approvalLabel"),
     approvalTone: readEnum(formData, "approvalTone", APPROVAL_TONES, "MEDIUM"),
     decisionTime: readOptionalString(formData, "decisionTime"),
@@ -312,6 +362,27 @@ async function collectOfferData(formData: FormData) {
     conditionsCheckedAt: readDate(formData, "conditionsCheckedAt"),
     updatedByUserAt: new Date(),
   };
+}
+
+function validatePromoFields(
+  offerData: Awaited<ReturnType<typeof collectOfferData>>,
+) {
+  const fieldErrors = getPromoFieldErrors(offerData, {
+    requireComplete: offerData.status === "ACTIVE",
+  });
+  const missingFieldNames = Object.keys(fieldErrors);
+
+  if (missingFieldNames.length === 0) {
+    return;
+  }
+
+  throw actionError(
+    offerData.status === "ACTIVE"
+      ? "Нельзя активировать оффер: проверьте условия акции 0%."
+      : "Проверьте заполненные поля акции 0%.",
+    missingFieldNames,
+    fieldErrors,
+  );
 }
 
 async function validateReplacementOffer(
@@ -437,8 +508,8 @@ function validateOfferPublication(
     ["Макс. сумма", "maxAmount", offerData.maxAmount],
     ["Мин. срок, дней", "minTermDays", offerData.minTermDays],
     ["Макс. срок, дней", "maxTermDays", offerData.maxTermDays],
-    ["Ставка от", "dailyRateFrom", offerData.dailyRateFrom],
-    ["Ставка до", "dailyRateTo", offerData.dailyRateTo],
+    ["Стандартная ставка", "standardDailyRate", offerData.dailyRateFrom],
+    ["Стандартная ставка", "standardDailyRate", offerData.dailyRateTo],
     ["ПСК от", "pskFrom", offerData.pskFrom],
     ["ПСК до", "pskTo", offerData.pskTo],
     ["Одобрение", "approvalLabel", offerData.approvalLabel],
@@ -496,6 +567,62 @@ function validateOfferPublication(
       missingFieldNames,
     );
   }
+}
+
+async function validatePublishedPromoUsage(
+  offerId: string,
+  offerData: Awaited<ReturnType<typeof collectOfferData>>,
+  affiliateData: ReturnType<typeof collectAffiliateData>,
+) {
+  const publishedPromoLinks = await prisma.seoPageOffer.findMany({
+    where: {
+      offerId,
+      usePromo: true,
+      seoPage: {
+        status: "PUBLISHED",
+      },
+    },
+    select: {
+      seoPage: {
+        select: {
+          h1: true,
+          slug: true,
+        },
+      },
+    },
+    orderBy: {
+      seoPage: {
+        h1: "asc",
+      },
+    },
+  });
+
+  if (publishedPromoLinks.length === 0) {
+    return;
+  }
+
+  const reasons = [
+    offerData.status !== "ACTIVE" ? "оффер перестанет быть активным" : null,
+    !isPromoReady(offerData) ? "акция выключена или заполнена не полностью" : null,
+    !affiliateData?.isActive ? "CPA-ссылка станет неактивной" : null,
+  ].filter(Boolean);
+
+  if (reasons.length === 0) {
+    return;
+  }
+
+  const pages = publishedPromoLinks
+    .map((item) => `«${item.seoPage.h1}» (/${item.seoPage.slug})`)
+    .join(", ");
+
+  throw actionError(
+    `Нельзя сохранить изменение: ${reasons.join(", ")}. Акционный вариант используется в опубликованных подборках: ${pages}. Сначала переключите эти карточки на стандартные условия.`,
+    ["promoEnabled"],
+    {
+      promoEnabled:
+        "Сначала отключите акционный вариант в перечисленных опубликованных подборках.",
+    },
+  );
 }
 
 function shouldRetryWithoutNetworkName(error: unknown) {
@@ -599,6 +726,7 @@ export async function createOffer(
     const offerData = await collectOfferData(formData);
     const affiliateData = collectAffiliateData(formData);
     await validateReplacementOffer(null, offerData);
+    validatePromoFields(offerData);
     validateOfferPublication(offerData, affiliateData);
     validateFeaturedPlacement(formData, offerData, affiliateData);
 
@@ -649,8 +777,10 @@ export async function updateOffer(
     }
 
     await validateReplacementOffer(offerId, offerData);
+    validatePromoFields(offerData);
     validateOfferPublication(offerData, affiliateData);
     validateFeaturedPlacement(formData, offerData, affiliateData);
+    await validatePublishedPromoUsage(offerId, offerData, affiliateData);
 
     await prisma.$transaction(async (db) => {
       await db.offer.update({
@@ -681,6 +811,106 @@ export async function updateOffer(
     revalidatePath(`/admin/offers/${offerId}`);
     revalidatePath(`/offers/${offerData.slug}`);
     redirect(`/admin/offers/${offerId}?saved=1`);
+  } catch (error) {
+    if (isRedirectError(error)) {
+      throw error;
+    }
+
+    return toOfferActionState(error);
+  }
+}
+
+async function getUniqueCopySlug(
+  db: Prisma.TransactionClient,
+  sourceSlug: string,
+) {
+  for (let copyNumber = 1; copyNumber <= 10_000; copyNumber += 1) {
+    const candidate = getOfferCopySlugCandidate(sourceSlug, copyNumber);
+    const existing = await db.offer.findUnique({
+      where: { slug: candidate },
+      select: { id: true },
+    });
+
+    if (!existing) {
+      return candidate;
+    }
+  }
+
+  throw actionError("Не удалось подобрать уникальный slug для копии.");
+}
+
+export async function duplicateOffer(
+  _state: OfferActionState,
+  formData: FormData,
+): Promise<OfferActionState> {
+  try {
+    await requireOfferManager();
+    const sourceOfferId = readString(formData, "offerId");
+
+    if (!sourceOfferId) {
+      throw actionError("Не найден ID исходного оффера.");
+    }
+
+    const createdOfferId = await prisma.$transaction(async (db) => {
+      const sourceOffer = await db.offer.findUnique({
+        where: { id: sourceOfferId },
+        include: {
+          affiliateOffers: {
+            orderBy: { createdAt: "asc" },
+          },
+        },
+      });
+
+      if (!sourceOffer) {
+        throw actionError("Исходный оффер не найден.");
+      }
+
+      const slug = await getUniqueCopySlug(db, sourceOffer.slug);
+      const { affiliateOffers, ...copiedOfferData } = sourceOffer;
+      const createdOffer = await db.offer.create({
+        data: {
+          ...copiedOfferData,
+          id: undefined,
+          slug,
+          status: "DRAFT",
+          replacementOfferId: null,
+          createdAt: undefined,
+          updatedAt: undefined,
+          updatedByUserAt: new Date(),
+        },
+      });
+
+      for (const affiliateOffer of affiliateOffers) {
+        await db.affiliateOffer.create({
+          data: {
+            offerId: createdOffer.id,
+            network: affiliateOffer.network,
+            networkName: affiliateOffer.networkName,
+            networkOfferId: affiliateOffer.networkOfferId,
+            targetAction: affiliateOffer.targetAction,
+            payoutAmount: affiliateOffer.payoutAmount,
+            currency: affiliateOffer.currency,
+            holdDays: affiliateOffer.holdDays,
+            reconciliationPeriod: affiliateOffer.reconciliationPeriod,
+            geoIncluded: affiliateOffer.geoIncluded,
+            geoExcluded: affiliateOffer.geoExcluded,
+            dailyCap: affiliateOffer.dailyCap,
+            monthlyCap: affiliateOffer.monthlyCap,
+            allowedTrafficTypes: affiliateOffer.allowedTrafficTypes,
+            forbiddenTrafficTypes: affiliateOffer.forbiddenTrafficTypes,
+            trackingBaseUrl: affiliateOffer.trackingBaseUrl,
+            trackingParamsTemplate:
+              affiliateOffer.trackingParamsTemplate ?? Prisma.JsonNull,
+            isActive: false,
+          },
+        });
+      }
+
+      return createdOffer.id;
+    });
+
+    revalidatePath("/admin");
+    redirect(`/admin/offers/${createdOfferId}?copied=1`);
   } catch (error) {
     if (isRedirectError(error)) {
       throw error;

@@ -10,6 +10,7 @@ import type {
 import { ArticleRichTextEditor } from "./article-rich-text-editor";
 import { createSeoPage, updateSeoPage } from "./seo-actions";
 import { SeoPageEditorForm } from "./seo-page-editor-form";
+import { getPromoFieldErrors, isPromoReady } from "@/lib/offer-promo";
 
 export type SeoPageWithRelations = SeoPage & {
   faqItems: SeoPageFaqItem[];
@@ -633,6 +634,12 @@ export function SeoPageEditor({
           {offers.map((offer, index) => {
             const selectedOffer = selectedOffers.get(offer.id);
             const hasActiveCpa = hasValidActiveCpa(offer.affiliateOffers);
+            const promoReady = isPromoReady(offer);
+            const promoUnavailableReason = promoReady
+              ? null
+              : offer.promoEnabled
+                ? Object.values(getPromoFieldErrors(offer)).join(" ")
+                : "У оффера не включена акция 0%.";
             const publicationUnavailableReason =
               offer.status !== "ACTIVE"
                 ? `Оффер ${offer.brandName} нельзя добавить в опубликованную подборку: статус ${offer.status}, а для публикации нужен ACTIVE.`
@@ -716,6 +723,38 @@ export function SeoPageEditor({
                       placeholder="Перейти к условиям"
                       className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-slate-900"
                     />
+                  </label>
+                  <label
+                    className={`flex items-start gap-3 rounded-md border p-3 sm:col-span-2 ${
+                      promoReady
+                        ? "border-violet-200 bg-violet-50"
+                        : "border-slate-200 bg-slate-50 text-slate-500"
+                    }`}
+                  >
+                    {selectedOffer?.usePromo && !promoReady ? (
+                      <input
+                        type="hidden"
+                        name={`offerUsePromo:${offer.id}`}
+                        value="on"
+                      />
+                    ) : null}
+                    <input
+                      type="checkbox"
+                      name={`offerUsePromo:${offer.id}`}
+                      defaultChecked={selectedOffer?.usePromo ?? false}
+                      disabled={!promoReady}
+                      className="mt-0.5 h-4 w-4 rounded border-slate-300 text-violet-700 disabled:opacity-50"
+                    />
+                    <span>
+                      <span className="block text-sm font-semibold text-slate-800">
+                        Показывать условия акции 0%
+                      </span>
+                      <span className="mt-1 block text-xs leading-5">
+                        {promoReady
+                          ? "В этой подборке карточка покажет подтверждённые акционные сумму, срок, ставку и ПСК."
+                          : `Недоступно: ${promoUnavailableReason}`}
+                      </span>
+                    </span>
                   </label>
                   <label className="flex min-h-10 items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 text-sm font-medium text-slate-700">
                     <input

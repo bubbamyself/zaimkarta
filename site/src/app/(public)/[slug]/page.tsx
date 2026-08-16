@@ -514,7 +514,9 @@ export default async function CategoryPage({
   );
   const selectedOffers = availableSeoPageOffers.map((item) =>
     ({
-      ...mapOfferToCardData(item.offer),
+      ...mapOfferToCardData(item.offer, {
+        displayVariant: item.usePromo ? "promo_zero" : "standard",
+      }),
       pageBadge: item.badge,
       pageNote: item.note,
       pageCtaText: item.ctaText,

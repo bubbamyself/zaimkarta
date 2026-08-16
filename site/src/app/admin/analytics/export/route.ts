@@ -12,6 +12,7 @@ type ReportRow = {
   pageType: string;
   categorySlug: string;
   cardPosition: number | null;
+  displayVariant: string;
   pageUrl: string;
   redirectUrl: string;
   referrer: string;
@@ -39,6 +40,7 @@ const HEADERS = [
   "Тип страницы",
   "Категория",
   "Позиция",
+  "Вариант карточки",
   "URL страницы",
   "Redirect URL",
   "Referrer",
@@ -108,6 +110,7 @@ function rowsToMatrix(rows: ReportRow[]) {
       row.pageType,
       row.categorySlug,
       row.cardPosition,
+      row.displayVariant,
       row.pageUrl,
       row.redirectUrl,
       row.referrer,
@@ -354,6 +357,8 @@ export async function GET(request: NextRequest) {
       pageType: click.pageType ?? "",
       categorySlug: click.categorySlug ?? "",
       cardPosition: click.cardPosition,
+      displayVariant:
+        click.displayVariant === "PROMO_ZERO" ? "promo_zero" : "standard",
       pageUrl: click.pageUrl ?? "",
       redirectUrl: click.redirectUrl,
       referrer: click.lead.referrer ?? "",

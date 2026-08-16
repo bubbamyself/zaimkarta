@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { updateOfferDisplayOrder } from "./offer-actions";
+import { CopyOfferButton } from "./copy-offer-button";
 
 export type OfferOrderRow = {
   id: string;
@@ -216,12 +217,15 @@ export function OfferOrderTable({
                 </td>
                 {canManageOffers ? (
                   <td className="px-4 py-4">
-                    <Link
-                      href={`/admin/offers/${offer.id}`}
-                      className="font-semibold text-emerald-700 hover:text-emerald-800"
-                    >
-                      редактировать
-                    </Link>
+                    <div className="grid gap-2">
+                      <Link
+                        href={`/admin/offers/${offer.id}`}
+                        className="font-semibold text-emerald-700 hover:text-emerald-800"
+                      >
+                        редактировать
+                      </Link>
+                      <CopyOfferButton offerId={offer.id} compact />
+                    </div>
                   </td>
                 ) : null}
               </tr>

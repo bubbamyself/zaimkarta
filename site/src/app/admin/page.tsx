@@ -66,6 +66,10 @@ function formatMoney(value: number, currency: string) {
   }).format(value);
 }
 
+function getDisplayVariantLabel(value: "STANDARD" | "PROMO_ZERO") {
+  return value === "PROMO_ZERO" ? "Акция 0%" : "Стандарт";
+}
+
 function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-5">
@@ -521,7 +525,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         })
       : Promise.resolve([]),
     prisma.offerClick.groupBy({
-      by: ["offerId"],
+      by: ["offerId", "displayVariant"],
       where: {
         createdAt: {
           gte: analyticsPeriod.fromDate,
@@ -544,6 +548,11 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         normalizedStatus: true,
         payoutAmount: true,
         currency: true,
+        offerClick: {
+          select: {
+            displayVariant: true,
+          },
+        },
       },
     }),
     prisma.seoPage.findMany({
@@ -700,9 +709,14 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     periodConversionsByOfferId.set(conversion.offerId, stats);
   }
 
-  const periodOfferClicksById = new Map(
-    periodOfferClickCounts.map((item) => [item.offerId, item._count.id]),
-  );
+  const periodOfferClicksById = new Map<string, number>();
+
+  for (const item of periodOfferClickCounts) {
+    periodOfferClicksById.set(
+      item.offerId,
+      (periodOfferClicksById.get(item.offerId) ?? 0) + item._count.id,
+    );
+  }
   const periodOfferIds = new Set([
     ...periodOfferClicksById.keys(),
     ...periodConversionsByOfferId.keys(),
@@ -740,6 +754,73 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   const periodOfferStatsById = new Map(
     periodOfferStats.map((item) => [item.offerId, item]),
   );
+  const periodVariantStatsMap = new Map<
+    string,
+    {
+      offerId: string;
+      displayVariant: "STANDARD" | "PROMO_ZERO";
+      clicks: number;
+      conversions: number;
+      approved: number;
+      payout: number;
+      currencies: Set<string>;
+    }
+  >();
+
+  for (const item of periodOfferClickCounts) {
+    const key = `${item.offerId}:${item.displayVariant}`;
+    periodVariantStatsMap.set(key, {
+      offerId: item.offerId,
+      displayVariant: item.displayVariant,
+      clicks: item._count.id,
+      conversions: 0,
+      approved: 0,
+      payout: 0,
+      currencies: new Set(),
+    });
+  }
+
+  for (const conversion of periodConversions) {
+    const displayVariant = conversion.offerClick.displayVariant;
+    const key = `${conversion.offerId}:${displayVariant}`;
+    const stats = periodVariantStatsMap.get(key) ?? {
+      offerId: conversion.offerId,
+      displayVariant,
+      clicks: 0,
+      conversions: 0,
+      approved: 0,
+      payout: 0,
+      currencies: new Set<string>(),
+    };
+    const isApproved =
+      conversion.normalizedStatus === "APPROVED" ||
+      conversion.normalizedStatus === "PAID";
+
+    stats.conversions += 1;
+
+    if (isApproved) {
+      stats.approved += 1;
+      stats.payout += conversion.payoutAmount.toNumber();
+      stats.currencies.add(conversion.currency);
+    }
+
+    periodVariantStatsMap.set(key, stats);
+  }
+
+  const periodVariantStats = [...periodVariantStatsMap.values()]
+    .map((stats) => ({
+      ...stats,
+      offer: offersById.get(stats.offerId),
+      currency: stats.currencies.size === 1 ? [...stats.currencies][0] : "RUB",
+      mixedCurrencies: stats.currencies.size > 1,
+      leadCr: stats.clicks > 0 ? (stats.conversions / stats.clicks) * 100 : 0,
+      approvedCr: stats.clicks > 0 ? (stats.approved / stats.clicks) * 100 : 0,
+      epc:
+        stats.clicks > 0 && stats.currencies.size <= 1
+          ? stats.payout / stats.clicks
+          : null,
+    }))
+    .sort((first, second) => second.clicks - first.clicks);
   const workingOfferRows: OfferOrderRow[] = workingOffers.map((offer) => {
     const affiliateOffer = offer.affiliateOffers.at(0);
     const stats = periodOfferStatsById.get(offer.id);
@@ -1117,6 +1198,70 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
             <section className="rounded-lg border border-slate-200 bg-white">
               <div className="border-b border-slate-200 p-5">
                 <h2 className="text-xl font-bold text-slate-950">
+                  Стандартные и акционные переходы
+                </h2>
+                <p className="mt-2 text-sm text-slate-500">
+                  Здесь одна CPA-ссылка сравнивается по варианту карточки,
+                  который видел посетитель.
+                </p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[1050px] border-collapse text-left text-sm">
+                  <thead className="bg-slate-50 text-slate-500">
+                    <tr>
+                      <th className="px-5 py-3 font-semibold">Оффер</th>
+                      <th className="px-5 py-3 font-semibold">Вариант</th>
+                      <th className="px-5 py-3 font-semibold">Клики</th>
+                      <th className="px-5 py-3 font-semibold">Конверсии</th>
+                      <th className="px-5 py-3 font-semibold">Подтверждения</th>
+                      <th className="px-5 py-3 font-semibold">CR заявки</th>
+                      <th className="px-5 py-3 font-semibold">CR подтверждения</th>
+                      <th className="px-5 py-3 font-semibold">EPC</th>
+                      <th className="px-5 py-3 font-semibold">Выплата</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {periodVariantStats.length > 0 ? (
+                      periodVariantStats.map((item) => (
+                        <tr key={`${item.offerId}:${item.displayVariant}`}>
+                          <td className="px-5 py-4 font-semibold text-slate-950">
+                            {item.offer?.brandName ?? item.offerId}
+                          </td>
+                          <td className="px-5 py-4 text-slate-700">
+                            {getDisplayVariantLabel(item.displayVariant)}
+                          </td>
+                          <td className="px-5 py-4 font-semibold text-slate-950">{item.clicks}</td>
+                          <td className="px-5 py-4 text-slate-700">{item.conversions}</td>
+                          <td className="px-5 py-4 text-slate-700">{item.approved}</td>
+                          <td className="px-5 py-4 text-slate-700">{formatPercent(item.leadCr)}</td>
+                          <td className="px-5 py-4 text-slate-700">{formatPercent(item.approvedCr)}</td>
+                          <td className="px-5 py-4 text-slate-700">
+                            {item.epc === null || item.mixedCurrencies
+                              ? "несколько валют"
+                              : formatMoney(item.epc, item.currency)}
+                          </td>
+                          <td className="px-5 py-4 text-slate-700">
+                            {item.mixedCurrencies
+                              ? "несколько валют"
+                              : formatMoney(item.payout, item.currency)}
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={9} className="px-5 py-8 text-center text-slate-500">
+                          За выбранный период кликов нет
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <section className="rounded-lg border border-slate-200 bg-white">
+              <div className="border-b border-slate-200 p-5">
+                <h2 className="text-xl font-bold text-slate-950">
                   Клики за период
                 </h2>
               </div>
@@ -1128,6 +1273,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                       <th className="px-5 py-3 font-semibold">Оффер</th>
                       <th className="px-5 py-3 font-semibold">Источник</th>
                       <th className="px-5 py-3 font-semibold">Позиция</th>
+                      <th className="px-5 py-3 font-semibold">Вариант</th>
                       <th className="px-5 py-3 font-semibold">Lead ID</th>
                       <th className="px-5 py-3 font-semibold">Редирект</th>
                     </tr>
@@ -1154,6 +1300,9 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                           <td className="px-5 py-4 text-slate-700">
                             {click.cardPosition ?? "—"}
                           </td>
+                          <td className="px-5 py-4 text-slate-700">
+                            {getDisplayVariantLabel(click.displayVariant)}
+                          </td>
                           <td className="max-w-[220px] truncate px-5 py-4 font-mono text-xs text-slate-700">
                             {click.lead.leadId}
                           </td>
@@ -1166,7 +1315,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                       <tr>
                         <td
                           className="px-5 py-8 text-center text-slate-500"
-                          colSpan={6}
+                          colSpan={7}
                         >
                           Кликов пока нет
                         </td>

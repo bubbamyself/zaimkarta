@@ -295,8 +295,8 @@ function evaluateOffer({
     region: regionCheck,
     overpayment,
     rateNotice:
-      offer.dailyRateFrom === 0
-        ? "Нулевая ставка может действовать только при выполнении условий акции. Проверьте условия у кредитора."
+      offer.promoReady
+        ? "Расчёт использует стандартную ставку. У оффера отдельно указана акция 0% — проверьте её срок и условия."
         : null,
     isEligible,
     ctaBlockedReason,
@@ -427,7 +427,7 @@ function getDifferenceBlocks(
   }
 
   if (priority === "min_overpayment") {
-    attention.push("Смотрите на диапазон ориентировочной переплаты, а не только на промоставку 0%.");
+    attention.push("Расчёт сравнивает стандартные ставки; условия акции 0% проверяйте отдельно в карточке оффера.");
   }
 
   if (priority === "fast_decision") {

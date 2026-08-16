@@ -20,7 +20,6 @@ EXPECTED_BRANCH=main
 HEALTH_URL=https://zaimkarta.ru/api/health/server
 HEALTH_MARKER_FILE=/tmp/zaimkarta-health-ok
 HEALTH_LOG=/var/log/zaimkarta-health.log
-METRIKA_INSTALLER=$PROJECT_DIR/deploy/scripts/install-metrika-offline-sync.sh
 APP_URL=https://zaimkarta.ru/
 ADMIN_URL=https://zaimkarta.ru/admin/login
 LOCK_FILE=$HOME/.zaimkarta-production-deploy.lock
@@ -59,16 +58,6 @@ command -v git >/dev/null 2>&1 || fail 'на VPS не найдена коман�
 command -v curl >/dev/null 2>&1 || fail 'на VPS не найдена команда curl.'
 [ -d "$PROJECT_DIR/.git" ] || fail "не найден Git-проект $PROJECT_DIR."
 [ -f "$DEPLOY_DIR/$COMPOSE_FILE" ] || fail "не найден production Compose $DEPLOY_DIR/$COMPOSE_FILE."
-[ -f "$DEPLOY_DIR/production.env.server" ] || fail 'не найден закрытый production.env.server.'
-
-metrika_counter=$(sed -n 's/^YANDEX_METRIKA_COUNTER_ID=//p' "$DEPLOY_DIR/production.env.server" | tail -n 1)
-metrika_enabled=$(sed -n 's/^YANDEX_METRIKA_OFFLINE_EXPORT_ENABLED=//p' "$DEPLOY_DIR/production.env.server" | tail -n 1)
-[ "$metrika_counter" = '110922978' ] \
-  || fail 'YANDEX_METRIKA_COUNTER_ID отсутствует или не равен 110922978.'
-case "$metrika_enabled" in
-  true|false) : ;;
-  *) fail 'YANDEX_METRIKA_OFFLINE_EXPORT_ENABLED должен быть true или false.' ;;
-esac
 
 exec 9>"$LOCK_FILE"
 flock -n 9 || fail 'другой production-деплой уже выполняется.'
@@ -148,7 +137,6 @@ cd "$PROJECT_DIR"
 printf '%s\n' 'Применяю ровно тот fast-forward commit, который был показан перед DEPLOY...'
 git merge --ff-only "$target_commit"
 [ "$(git rev-parse HEAD)" = "$target_commit" ] || fail 'установлен неожиданный commit.'
-[ -x "$METRIKA_INSTALLER" ] || fail "не найден исполняемый установщик $METRIKA_INSTALLER."
 
 cd "$DEPLOY_DIR"
 printf '%s\n' 'Пересобираю только app...'
@@ -161,9 +149,6 @@ esac
 
 printf '%s\n' 'Заменяю только app без запуска и пересоздания зависимостей...'
 sudo -n docker compose -f "$COMPOSE_FILE" up -d --no-deps app
-
-printf '%s\n' 'Устанавливаю или обновляю cron офлайн-конверсий Метрики...'
-sudo -n "$METRIKA_INSTALLER"
 
 db_after=$(sudo -n docker compose -f "$COMPOSE_FILE" ps -q db)
 caddy_after=$(sudo -n docker compose -f "$COMPOSE_FILE" ps -q caddy)
@@ -219,6 +204,7 @@ health_marker_ready=0
 for minute in $(seq 0 20); do
   new_health_logs=$(sudo -n tail -n "+$((health_log_start_line + 1))" "$HEALTH_LOG" 2>/dev/null || true)
   if sudo -n docker compose -f "$COMPOSE_FILE" exec -T app test -f "$HEALTH_MARKER_FILE" \
+    && grep -q 'Служебный health marker обновлён' <<<"$new_health_logs" \
     && grep -q 'STATUS OK: все проверки пройдены' <<<"$new_health_logs"; then
     health_marker_ready=1
     break
@@ -234,8 +220,25 @@ if [ "$health_marker_ready" -ne 1 ]; then
   fail 'плановый monitoring не создал health marker за 20 минут.'
 fi
 
-health_status=$(curl --silent --show-error --max-time 20 --output /dev/null --write-out '%{http_code}' "$HEALTH_URL" || true)
+health_response=$(curl --silent --show-error --max-time 20 --write-out '\n%{http_code}' "$HEALTH_URL" || true)
+health_status=$(printf '%s\n' "$health_response" | tail -n 1)
+health_body=$(printf '%s\n' "$health_response" | sed '$d' | tr -d '\r\n')
 [ "$health_status" = '200' ] || fail "после STATUS OK внешний health-check вернул HTTP ${health_status:-нет ответа} вместо 200."
+[ "$health_body" = 'ok' ] || fail "внешний health-check вернул неожиданный ответ '$health_body' вместо ok."
+
+db_final=$(sudo -n docker compose -f "$COMPOSE_FILE" ps -q db)
+caddy_final=$(sudo -n docker compose -f "$COMPOSE_FILE" ps -q caddy)
+app_final=$(sudo -n docker compose -f "$COMPOSE_FILE" ps -q app)
+[ "$db_final" = "$db_before" ] || fail 'контейнер PostgreSQL неожиданно изменился.'
+[ "$caddy_final" = "$caddy_before" ] || fail 'контейнер Caddy неожиданно изменился.'
+[ "$app_final" = "$app_id" ] || fail 'контейнер app неожиданно изменился после запуска.'
+
+db_final_state=$(sudo -n docker inspect --format '{{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$db_final")
+[ "$db_final_state" = 'running healthy' ] || fail "PostgreSQL не готов после деплоя: $db_final_state."
+caddy_final_state=$(sudo -n docker inspect --format '{{.State.Status}}' "$caddy_final")
+[ "$caddy_final_state" = 'running' ] || fail "Caddy не работает после деплоя: $caddy_final_state."
+app_final_state=$(sudo -n docker inspect --format '{{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$app_final")
+[ "$app_final_state" = 'running healthy' ] || fail "app не готов после деплоя: $app_final_state."
 
 printf '%s\n' 'Плановый monitoring: STATUS OK'
 printf '%s\n' 'Внешний health-check: HTTP 200'
@@ -246,7 +249,6 @@ printf '\n%s\n' 'DEPLOY SUCCESS'
 printf 'Установлен commit: %s\n' "$(git -C "$PROJECT_DIR" log -1 --oneline)"
 printf '%s\n' 'PostgreSQL и Caddy не пересоздавались.'
 printf '%s\n' 'Миграции, app=healthy, главная, админка и внешний health-check проверены.'
-printf 'Cron Метрики установлен; автоматический экспорт в env: %s.\n' "$metrika_enabled"
 REMOTE_SCRIPT_EOF
 
 printf '%s\n' 'Запускаю безопасный production-деплой ZaimKarta.'

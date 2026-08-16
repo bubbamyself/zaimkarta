@@ -51,6 +51,11 @@ enum ApprovalTone {
   HIGH
 }
 
+enum OfferDisplayVariant {
+  STANDARD   @map("standard")
+  PROMO_ZERO @map("promo_zero")
+}
+
 enum AdminRole {
   BOSS
   ADMIN
@@ -120,6 +125,19 @@ model Offer {
   dailyRateTo           Decimal?     @db.Decimal(5, 2)
   pskFrom               Decimal?     @db.Decimal(6, 2)
   pskTo                 Decimal?     @db.Decimal(6, 2)
+  promoEnabled          Boolean      @default(false)
+  promoTitle            String?
+  promoDailyRate        Decimal?     @db.Decimal(5, 2)
+  promoPsk              Decimal?     @db.Decimal(6, 2)
+  promoMinAmount        Int?
+  promoMaxAmount        Int?
+  promoZeroTermDays     Int?
+  promoNewClientsOnly   Boolean      @default(true)
+  promoConditions       String?
+  promoLateConsequences String?
+  promoPaidServices     String?
+  promoSourceUrl        String?
+  promoCheckedAt        DateTime?
   approvalLabel         String?
   approvalTone          ApprovalTone @default(MEDIUM)
   decisionTime          String?
@@ -210,6 +228,7 @@ model OfferClick {
   pageType         String?
   categorySlug     String?
   cardPosition     Int?
+  displayVariant   OfferDisplayVariant @default(STANDARD)
   metrikaClientId  String?
   redirectUrl      String
   createdAt        DateTime @default(now())
@@ -225,6 +244,7 @@ model OfferClick {
   @@index([affiliateOfferId])
   @@index([createdAt])
   @@index([categorySlug])
+  @@index([displayVariant, createdAt])
 }
 
 model AffiliateConversion {
@@ -356,6 +376,7 @@ model SeoPageOffer {
   note      String?
   ctaText   String?
   highlight Boolean  @default(false)
+  usePromo  Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

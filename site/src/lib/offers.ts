@@ -3,6 +3,9 @@ import { hasActiveHttpsAffiliateOffer } from "@/lib/affiliate-offer-availability
 import { PUBLIC_OFFER_STATUSES } from "@/lib/offer-publication";
 import { prisma } from "@/lib/prisma";
 import { isRussianRegionCode } from "@/lib/russian-regions";
+import { isPromoReady } from "@/lib/offer-promo";
+
+export type OfferCardDisplayVariant = "standard" | "promo_zero";
 
 export type OfferCardData = {
   name: string;
@@ -18,6 +21,18 @@ export type OfferCardData = {
   dailyRateTo: number | null;
   pskFrom: number | null;
   pskTo: number | null;
+  promoEnabled: boolean;
+  promoReady: boolean;
+  promoTitle: string | null;
+  promoDailyRate: number | null;
+  promoPsk: number | null;
+  promoMinAmount: number | null;
+  promoMaxAmount: number | null;
+  promoZeroTermDays: number | null;
+  promoNewClientsOnly: boolean;
+  promoConditions: string | null;
+  displayVariant: OfferCardDisplayVariant;
+  promoUnavailable: boolean;
   amount: string;
   term: string;
   psk: string;
@@ -52,6 +67,10 @@ export type OfferDetailsData = OfferCardData & {
   advantages: string[];
   warnings: string[];
   legalDisclosure: string | null;
+  promoLateConsequences: string | null;
+  promoPaidServices: string | null;
+  promoSourceUrl: string | null;
+  promoCheckedAt: string | null;
 };
 
 type OfferForCard = Pick<
@@ -74,6 +93,19 @@ type OfferForCard = Pick<
   | "payoutMethods"
   | "pskFrom"
   | "pskTo"
+  | "promoEnabled"
+  | "promoTitle"
+  | "promoDailyRate"
+  | "promoPsk"
+  | "promoMinAmount"
+  | "promoMaxAmount"
+  | "promoZeroTermDays"
+  | "promoNewClientsOnly"
+  | "promoConditions"
+  | "promoLateConsequences"
+  | "promoPaidServices"
+  | "promoSourceUrl"
+  | "promoCheckedAt"
   | "repaymentMethods"
   | "requirements"
   | "restrictedRegionCodes"
@@ -88,6 +120,18 @@ function formatMoney(value: number | null) {
   }
 
   return new Intl.NumberFormat("ru-RU").format(value) + " ₽";
+}
+
+function formatMoneyRange(from: number | null, to: number | null) {
+  if (from === null && to === null) {
+    return "индивидуально";
+  }
+
+  if (from !== null && to !== null && from !== to) {
+    return `${formatMoney(from)}–${formatMoney(to)}`;
+  }
+
+  return formatMoney(from ?? to);
 }
 
 function formatPercentRange(
@@ -123,7 +167,15 @@ function decimalToNumber(value: { toString(): string } | null) {
   return value ? Number(value.toString()) : null;
 }
 
-export function mapOfferToCardData(offer: OfferForCard): OfferCardData {
+export function mapOfferToCardData(
+  offer: OfferForCard,
+  options: { displayVariant?: OfferCardDisplayVariant } = {},
+): OfferCardData {
+  const displayVariant = options.displayVariant ?? "standard";
+  const promoReady = isPromoReady(offer);
+  const usePromo = displayVariant === "promo_zero" && promoReady;
+  const promoUnavailable = displayVariant === "promo_zero" && !promoReady;
+
   return {
     name: offer.brandName,
     slug: offer.slug,
@@ -138,13 +190,40 @@ export function mapOfferToCardData(offer: OfferForCard): OfferCardData {
     dailyRateTo: decimalToNumber(offer.dailyRateTo),
     pskFrom: decimalToNumber(offer.pskFrom),
     pskTo: decimalToNumber(offer.pskTo),
-    amount: `до ${formatMoney(offer.maxAmount)}`,
-    term:
-      offer.minTermDays && offer.maxTermDays
-        ? `${offer.minTermDays}-${offer.maxTermDays} дней`
-        : "индивидуально",
-    psk: formatPercentRange(offer.pskFrom, offer.pskTo),
-    rate: formatPercentRange(offer.dailyRateFrom, offer.dailyRateTo),
+    promoEnabled: offer.promoEnabled,
+    promoReady,
+    promoTitle: offer.promoTitle,
+    promoDailyRate: decimalToNumber(offer.promoDailyRate),
+    promoPsk: decimalToNumber(offer.promoPsk),
+    promoMinAmount: offer.promoMinAmount,
+    promoMaxAmount: offer.promoMaxAmount,
+    promoZeroTermDays: offer.promoZeroTermDays,
+    promoNewClientsOnly: offer.promoNewClientsOnly,
+    promoConditions: offer.promoConditions,
+    displayVariant,
+    promoUnavailable,
+    amount: promoUnavailable
+      ? "условия акции уточняются"
+      : usePromo
+        ? formatMoneyRange(offer.promoMinAmount, offer.promoMaxAmount)
+        : `до ${formatMoney(offer.maxAmount)}`,
+    term: promoUnavailable
+      ? "условия акции уточняются"
+      : usePromo
+        ? `${offer.promoZeroTermDays} дней по акции`
+        : offer.minTermDays && offer.maxTermDays
+          ? `${offer.minTermDays}-${offer.maxTermDays} дней`
+          : "индивидуально",
+    psk: promoUnavailable
+      ? "условия акции уточняются"
+      : usePromo
+        ? formatPercentRange(offer.promoPsk, offer.promoPsk)
+        : formatPercentRange(offer.pskFrom, offer.pskTo),
+    rate: promoUnavailable
+      ? "условия акции уточняются"
+      : usePromo
+        ? formatPercentRange(offer.promoDailyRate, offer.promoDailyRate)
+        : formatPercentRange(offer.dailyRateFrom, offer.dailyRateTo),
     decisionTime: offer.decisionTime ?? "индивидуально",
     approval: offer.approvalLabel ?? "Индивидуально",
     approvalTone: mapApprovalTone(offer.approvalTone),
@@ -207,7 +286,7 @@ export async function getActiveOffersForRegion(
         !options?.requireActiveAffiliateOffer ||
         hasActiveHttpsAffiliateOffer(offer.affiliateOffers),
     )
-    .map(mapOfferToCardData);
+    .map((offer) => mapOfferToCardData(offer));
 }
 
 export async function getOfferDetails(
@@ -241,43 +320,16 @@ export async function getOfferDetails(
     hasActiveAffiliateOffer: hasActiveHttpsAffiliateOffer(
       offer.affiliateOffers,
     ),
-    name: offer.brandName,
-    slug: offer.slug,
-    logoText: offer.logoText ?? offer.brandName.slice(0, 1),
-    logoUrl: offer.logoUrl,
-    badge: offer.badge ?? "онлайн заем",
-    minAmount: offer.minAmount,
-    maxAmount: offer.maxAmount,
-    minTermDays: offer.minTermDays,
-    maxTermDays: offer.maxTermDays,
-    dailyRateFrom: decimalToNumber(offer.dailyRateFrom),
-    dailyRateTo: decimalToNumber(offer.dailyRateTo),
-    pskFrom: decimalToNumber(offer.pskFrom),
-    pskTo: decimalToNumber(offer.pskTo),
-    amount: `до ${formatMoney(offer.maxAmount)}`,
-    term:
-      offer.minTermDays && offer.maxTermDays
-        ? `${offer.minTermDays}-${offer.maxTermDays} дней`
-        : "индивидуально",
-    psk: formatPercentRange(offer.pskFrom, offer.pskTo),
-    rate: formatPercentRange(offer.dailyRateFrom, offer.dailyRateTo),
-    decisionTime: offer.decisionTime ?? "индивидуально",
-    approval: offer.approvalLabel ?? "Индивидуально",
-    approvalTone: mapApprovalTone(offer.approvalTone),
-    payoutMethods: offer.payoutMethods,
-    repaymentMethods: offer.repaymentMethods,
-    requirements: offer.requirements,
-    documents: offer.documents,
-    advantages: offer.advantages,
-    warnings: offer.warnings,
-    restrictedRegionCodes: offer.restrictedRegionCodes,
-    conditionsCheckedAt: offer.conditionsCheckedAt
-      ? offer.conditionsCheckedAt.toISOString()
-      : null,
-    tags: offer.advantages.slice(0, 3),
+    ...mapOfferToCardData(offer),
     legalName: offer.legalName,
     officialSite: offer.officialSite,
     shortDescription: offer.shortDescription,
     legalDisclosure: offer.legalDisclosure,
+    promoLateConsequences: offer.promoLateConsequences,
+    promoPaidServices: offer.promoPaidServices,
+    promoSourceUrl: offer.promoSourceUrl,
+    promoCheckedAt: offer.promoCheckedAt
+      ? offer.promoCheckedAt.toISOString()
+      : null,
   };
 }

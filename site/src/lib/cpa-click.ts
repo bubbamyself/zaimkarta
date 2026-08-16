@@ -10,6 +10,11 @@ import {
   isValidMetrikaClientId,
   METRIKA_CLIENT_ID_PARAM,
 } from "@/lib/metrika-client";
+import {
+  parseOfferDisplayVariant,
+  toStoredOfferDisplayVariant,
+} from "@/lib/offer-display-variant";
+import { isPromoReady } from "@/lib/offer-promo";
 
 const LEAD_COOKIE_NAME = "zk_lead_id";
 const OFFER_FALLBACK_PATH = "/?offer_unavailable=1";
@@ -210,6 +215,15 @@ export async function redirectToAffiliateOffer({
     return getFallbackResponse();
   }
 
+  const displayVariant = parseOfferDisplayVariant(
+    readSearchParam(request, "variant"),
+  );
+
+  if (displayVariant === "promo_zero" && !isPromoReady(offer)) {
+    warnBlockedClick("promo_unavailable", slug);
+    return getFallbackResponse();
+  }
+
   if (!selectedRegionCode) {
     warnBlockedClick("region_required", slug);
     return getFallbackResponse(REGION_FALLBACK_PATH);
@@ -276,6 +290,7 @@ export async function redirectToAffiliateOffer({
         typeof cardPosition === "number" && Number.isFinite(cardPosition)
           ? cardPosition
           : null,
+      displayVariant: toStoredOfferDisplayVariant(displayVariant),
       metrikaClientId: readMetrikaClientId(request),
       redirectUrl,
     },

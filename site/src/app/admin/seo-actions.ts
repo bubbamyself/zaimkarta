@@ -11,6 +11,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getAdminSession } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
+import { getPromoFieldErrors, isPromoReady } from "@/lib/offer-promo";
 
 const SEO_PAGE_STATUSES: SeoPageStatus[] = [
   "DRAFT",
@@ -431,6 +432,19 @@ async function validateSeoPagePublication(
         id: true,
         brandName: true,
         status: true,
+        promoEnabled: true,
+        promoTitle: true,
+        promoDailyRate: true,
+        promoPsk: true,
+        promoMinAmount: true,
+        promoMaxAmount: true,
+        promoZeroTermDays: true,
+        promoNewClientsOnly: true,
+        promoConditions: true,
+        promoLateConsequences: true,
+        promoPaidServices: true,
+        promoSourceUrl: true,
+        promoCheckedAt: true,
         affiliateOffers: {
           where: {
             isActive: true,
@@ -478,6 +492,15 @@ async function validateSeoPagePublication(
           };
         }
 
+        if (item.usePromo && !isPromoReady(offer)) {
+          const promoErrors = Object.values(getPromoFieldErrors(offer));
+
+          return {
+            brandName: offer.brandName,
+            reason: `акционный вариант не готов: ${promoErrors.join(" ")}`,
+          };
+        }
+
         return null;
       })
       .filter(
@@ -515,6 +538,7 @@ function collectOfferLinks(formData: FormData) {
         note: readOptionalString(formData, `offerNote:${offerId}`),
         ctaText: readOptionalString(formData, `offerCtaText:${offerId}`),
         highlight: readString(formData, `offerHighlight:${offerId}`) === "on",
+        usePromo: readString(formData, `offerUsePromo:${offerId}`) === "on",
       };
     })
     .filter((item) => item.offerId.length > 0)
@@ -729,6 +753,7 @@ async function replaceSeoPageRelations(seoPageId: string, formData: FormData) {
               note: item.note,
               ctaText: item.ctaText,
               highlight: item.highlight,
+              usePromo: item.usePromo,
             })),
           }),
         ]

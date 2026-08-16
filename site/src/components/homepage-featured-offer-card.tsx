@@ -87,10 +87,15 @@ export function HomepageFeaturedOfferCard({
       <p className="mt-4 break-words text-sm leading-6 text-slate-600">
         Получение: {offer.payoutMethods.join(", ")}
       </p>
+      {offer.promoAvailable ? (
+        <p className="mt-3 w-fit rounded-md bg-violet-50 px-2.5 py-1 text-xs font-semibold text-violet-800">
+          Есть акция 0%
+        </p>
+      ) : null}
 
       <div className="mt-auto grid gap-2 pt-5">
         <OfferCtaLink
-          href={`/go/${offer.slug}?page_type=home&category=home&position=1`}
+          href={`/go/${offer.slug}?page_type=home&category=home&position=1&variant=standard`}
           regionSelected={regionSelected}
           className="inline-flex min-h-12 w-full items-center justify-center rounded-md bg-emerald-700 px-4 text-center font-semibold text-white transition hover:bg-emerald-800"
         >

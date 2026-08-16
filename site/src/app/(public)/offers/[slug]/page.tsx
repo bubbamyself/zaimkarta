@@ -103,6 +103,25 @@ function TextList({ title, items }: { title: string; items: string[] }) {
   );
 }
 
+function formatMoney(value: number | null) {
+  return value === null
+    ? "не указано"
+    : `${new Intl.NumberFormat("ru-RU").format(value)} ₽`;
+}
+
+function formatCheckedDate(value: string | null) {
+  if (!value) {
+    return "не указана";
+  }
+
+  return new Intl.DateTimeFormat("ru-RU", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(value));
+}
+
 export default async function OfferPage({ params }: OfferPageProps) {
   const { slug } = await params;
   const selectedRegionCode = await getSelectedRegionCode();
@@ -207,7 +226,7 @@ export default async function OfferPage({ params }: OfferPageProps) {
                   Кнопка ниже откроет страницу заявки на сайте партнера.
                 </p>
                 <a
-                  href={`/go/${offer.slug}?page_type=offer&position=1`}
+                  href={`/go/${offer.slug}?page_type=offer&position=1&variant=standard`}
                   className="mt-5 inline-flex min-h-12 w-full items-center justify-center rounded-md bg-emerald-700 px-5 text-base font-semibold text-white transition hover:bg-emerald-800"
                 >
                   Оформить заем
@@ -227,7 +246,7 @@ export default async function OfferPage({ params }: OfferPageProps) {
                 </p>
                 {availability.reason === "REGION_REQUIRED" ? (
                   <OfferCtaLink
-                    href={`/go/${offer.slug}?page_type=offer&position=1`}
+                    href={`/go/${offer.slug}?page_type=offer&position=1&variant=standard`}
                     regionSelected={false}
                     regionRequiredText="Проверить актуальность"
                     className="mt-5 inline-flex min-h-12 w-full items-center justify-center rounded-md bg-emerald-700 px-5 text-base font-semibold text-white transition hover:bg-emerald-800"
@@ -307,6 +326,10 @@ export default async function OfferPage({ params }: OfferPageProps) {
 
       <section className="mx-auto grid max-w-6xl gap-6 px-5 py-10 lg:grid-cols-[1fr_360px]">
         <div className="grid gap-6">
+          <div>
+            <h2 className="mb-4 text-2xl font-bold text-slate-950">
+              Стандартные условия займа
+            </h2>
           <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <DetailItem label="Сумма" value={offer.amount} />
             <DetailItem label="Срок" value={offer.term} />
@@ -318,6 +341,83 @@ export default async function OfferPage({ params }: OfferPageProps) {
               value={offer.approval}
             />
           </dl>
+          </div>
+
+          {offer.promoEnabled ? (
+            <section className="rounded-lg border border-violet-200 bg-violet-50/60 p-5">
+              <p className="text-sm font-semibold uppercase tracking-wide text-violet-700">
+                Отдельные акционные условия
+              </p>
+              <h2 className="mt-2 text-2xl font-bold text-slate-950">
+                {offer.promoTitle ?? "Акция 0%"}
+              </h2>
+              {offer.promoReady ? (
+                <>
+                  <dl className="mt-5 grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-md bg-white p-3">
+                      <dt className="text-sm text-slate-500">Сумма по акции</dt>
+                      <dd className="mt-1 font-bold text-slate-950">
+                        {formatMoney(offer.promoMinAmount)}–{formatMoney(offer.promoMaxAmount)}
+                      </dd>
+                    </div>
+                    <div className="rounded-md bg-white p-3">
+                      <dt className="text-sm text-slate-500">Срок ставки 0%</dt>
+                      <dd className="mt-1 font-bold text-slate-950">
+                        {offer.promoZeroTermDays} дней
+                      </dd>
+                    </div>
+                    <div className="rounded-md bg-white p-3">
+                      <dt className="text-sm text-slate-500">Ставка по акции</dt>
+                      <dd className="mt-1 font-bold text-slate-950">
+                        {offer.promoDailyRate?.toLocaleString("ru-RU")}% в день
+                      </dd>
+                    </div>
+                    <div className="rounded-md bg-white p-3">
+                      <dt className="text-sm text-slate-500">ПСК по акции</dt>
+                      <dd className="mt-1 font-bold text-slate-950">
+                        {offer.promoPsk?.toLocaleString("ru-RU")}%
+                      </dd>
+                    </div>
+                  </dl>
+                  <div className="mt-5 grid gap-4 text-sm leading-6 text-slate-700">
+                    <p>
+                      <strong>Для кого:</strong>{" "}
+                      {offer.promoNewClientsOnly
+                        ? "только для новых клиентов"
+                        : "условия для клиентов указаны кредитором в источнике"}
+                    </p>
+                    <p><strong>Как сохранить 0%:</strong> {offer.promoConditions}</p>
+                    {offer.promoLateConsequences ? (
+                      <p><strong>При просрочке или продлении:</strong> {offer.promoLateConsequences}</p>
+                    ) : null}
+                    {offer.promoPaidServices ? (
+                      <p><strong>Возможные платные услуги:</strong> {offer.promoPaidServices}</p>
+                    ) : null}
+                    <p>
+                      <strong>Проверено:</strong> {formatCheckedDate(offer.promoCheckedAt)}
+                    </p>
+                    {offer.promoSourceUrl ? (
+                      <p>
+                        <a
+                          href={offer.promoSourceUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="font-semibold text-violet-800 underline underline-offset-2"
+                        >
+                          Официальный источник условий
+                        </a>
+                      </p>
+                    ) : null}
+                  </div>
+                </>
+              ) : (
+                <p className="mt-4 rounded-md bg-white p-4 text-sm leading-6 text-amber-900">
+                  Акция включена, но её данные требуют повторной проверки. Мы не
+                  подменяем их стандартными условиями.
+                </p>
+              )}
+            </section>
+          ) : null}
 
           <TextList title="Преимущества" items={offer.advantages} />
           <TextList title="Требования к заемщику" items={offer.requirements} />

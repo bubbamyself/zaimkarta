@@ -27,13 +27,14 @@ test("ClientID добавляется только во внутренний /go
 test("параметры цели берутся только из безопасных полей CTA", () => {
   assert.deepEqual(
     getOfferClickGoalParams(
-      "/go/moneyman?page_type=service&category=zaimy-na-kartu&position=2&lead_id=secret",
+      "/go/moneyman?page_type=service&category=zaimy-na-kartu&position=2&variant=promo_zero&lead_id=secret",
     ),
     {
       offer_slug: "moneyman",
       page_type: "service",
       category: "zaimy-na-kartu",
       position: 2,
+      variant: "promo_zero",
     },
   );
   assert.equal(getOfferClickGoalParams("/offers/moneyman"), null);

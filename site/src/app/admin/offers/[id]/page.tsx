@@ -5,6 +5,7 @@ import { getAdminSession } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 import { HOMEPAGE_FEATURED_OFFER_KEY } from "@/lib/homepage-featured-offer";
 import { OfferEditor } from "../../offer-editor";
+import { CopyOfferButton } from "../../copy-offer-button";
 
 type EditOfferPageProps = {
   params: Promise<{
@@ -12,6 +13,7 @@ type EditOfferPageProps = {
   }>;
   searchParams?: Promise<{
     saved?: string;
+    copied?: string;
   }>;
 };
 
@@ -108,11 +110,19 @@ export default async function EditOfferPage({
                 slug: {offer.slug} · статус: {offer.status}
               </p>
             </div>
-            {resolvedSearchParams?.saved === "1" ? (
-              <span className="rounded-md bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">
-                Изменения сохранены
-              </span>
-            ) : null}
+            <div className="grid justify-items-start gap-2 md:justify-items-end">
+              {resolvedSearchParams?.saved === "1" ? (
+                <span className="rounded-md bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">
+                  Изменения сохранены
+                </span>
+              ) : null}
+              {resolvedSearchParams?.copied === "1" ? (
+                <span className="rounded-md bg-violet-50 px-3 py-2 text-sm font-semibold text-violet-700">
+                  Создан новый черновик-копия
+                </span>
+              ) : null}
+              <CopyOfferButton offerId={offer.id} />
+            </div>
           </div>
         </section>
 

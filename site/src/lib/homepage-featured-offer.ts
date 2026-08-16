@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { isRussianRegionCode } from "@/lib/russian-regions";
+import { isPromoReady } from "@/lib/offer-promo";
 
 export const HOMEPAGE_FEATURED_OFFER_KEY = "homepage_featured_offer_id";
 
@@ -128,6 +129,7 @@ export type HomepageFeaturedOffer = {
   rate: string | null;
   psk: string | null;
   erid: string;
+  promoAvailable: boolean;
 };
 
 export async function getHomepageFeaturedOffer(
@@ -187,6 +189,7 @@ export async function getHomepageFeaturedOffer(
       rate: formatPercentRange(offer.dailyRateFrom, offer.dailyRateTo),
       psk: formatPercentRange(offer.pskFrom, offer.pskTo),
       erid,
+      promoAvailable: isPromoReady(offer),
     };
   } catch (error) {
     console.error("Failed to render homepage featured offer", error);

@@ -41,6 +41,8 @@ export function OfferCard({
     clickParams.set("position", String(position));
   }
 
+  clickParams.set("variant", offer.displayVariant);
+
   return (
     <article
       className={`flex h-full min-w-0 flex-col rounded-lg border bg-white p-2 shadow-sm sm:p-3 lg:p-4 ${
@@ -86,6 +88,17 @@ export function OfferCard({
           </span>
         ) : null}
       </div>
+
+      {offer.displayVariant === "promo_zero" ? (
+        <div className="mt-2 rounded-md border border-violet-200 bg-violet-50 px-2 py-1.5 text-[10px] font-semibold leading-4 text-violet-900 sm:text-xs">
+          Условия акции 0%
+          {offer.promoNewClientsOnly ? " · только новым клиентам" : ""}
+        </div>
+      ) : offer.promoReady ? (
+        <div className="mt-2 text-[10px] font-semibold leading-4 text-violet-700 sm:text-xs">
+          Есть акция 0%
+        </div>
+      ) : null}
 
       <dl className="mt-2 grid gap-1 text-[10px] leading-4 min-[390px]:text-xs sm:mt-3 sm:gap-1.5">
         <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] sm:gap-1.5">
@@ -135,6 +148,12 @@ export function OfferCard({
         </p>
       ) : null}
 
+      {offer.displayVariant === "promo_zero" && offer.promoConditions ? (
+        <p className="mt-2 line-clamp-3 rounded-md bg-violet-50 p-2 text-[10px] leading-4 text-violet-950 sm:text-xs sm:leading-5">
+          {offer.promoConditions}
+        </p>
+      ) : null}
+
       {matchReasons.length > 0 ? (
         <div className="mt-2 flex flex-wrap gap-1">
           {matchReasons.map((reason) => (
@@ -149,13 +168,23 @@ export function OfferCard({
       ) : null}
 
       <div className="mt-auto grid gap-1.5 pt-3 sm:gap-2 sm:pt-4">
-        <OfferCtaLink
-          href={`/go/${offer.slug}?${clickParams.toString()}`}
-          regionSelected={regionSelected}
-          className="inline-flex min-h-11 w-full items-center justify-center rounded-md bg-emerald-700 px-2 py-2 text-center text-xs font-semibold leading-5 text-white transition hover:bg-emerald-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 min-[390px]:text-sm"
-        >
-          {ctaText}
-        </OfferCtaLink>
+        {offer.promoUnavailable ? (
+          <button
+            type="button"
+            disabled
+            className="inline-flex min-h-11 w-full cursor-not-allowed items-center justify-center rounded-md bg-slate-300 px-2 py-2 text-center text-xs font-semibold leading-5 text-slate-600 min-[390px]:text-sm"
+          >
+            Акция временно недоступна
+          </button>
+        ) : (
+          <OfferCtaLink
+            href={`/go/${offer.slug}?${clickParams.toString()}`}
+            regionSelected={regionSelected}
+            className="inline-flex min-h-11 w-full items-center justify-center rounded-md bg-emerald-700 px-2 py-2 text-center text-xs font-semibold leading-5 text-white transition hover:bg-emerald-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 min-[390px]:text-sm"
+          >
+            {ctaText}
+          </OfferCtaLink>
+        )}
         <Link
           href={`/offers/${offer.slug}`}
           className="inline-flex min-h-11 w-full items-center justify-center rounded-md border border-slate-300 bg-white px-2 py-2 text-center text-xs font-semibold leading-5 text-slate-800 transition hover:border-slate-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 min-[390px]:text-sm"

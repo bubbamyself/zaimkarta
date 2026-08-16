@@ -10,6 +10,7 @@ export type OfferClickGoalParams = {
   page_type?: string;
   category?: string;
   position?: number;
+  variant?: "standard" | "promo_zero";
 };
 
 export type OfferClickAnalyticsDetail = {
@@ -68,6 +69,11 @@ export function getOfferClickGoalParams(href: string): OfferClickGoalParams | nu
   const category = readSafeParam(url, "category");
   const positionValue = url.searchParams.get("position");
   const position = positionValue ? Number(positionValue) : null;
+  const variantValue = readSafeParam(url, "variant");
+  const variant =
+    variantValue === "promo_zero" || variantValue === "standard"
+      ? variantValue
+      : null;
 
   return {
     offer_slug: match[1],
@@ -76,6 +82,7 @@ export function getOfferClickGoalParams(href: string): OfferClickGoalParams | nu
     ...(Number.isSafeInteger(position) && position! > 0 && position! <= 10_000
       ? { position: position! }
       : {}),
+    ...(variant ? { variant } : {}),
   };
 }
 

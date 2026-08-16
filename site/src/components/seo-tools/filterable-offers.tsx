@@ -262,10 +262,10 @@ function isFastDecision(offer: OfferCardData) {
   return text.includes("быстр") || text.includes("сроч");
 }
 
-function isZeroRateOffer(offer: OfferCardData) {
-  const text = normalize(`${offer.badge} ${offer.advantages.join(" ")} ${offer.tags.join(" ")}`);
-
-  return text.includes("0%") || text.includes("0 процент") || offer.dailyRateFrom === 0;
+export function isZeroRateOffer(
+  offer: Pick<OfferCardData, "promoReady">,
+) {
+  return offer.promoReady;
 }
 
 function offerMatchesPriority(offer: OfferCardData, priority: OfferPickerPriority | null) {

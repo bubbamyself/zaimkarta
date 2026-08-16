@@ -2,6 +2,7 @@ import type { AffiliateOffer, Offer } from "@prisma/client";
 import { createOffer, updateOffer } from "./offer-actions";
 import { OfferFormShell } from "./offer-form-shell";
 import { LogoFileField } from "./logo-file-field";
+import { OfferPromoFields } from "./offer-promo-fields";
 import { RegionRestrictionsField } from "./region-restrictions-field";
 
 export type OfferWithAffiliate = Offer & {
@@ -64,10 +65,9 @@ function getPublicationChecklist(
     ["Макс. сумма", offer?.maxAmount],
     ["Мин. срок", offer?.minTermDays],
     ["Макс. срок", offer?.maxTermDays],
-    ["Ставка от", offer?.dailyRateFrom],
-    ["Ставка до", offer?.dailyRateTo],
-    ["ПСК от", offer?.pskFrom],
-    ["ПСК до", offer?.pskTo],
+    ["Стандартная ставка", offer?.dailyRateFrom && offer?.dailyRateTo],
+    ["Стандартная ПСК от", offer?.pskFrom],
+    ["Стандартная ПСК до", offer?.pskTo],
     ["Одобрение", offer?.approvalLabel],
     ["Время решения", offer?.decisionTime],
     ["Способы получения", offer?.payoutMethods],
@@ -121,7 +121,10 @@ function Field({
         placeholder={placeholder}
         className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-slate-900"
       />
-      <span className="min-h-5 text-xs leading-5 text-slate-500">
+      <span
+        data-field-error-for={name}
+        className="min-h-5 text-xs leading-5 text-slate-500"
+      >
         {hint ?? ""}
       </span>
     </label>
@@ -151,6 +154,10 @@ function TextArea({
         defaultValue={value}
         rows={rows}
         className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-900"
+      />
+      <span
+        data-field-error-for={name}
+        className="min-h-5 text-xs leading-5 text-slate-500"
       />
     </label>
   );
@@ -297,6 +304,11 @@ export function OfferEditor({
   const publicationChecklist = getPublicationChecklist(offer, affiliateOffer);
   const readyCount = publicationChecklist.filter((item) => item.ready).length;
   const missingItems = publicationChecklist.filter((item) => !item.ready);
+  const currentDailyRateFrom = toFieldValue(offer?.dailyRateFrom);
+  const currentDailyRateTo = toFieldValue(offer?.dailyRateTo);
+  const hasSingleStandardDailyRate =
+    currentDailyRateFrom.length > 0 &&
+    currentDailyRateFrom === currentDailyRateTo;
 
   return (
     <OfferFormShell
@@ -409,28 +421,80 @@ export function OfferEditor({
         defaultValue={offer?.shortDescription}
       />
 
-      <div className="grid gap-4 md:grid-cols-4">
-        <Field label="Мин. сумма" name="minAmount" type="number" defaultValue={offer?.minAmount} />
-        <Field label="Макс. сумма" name="maxAmount" type="number" defaultValue={offer?.maxAmount} />
-        <Field label="Мин. срок, дней" name="minTermDays" type="number" defaultValue={offer?.minTermDays} />
-        <Field label="Макс. срок, дней" name="maxTermDays" type="number" defaultValue={offer?.maxTermDays} />
-        <Field label="Ставка от, %/день" name="dailyRateFrom" defaultValue={offer?.dailyRateFrom} />
-        <Field label="Ставка до, %/день" name="dailyRateTo" defaultValue={offer?.dailyRateTo} />
-        <Field label="ПСК от, %" name="pskFrom" defaultValue={offer?.pskFrom} />
-        <Field label="ПСК до, %" name="pskTo" defaultValue={offer?.pskTo} />
-        <Field label="Одобрение" name="approvalLabel" defaultValue={offer?.approvalLabel} />
-        <SelectField
-          label="Тон одобрения"
-          name="approvalTone"
-          defaultValue={offer?.approvalTone ?? "MEDIUM"}
-          options={[
-            { value: "LOW", label: "Низкий" },
-            { value: "MEDIUM", label: "Средний" },
-            { value: "HIGH", label: "Высокий" },
-          ]}
+      <section className="rounded-lg border border-slate-200 bg-white p-4">
+        <h4 className="font-bold text-slate-950">Стандартные условия займа</h4>
+        <p className="mt-1 text-sm leading-6 text-slate-500">
+          Здесь указываются только обычные условия. Акционный ноль заполняется
+          отдельно ниже.
+        </p>
+        <input
+          type="hidden"
+          name="existingDailyRateFrom"
+          value={currentDailyRateFrom}
         />
-        <Field label="Время решения" name="decisionTime" defaultValue={offer?.decisionTime} />
-      </div>
+        <input
+          type="hidden"
+          name="existingDailyRateTo"
+          value={currentDailyRateTo}
+        />
+        <div className="mt-4 grid gap-4 md:grid-cols-4">
+          <Field label="Мин. сумма" name="minAmount" type="number" defaultValue={offer?.minAmount} />
+          <Field label="Макс. сумма" name="maxAmount" type="number" defaultValue={offer?.maxAmount} />
+          <Field label="Мин. срок, дней" name="minTermDays" type="number" defaultValue={offer?.minTermDays} />
+          <Field label="Макс. срок, дней" name="maxTermDays" type="number" defaultValue={offer?.maxTermDays} />
+          <Field
+            label="Стандартная ставка, % в день"
+            name="standardDailyRate"
+            defaultValue={hasSingleStandardDailyRate ? currentDailyRateFrom : ""}
+            hint={
+              currentDailyRateFrom && !hasSingleStandardDailyRate
+                ? `Сейчас сохранён старый смешанный диапазон ${currentDailyRateFrom}–${currentDailyRateTo}%. Оставьте поле пустым, чтобы сохранить его до ручной проверки, либо внесите подтверждённую обычную ставку.`
+                : "Одно подтверждённое значение записывается в обе технические границы."
+            }
+          />
+          <Field label="Стандартная ПСК от, %" name="pskFrom" defaultValue={offer?.pskFrom} />
+          <Field
+            label="Стандартная ПСК до, %"
+            name="pskTo"
+            defaultValue={offer?.pskTo}
+            hint="Если ПСК одна, укажите одинаковое значение в обоих полях."
+          />
+          <Field label="Одобрение" name="approvalLabel" defaultValue={offer?.approvalLabel} />
+          <SelectField
+            label="Тон одобрения"
+            name="approvalTone"
+            defaultValue={offer?.approvalTone ?? "MEDIUM"}
+            options={[
+              { value: "LOW", label: "Низкий" },
+              { value: "MEDIUM", label: "Средний" },
+              { value: "HIGH", label: "Высокий" },
+            ]}
+          />
+          <Field label="Время решения" name="decisionTime" defaultValue={offer?.decisionTime} />
+        </div>
+      </section>
+
+      <OfferPromoFields
+        initialValue={
+          offer
+            ? {
+                promoEnabled: offer.promoEnabled,
+                promoTitle: offer.promoTitle,
+                promoDailyRate: toFieldValue(offer.promoDailyRate),
+                promoPsk: toFieldValue(offer.promoPsk),
+                promoMinAmount: offer.promoMinAmount,
+                promoMaxAmount: offer.promoMaxAmount,
+                promoZeroTermDays: offer.promoZeroTermDays,
+                promoNewClientsOnly: offer.promoNewClientsOnly,
+                promoConditions: offer.promoConditions,
+                promoLateConsequences: offer.promoLateConsequences,
+                promoPaidServices: offer.promoPaidServices,
+                promoSourceUrl: offer.promoSourceUrl,
+                promoCheckedAt: toInputDate(offer.promoCheckedAt),
+              }
+            : undefined
+        }
+      />
 
       <div className="grid gap-4 md:grid-cols-2">
         <CheckboxGroup
@@ -464,11 +528,16 @@ export function OfferEditor({
         <TextArea label="Предупреждения" name="warnings" defaultValue={offer?.warnings} />
       </div>
 
-      <TextArea
-        label="Юридическая/рекламная сноска"
-        name="legalDisclosure"
-        defaultValue={offer?.legalDisclosure}
-      />
+      <section className="rounded-lg border border-slate-200 bg-white p-4">
+        <h4 className="font-bold text-slate-950">Юридические сведения</h4>
+        <div className="mt-4">
+          <TextArea
+            label="Юридическая/рекламная сноска"
+            name="legalDisclosure"
+            defaultValue={offer?.legalDisclosure}
+          />
+        </div>
+      </section>
 
       <label className="flex items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-4">
         <input
@@ -489,7 +558,7 @@ export function OfferEditor({
       </label>
 
       <div className="rounded-lg border border-slate-200 bg-white p-4">
-        <h4 className="font-bold text-slate-950">Партнерская ссылка</h4>
+        <h4 className="font-bold text-slate-950">CPA-настройки</h4>
         <p className="mt-1 text-sm text-slate-500">
           Сюда вставляется ссылка, которую ты сам получил в CPA-сети.
         </p>

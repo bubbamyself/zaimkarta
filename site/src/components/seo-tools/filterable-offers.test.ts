@@ -5,6 +5,7 @@ import {
   offerHasConfirmedPaidMinimumRate,
   offerMatchesAmount,
   offerMatchesTerm,
+  isZeroRateOffer,
 } from "./filterable-offers";
 
 test("просрочка принимает только подтверждённую платную минимальную ставку", () => {
@@ -14,6 +15,11 @@ test("просрочка принимает только подтверждён�
   );
   assert.equal(offerHasConfirmedPaidMinimumRate({ dailyRateFrom: 0 }), false);
   assert.equal(offerHasConfirmedPaidMinimumRate({ dailyRateFrom: null }), false);
+});
+
+test("фильтр 0% опирается только на проверенную акцию", () => {
+  assert.equal(isZeroRateOffer({ promoReady: true }), true);
+  assert.equal(isZeroRateOffer({ promoReady: false }), false);
 });
 
 test("событие коммерческого блока не затрагивает чужую подборку", () => {

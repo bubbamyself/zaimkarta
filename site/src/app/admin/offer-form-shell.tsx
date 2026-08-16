@@ -36,6 +36,10 @@ export function OfferFormShell({
         element.removeAttribute("aria-invalid");
         element.classList.remove("ring-2", "ring-red-500", "border-red-400");
       });
+    form.querySelectorAll<HTMLElement>("[data-field-error-for]").forEach((element) => {
+      element.textContent = element.dataset.defaultHint ?? element.textContent ?? "";
+      element.classList.remove("font-semibold", "text-red-700");
+    });
 
     if (!state.error) {
       const timeoutId = window.setTimeout(() => {
@@ -59,6 +63,20 @@ export function OfferFormShell({
         field.setAttribute("aria-invalid", "true");
         field.classList.add("ring-2", "ring-red-500", "border-red-400");
       });
+
+      form
+        .querySelectorAll<HTMLElement>(
+          `[data-field-error-for="${CSS.escape(fieldName)}"]`,
+        )
+        .forEach((element) => {
+          if (!element.dataset.defaultHint) {
+            element.dataset.defaultHint = element.textContent ?? "";
+          }
+
+          element.textContent =
+            state.fieldErrors?.[fieldName] ?? "Проверьте это поле.";
+          element.classList.add("font-semibold", "text-red-700");
+        });
     }
 
     const firstMissingField = state.missingFieldNames?.[0];
