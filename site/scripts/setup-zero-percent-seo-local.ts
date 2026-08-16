@@ -1,5 +1,18 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { hasActiveHttpsAffiliateOffer } from "../src/lib/affiliate-offer-availability";
+import { getPromoFieldErrors } from "../src/lib/offer-promo";
+
+const dryRunFlag = "--production-content-dry-run";
+const applyFlag = "--production-content-apply";
+const confirmationValue = "APPLY_ZERO_PERCENT_SEO_CONTENT";
+const isProductionDryRun = process.argv.includes(dryRunFlag);
+const isProductionApply = process.argv.includes(applyFlag);
+const isProductionContentMode = isProductionDryRun || isProductionApply;
+
+if (isProductionDryRun && isProductionApply) {
+  throw new Error(`Use either ${dryRunFlag} or ${applyFlag}, not both.`);
+}
 
 const connectionString = process.env.DATABASE_URL;
 
@@ -9,10 +22,26 @@ if (!connectionString) {
 
 const databaseUrl = new URL(connectionString);
 const localHosts = new Set(["127.0.0.1", "localhost", "[::1]"]);
+const isLocalDatabase = localHosts.has(databaseUrl.hostname);
 
-if (!localHosts.has(databaseUrl.hostname)) {
+if (!isLocalDatabase && !isProductionContentMode) {
   throw new Error(
     `Refusing to update a non-local database host: ${databaseUrl.hostname}`,
+  );
+}
+
+if (isProductionApply && isLocalDatabase) {
+  throw new Error(
+    `${applyFlag} is reserved for a non-local production database. Use the default local mode instead.`,
+  );
+}
+
+if (
+  isProductionApply &&
+  process.env.ZAIMKARTA_PRODUCTION_SEO_SYNC !== confirmationValue
+) {
+  throw new Error(
+    `Production apply requires ZAIMKARTA_PRODUCTION_SEO_SYNC=${confirmationValue}.`,
   );
 }
 
@@ -512,187 +541,300 @@ const articleFaqItems = [
 ];
 
 async function main() {
-  const savedOffers = [];
+  const targetOfferSlugs = offers.map((offer) => offer.slug);
+  const savedOffers: Array<{ id: string; slug: string }> = [];
 
-  for (const [index, item] of offers.entries()) {
-    const offer = await prisma.offer.upsert({
-      where: { slug: item.slug },
-      update: {
-        ...item,
-        status: "ACTIVE",
-        promoEnabled: true,
-        promoNewClientsOnly: true,
-        promoCheckedAt: checkedAt,
-        conditionsCheckedAt: checkedAt,
-        displayPriority: index + 1,
-      },
-      create: {
-        ...item,
-        status: "ACTIVE",
-        promoEnabled: true,
-        promoNewClientsOnly: true,
-        promoCheckedAt: checkedAt,
-        conditionsCheckedAt: checkedAt,
-        displayPriority: index + 1,
-        payoutMethods: ["карта", "онлайн"],
-        repaymentMethods: ["карта", "банковский перевод", "личный кабинет"],
-        requirements: ["гражданство РФ", "возраст от 18 лет"],
-        documents: ["паспорт РФ"],
-        advantages: ["онлайн-заявка"],
-        warnings: ["решение о выдаче принимает кредитор"],
-      },
-    });
-
-    const affiliateOffer = await prisma.affiliateOffer.findFirst({
-      where: { offerId: offer.id, isActive: true },
-      select: { id: true },
-    });
-
-    if (!affiliateOffer) {
-      await prisma.affiliateOffer.create({
-        data: {
-          id: `${item.slug}-zero-seo-local`,
-          offerId: offer.id,
-          network: "OTHER",
-          networkName: "Local SEO preview",
-          targetAction: "локальная проверка карточки",
-          trackingBaseUrl: `https://example.com/${item.slug}`,
-          allowedTrafficTypes: ["LOCAL_PREVIEW"],
-          isActive: true,
+  if (isProductionContentMode) {
+    const existingOffers = await prisma.offer.findMany({
+      where: {
+        slug: {
+          in: targetOfferSlugs,
         },
-      });
+      },
+      include: {
+        affiliateOffers: {
+          where: {
+            isActive: true,
+          },
+          select: {
+            trackingBaseUrl: true,
+          },
+        },
+      },
+    });
+    const offersBySlug = new Map(
+      existingOffers.map((offer) => [offer.slug, offer]),
+    );
+    const missingOfferSlugs = targetOfferSlugs.filter(
+      (slug) => !offersBySlug.has(slug),
+    );
+    const inactiveOfferSlugs = existingOffers
+      .filter((offer) => offer.status !== "ACTIVE")
+      .map((offer) => offer.slug);
+    const promoValidationErrors = existingOffers.flatMap((offer) => {
+      const fieldErrors = Object.keys(getPromoFieldErrors(offer));
+      const errors = offer.promoEnabled
+        ? fieldErrors
+        : ["promoEnabled", ...fieldErrors];
+
+      return errors.length > 0 ? [{ slug: offer.slug, fields: errors }] : [];
+    });
+    const missingCpaOfferSlugs = existingOffers
+      .filter(
+        (offer) => !hasActiveHttpsAffiliateOffer(offer.affiliateOffers),
+      )
+      .map((offer) => offer.slug);
+
+    if (
+      missingOfferSlugs.length > 0 ||
+      inactiveOfferSlugs.length > 0 ||
+      promoValidationErrors.length > 0 ||
+      missingCpaOfferSlugs.length > 0
+    ) {
+      throw new Error(
+        `Production preflight failed:\n${JSON.stringify(
+          {
+            missingOfferSlugs,
+            inactiveOfferSlugs,
+            promoValidationErrors,
+            missingCpaOfferSlugs,
+          },
+          null,
+          2,
+        )}`,
+      );
     }
 
-    savedOffers.push(offer);
+    for (const slug of targetOfferSlugs) {
+      const offer = offersBySlug.get(slug);
+
+      if (!offer) {
+        throw new Error(`Offer disappeared during preflight: ${slug}`);
+      }
+
+      savedOffers.push({ id: offer.id, slug: offer.slug });
+    }
+
+    if (isProductionDryRun) {
+      console.log(
+        JSON.stringify(
+          {
+            mode: "production-content-dry-run",
+            databaseHost: databaseUrl.hostname,
+            readyToApply: true,
+            offers: savedOffers.map((offer) => offer.slug),
+            plannedChanges: {
+              categorySlug: "0-procentov-na-pervii-zaem",
+              categoryOffers: savedOffers.length,
+              categoryFaqItems: faqItems.length,
+              categoryContentBlocks: contentBlocks.length,
+              articleSlug: "kak-rabotaet-perviy-zaym-pod-0",
+              articleFaqItems: articleFaqItems.length,
+            },
+            protectedData: [
+              "Offer fields",
+              "AffiliateOffer and CPA links",
+              "clicks and conversions",
+            ],
+          },
+          null,
+          2,
+        ),
+      );
+      return;
+    }
+  } else {
+    for (const [index, item] of offers.entries()) {
+      const offer = await prisma.offer.upsert({
+        where: { slug: item.slug },
+        update: {
+          ...item,
+          status: "ACTIVE",
+          promoEnabled: true,
+          promoNewClientsOnly: true,
+          promoCheckedAt: checkedAt,
+          conditionsCheckedAt: checkedAt,
+          displayPriority: index + 1,
+        },
+        create: {
+          ...item,
+          status: "ACTIVE",
+          promoEnabled: true,
+          promoNewClientsOnly: true,
+          promoCheckedAt: checkedAt,
+          conditionsCheckedAt: checkedAt,
+          displayPriority: index + 1,
+          payoutMethods: ["карта", "онлайн"],
+          repaymentMethods: ["карта", "банковский перевод", "личный кабинет"],
+          requirements: ["гражданство РФ", "возраст от 18 лет"],
+          documents: ["паспорт РФ"],
+          advantages: ["онлайн-заявка"],
+          warnings: ["решение о выдаче принимает кредитор"],
+        },
+      });
+
+      const affiliateOffer = await prisma.affiliateOffer.findFirst({
+        where: { offerId: offer.id, isActive: true },
+        select: { id: true },
+      });
+
+      if (!affiliateOffer) {
+        await prisma.affiliateOffer.create({
+          data: {
+            id: `${item.slug}-zero-seo-local`,
+            offerId: offer.id,
+            network: "OTHER",
+            networkName: "Local SEO preview",
+            targetAction: "локальная проверка карточки",
+            trackingBaseUrl: `https://example.com/${item.slug}`,
+            allowedTrafficTypes: ["LOCAL_PREVIEW"],
+            isActive: true,
+          },
+        });
+      }
+
+      savedOffers.push({ id: offer.id, slug: offer.slug });
+    }
   }
 
-  const seoPage = await prisma.seoPage.upsert({
-    where: { slug: "0-procentov-na-pervii-zaem" },
-    update: {
-      status: "PUBLISHED",
-      pageType: "CATEGORY",
-      intent: "COMMERCIAL",
-      title:
-        "Первый займ без процентов на карту — предложения под 0% | ZaimKarta",
-      description:
-        "Сравните предложения первого займа под 0% для новых клиентов: суммы, сроки акции, ПСК и условия сохранения нулевой ставки.",
-      h1: "Первый займ без процентов на карту",
-      intro:
-        "Сравните предложения для новых клиентов со ставкой 0%. Нулевая ставка действует только при соблюдении правил конкретной акции: проверьте доступную сумму, срок льготы, ПСК и последствия просрочки до отправки заявки.",
-      contentBlocks,
-      riskNotice:
-        "Займ необходимо вернуть. Решение о выдаче принимает кредитор. Перед подписанием проверьте ПСК, ставку, дату платежа, дополнительные услуги и условия потери акции 0% в индивидуальном договоре.",
-      editorNote:
-        "Условия восьми предложений проверены по официальным источникам 17 августа 2026 года.",
-      updatedByUserAt: checkedAt,
+  const { seoPage, articlePage } = await prisma.$transaction(
+    async (transaction) => {
+      const seoPage = await transaction.seoPage.upsert({
+        where: { slug: "0-procentov-na-pervii-zaem" },
+        update: {
+          status: "PUBLISHED",
+          pageType: "CATEGORY",
+          intent: "COMMERCIAL",
+          title:
+            "Первый займ без процентов на карту — предложения под 0% | ZaimKarta",
+          description:
+            "Сравните предложения первого займа под 0% для новых клиентов: суммы, сроки акции, ПСК и условия сохранения нулевой ставки.",
+          h1: "Первый займ без процентов на карту",
+          intro:
+            "Сравните предложения для новых клиентов со ставкой 0%. Нулевая ставка действует только при соблюдении правил конкретной акции: проверьте доступную сумму, срок льготы, ПСК и последствия просрочки до отправки заявки.",
+          contentBlocks,
+          riskNotice:
+            "Займ необходимо вернуть. Решение о выдаче принимает кредитор. Перед подписанием проверьте ПСК, ставку, дату платежа, дополнительные услуги и условия потери акции 0% в индивидуальном договоре.",
+          editorNote:
+            "Условия восьми предложений проверены по официальным источникам 17 августа 2026 года.",
+          updatedByUserAt: checkedAt,
+        },
+        create: {
+          slug: "0-procentov-na-pervii-zaem",
+          status: "PUBLISHED",
+          pageType: "CATEGORY",
+          intent: "COMMERCIAL",
+          displayPriority: 1,
+          title:
+            "Первый займ без процентов на карту — предложения под 0% | ZaimKarta",
+          description:
+            "Сравните предложения первого займа под 0% для новых клиентов: суммы, сроки акции, ПСК и условия сохранения нулевой ставки.",
+          h1: "Первый займ без процентов на карту",
+          intro:
+            "Сравните предложения для новых клиентов со ставкой 0%. Нулевая ставка действует только при соблюдении правил конкретной акции: проверьте доступную сумму, срок льготы, ПСК и последствия просрочки до отправки заявки.",
+          contentBlocks,
+          riskNotice:
+            "Займ необходимо вернуть. Решение о выдаче принимает кредитор. Перед подписанием проверьте ПСК, ставку, дату платежа, дополнительные услуги и условия потери акции 0% в индивидуальном договоре.",
+          editorNote:
+            "Условия восьми предложений проверены по официальным источникам 17 августа 2026 года.",
+          publishedAt: checkedAt,
+          updatedByUserAt: checkedAt,
+        },
+      });
+
+      await transaction.seoPageOffer.deleteMany({
+        where: { seoPageId: seoPage.id },
+      });
+      await transaction.seoPageFaqItem.deleteMany({
+        where: { seoPageId: seoPage.id },
+      });
+
+      await transaction.seoPageOffer.createMany({
+        data: savedOffers.map((offer, index) => ({
+          seoPageId: seoPage.id,
+          offerId: offer.id,
+          position: index + 1,
+          usePromo: true,
+        })),
+      });
+
+      await transaction.seoPageFaqItem.createMany({
+        data: faqItems.map((item, index) => ({
+          seoPageId: seoPage.id,
+          position: index + 1,
+          ...item,
+        })),
+      });
+
+      const articlePage = await transaction.seoPage.upsert({
+        where: { slug: "kak-rabotaet-perviy-zaym-pod-0" },
+        update: {
+          status: "PUBLISHED",
+          pageType: "ARTICLE",
+          intent: "INFORMATIONAL",
+          title:
+            "Как работает первый займ под 0%: условия акции и переплата | ZaimKarta",
+          description:
+            "Разбираем, как устроен первый займ под 0%: кто считается новым клиентом, почему ПСК бывает ненулевой и когда кредитор отменяет скидку.",
+          h1: "Как работает первый займ под 0%",
+          intro:
+            "Ставка 0% обычно является акцией для нового клиента, а не прощением долга. Разберём, как формируется скидка, почему льготный срок может быть короче договора и какие условия проверить до заявки.",
+          content: articleContent,
+          contentBlocks: [],
+          riskNotice:
+            "Займ необходимо вернуть. Условия акции определяет кредитор, а окончательные сумма, ставка, ПСК и дата платежа фиксируются в индивидуальном договоре.",
+          editorNote:
+            "Материал основан на проверке официальных условий действующих акций 17 августа 2026 года.",
+          publishedAt: checkedAt,
+          updatedByUserAt: checkedAt,
+        },
+        create: {
+          slug: "kak-rabotaet-perviy-zaym-pod-0",
+          status: "PUBLISHED",
+          pageType: "ARTICLE",
+          intent: "INFORMATIONAL",
+          displayPriority: 20,
+          title:
+            "Как работает первый займ под 0%: условия акции и переплата | ZaimKarta",
+          description:
+            "Разбираем, как устроен первый займ под 0%: кто считается новым клиентом, почему ПСК бывает ненулевой и когда кредитор отменяет скидку.",
+          h1: "Как работает первый займ под 0%",
+          intro:
+            "Ставка 0% обычно является акцией для нового клиента, а не прощением долга. Разберём, как формируется скидка, почему льготный срок может быть короче договора и какие условия проверить до заявки.",
+          content: articleContent,
+          contentBlocks: [],
+          riskNotice:
+            "Займ необходимо вернуть. Условия акции определяет кредитор, а окончательные сумма, ставка, ПСК и дата платежа фиксируются в индивидуальном договоре.",
+          editorNote:
+            "Материал основан на проверке официальных условий действующих акций 17 августа 2026 года.",
+          publishedAt: checkedAt,
+          updatedByUserAt: checkedAt,
+        },
+      });
+
+      await transaction.seoPageOffer.deleteMany({
+        where: { seoPageId: articlePage.id },
+      });
+      await transaction.seoPageFaqItem.deleteMany({
+        where: { seoPageId: articlePage.id },
+      });
+
+      await transaction.seoPageFaqItem.createMany({
+        data: articleFaqItems.map((item, index) => ({
+          seoPageId: articlePage.id,
+          position: index + 1,
+          ...item,
+        })),
+      });
+
+      return { seoPage, articlePage };
     },
-    create: {
-      slug: "0-procentov-na-pervii-zaem",
-      status: "PUBLISHED",
-      pageType: "CATEGORY",
-      intent: "COMMERCIAL",
-      displayPriority: 1,
-      title:
-        "Первый займ без процентов на карту — предложения под 0% | ZaimKarta",
-      description:
-        "Сравните предложения первого займа под 0% для новых клиентов: суммы, сроки акции, ПСК и условия сохранения нулевой ставки.",
-      h1: "Первый займ без процентов на карту",
-      intro:
-        "Сравните предложения для новых клиентов со ставкой 0%. Нулевая ставка действует только при соблюдении правил конкретной акции: проверьте доступную сумму, срок льготы, ПСК и последствия просрочки до отправки заявки.",
-      contentBlocks,
-      riskNotice:
-        "Займ необходимо вернуть. Решение о выдаче принимает кредитор. Перед подписанием проверьте ПСК, ставку, дату платежа, дополнительные услуги и условия потери акции 0% в индивидуальном договоре.",
-      editorNote:
-        "Условия восьми предложений проверены по официальным источникам 17 августа 2026 года.",
-      publishedAt: checkedAt,
-      updatedByUserAt: checkedAt,
-    },
-  });
-
-  await prisma.$transaction([
-    prisma.seoPageOffer.deleteMany({ where: { seoPageId: seoPage.id } }),
-    prisma.seoPageFaqItem.deleteMany({ where: { seoPageId: seoPage.id } }),
-  ]);
-
-  await prisma.seoPageOffer.createMany({
-    data: savedOffers.map((offer, index) => ({
-      seoPageId: seoPage.id,
-      offerId: offer.id,
-      position: index + 1,
-      usePromo: true,
-    })),
-  });
-
-  await prisma.seoPageFaqItem.createMany({
-    data: faqItems.map((item, index) => ({
-      seoPageId: seoPage.id,
-      position: index + 1,
-      ...item,
-    })),
-  });
-
-  const articlePage = await prisma.seoPage.upsert({
-    where: { slug: "kak-rabotaet-perviy-zaym-pod-0" },
-    update: {
-      status: "PUBLISHED",
-      pageType: "ARTICLE",
-      intent: "INFORMATIONAL",
-      title:
-        "Как работает первый займ под 0%: условия акции и переплата | ZaimKarta",
-      description:
-        "Разбираем, как устроен первый займ под 0%: кто считается новым клиентом, почему ПСК бывает ненулевой и когда кредитор отменяет скидку.",
-      h1: "Как работает первый займ под 0%",
-      intro:
-        "Ставка 0% обычно является акцией для нового клиента, а не прощением долга. Разберём, как формируется скидка, почему льготный срок может быть короче договора и какие условия проверить до заявки.",
-      content: articleContent,
-      contentBlocks: [],
-      riskNotice:
-        "Займ необходимо вернуть. Условия акции определяет кредитор, а окончательные сумма, ставка, ПСК и дата платежа фиксируются в индивидуальном договоре.",
-      editorNote:
-        "Материал основан на проверке официальных условий действующих акций 17 августа 2026 года.",
-      publishedAt: checkedAt,
-      updatedByUserAt: checkedAt,
-    },
-    create: {
-      slug: "kak-rabotaet-perviy-zaym-pod-0",
-      status: "PUBLISHED",
-      pageType: "ARTICLE",
-      intent: "INFORMATIONAL",
-      displayPriority: 20,
-      title:
-        "Как работает первый займ под 0%: условия акции и переплата | ZaimKarta",
-      description:
-        "Разбираем, как устроен первый займ под 0%: кто считается новым клиентом, почему ПСК бывает ненулевой и когда кредитор отменяет скидку.",
-      h1: "Как работает первый займ под 0%",
-      intro:
-        "Ставка 0% обычно является акцией для нового клиента, а не прощением долга. Разберём, как формируется скидка, почему льготный срок может быть короче договора и какие условия проверить до заявки.",
-      content: articleContent,
-      contentBlocks: [],
-      riskNotice:
-        "Займ необходимо вернуть. Условия акции определяет кредитор, а окончательные сумма, ставка, ПСК и дата платежа фиксируются в индивидуальном договоре.",
-      editorNote:
-        "Материал основан на проверке официальных условий действующих акций 17 августа 2026 года.",
-      publishedAt: checkedAt,
-      updatedByUserAt: checkedAt,
-    },
-  });
-
-  await prisma.$transaction([
-    prisma.seoPageOffer.deleteMany({ where: { seoPageId: articlePage.id } }),
-    prisma.seoPageFaqItem.deleteMany({ where: { seoPageId: articlePage.id } }),
-  ]);
-
-  await prisma.seoPageFaqItem.createMany({
-    data: articleFaqItems.map((item, index) => ({
-      seoPageId: articlePage.id,
-      position: index + 1,
-      ...item,
-    })),
-  });
+  );
 
   console.log(
     JSON.stringify(
       {
+        mode: isProductionApply ? "production-content-apply" : "local-setup",
         databaseHost: databaseUrl.hostname,
         slug: seoPage.slug,
         articleSlug: articlePage.slug,
@@ -700,6 +842,13 @@ async function main() {
         faqItems: faqItems.length,
         articleFaqItems: articleFaqItems.length,
         contentBlocks: contentBlocks.length,
+        protectedData: isProductionApply
+          ? [
+              "Offer fields",
+              "AffiliateOffer and CPA links",
+              "clicks and conversions",
+            ]
+          : undefined,
       },
       null,
       2,
