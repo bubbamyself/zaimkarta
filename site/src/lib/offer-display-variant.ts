@@ -9,6 +9,13 @@ export function parseOfferDisplayVariant(
   return value === "promo_zero" ? "promo_zero" : "standard";
 }
 
+export function getOfferClickVariant(
+  pageType: string,
+  promoReady: boolean,
+): OfferDisplayVariantParam {
+  return pageType === "category" && promoReady ? "promo_zero" : "standard";
+}
+
 export function toStoredOfferDisplayVariant(value: OfferDisplayVariantParam) {
   return value === "promo_zero" ? ("PROMO_ZERO" as const) : ("STANDARD" as const);
 }

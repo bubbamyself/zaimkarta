@@ -1,6 +1,7 @@
 import type { OfferCardData } from "@/lib/offers";
 import Link from "next/link";
 import { OfferCtaLink } from "@/components/offer-cta-link";
+import { getOfferClickVariant } from "@/lib/offer-display-variant";
 
 type OfferCardProps = {
   offer: OfferCardData;
@@ -41,7 +42,10 @@ export function OfferCard({
     clickParams.set("position", String(position));
   }
 
-  clickParams.set("variant", offer.displayVariant);
+  clickParams.set(
+    "variant",
+    getOfferClickVariant(pageType, offer.promoReady),
+  );
 
   return (
     <article
