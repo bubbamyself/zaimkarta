@@ -37,6 +37,7 @@ import { getAbsoluteUrl } from "@/lib/site-url";
 import { buildPublicShareImageUrl } from "@/lib/public-page-share";
 import {
   getArticleJsonLd,
+  getCategoryCollectionJsonLd,
   getFaqPageJsonLd,
   serializeJsonLd,
 } from "@/lib/structured-data";
@@ -629,6 +630,19 @@ export default async function CategoryPage({
             seoPage.updatedByUserAt ?? seoPage.publishedAt ?? seoPage.updatedAt,
         })
       : null;
+  const categoryCollectionJsonLd = isCategoryPage
+    ? getCategoryCollectionJsonLd({
+        path: `/${slug}`,
+        name: seoPage.h1,
+        description: seoPage.description,
+        dateModified:
+          seoPage.updatedByUserAt ?? seoPage.publishedAt ?? seoPage.updatedAt,
+        items: selectedOffers.map((offer) => ({
+          name: offer.name,
+          path: `/offers/${offer.slug}`,
+        })),
+      })
+    : null;
 
   if (isCategoryPage) {
     return (
@@ -640,6 +654,14 @@ export default async function CategoryPage({
             __html: serializeJsonLd(breadcrumbJsonLd),
           }}
         />
+        {categoryCollectionJsonLd ? (
+          <script
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{
+              __html: serializeJsonLd(categoryCollectionJsonLd),
+            }}
+          />
+        ) : null}
         {faqPageJsonLd ? (
           <script
             type="application/ld+json"

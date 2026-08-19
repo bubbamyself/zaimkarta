@@ -176,18 +176,6 @@ function validateSlug(slug: string) {
   }
 }
 
-function hasForbiddenPromise(text: string) {
-  const normalized = text.toLocaleLowerCase("ru-RU");
-
-  return [
-    /100\s*%\s*одобр/,
-    /гарантированн/,
-    /деньги\s+всем/,
-    /одобр[а-яё]*\s+всем/,
-    /без\s+отказа\s+(?:кажд|всем|гарант|получ|одобр|выдад|дадут)/,
-  ].some((pattern) => pattern.test(normalized));
-}
-
 function hasReadableText(value: string | null) {
   if (!value) {
     return false;
@@ -354,25 +342,6 @@ async function validateSeoPagePublication(
   if (missingFields.length > 0) {
     throw actionError(
       `Нельзя опубликовать страницу. Заполни поля: ${missingFields.join(", ")}.`,
-    );
-  }
-
-  const publicText = [
-    data.title,
-    data.description,
-    data.h1,
-    data.intro,
-    data.content,
-    data.riskNotice,
-    JSON.stringify(data.contentBlocks ?? ""),
-    ...offerLinks.flatMap((item) => [item.badge, item.note, item.ctaText]),
-  ]
-    .filter(Boolean)
-    .join("\n");
-
-  if (hasForbiddenPromise(publicText)) {
-    throw actionError(
-      "В тексте есть рискованные обещания вроде «100% одобрение», «гарантированно», «деньги всем» или «без отказа» как обещание. Смягчи формулировку перед публикацией.",
     );
   }
 

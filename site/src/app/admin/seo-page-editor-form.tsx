@@ -98,7 +98,7 @@ function hasReadableText(value: string) {
     .trim().length > 0;
 }
 
-function hasForbiddenPromise(text: string) {
+function hasRiskyPromise(text: string) {
   const normalized = text.toLocaleLowerCase("ru-RU");
 
   return [
@@ -108,6 +108,18 @@ function hasForbiddenPromise(text: string) {
     /одобр[а-яё]*\s+всем/,
     /без\s+отказа\s+(?:кажд|всем|гарант|получ|одобр|выдад|дадут)/,
   ].some((pattern) => pattern.test(normalized));
+}
+
+function getPublicFormText(formData: FormData) {
+  return [
+    textValue(formData, "title"),
+    textValue(formData, "description"),
+    textValue(formData, "h1"),
+    textValue(formData, "intro"),
+    textValue(formData, "content"),
+    textValue(formData, "riskNotice"),
+    textValue(formData, "contentBlocks"),
+  ].join("\n");
 }
 
 function getSubmitStatus(formData: FormData, submitter: SubmitEvent["submitter"]) {
@@ -161,7 +173,16 @@ export function SeoPageEditorForm({
   const submittedControlsRef =
     useRef<Map<string, FormControlSnapshot[]> | null>(null);
   const [validationMessage, setValidationMessage] = useState("");
+  const [legalWarning, setLegalWarning] = useState("");
   const [state, formAction, isPending] = useActionState(action, {});
+
+  function refreshLegalWarning(formData: FormData) {
+    setLegalWarning(
+      hasRiskyPromise(getPublicFormText(formData))
+        ? "Предупреждение: в тексте найдена формулировка, похожая на обещание одобрения или результата. Проверка может ошибаться — сохранение и публикация не заблокированы."
+        : "",
+    );
+  }
 
   useEffect(() => {
     const form = formRef.current;
@@ -181,6 +202,7 @@ export function SeoPageEditorForm({
     const submitStatus = getSubmitStatus(formData, nativeEvent.submitter);
     const slug = textValue(formData, "slug");
     submittedControlsRef.current = captureFormControls(form);
+    refreshLegalWarning(formData);
 
     if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
       event.preventDefault();
@@ -253,24 +275,6 @@ export function SeoPageEditorForm({
       missingFields.push({ name: "pageToolToolId", label: "Основной инструмент" });
     }
 
-    const publicText = [
-      textValue(formData, "title"),
-      textValue(formData, "description"),
-      textValue(formData, "h1"),
-      textValue(formData, "intro"),
-      textValue(formData, "content"),
-      textValue(formData, "riskNotice"),
-      textValue(formData, "contentBlocks"),
-    ].join("\n");
-
-    if (hasForbiddenPromise(publicText)) {
-      event.preventDefault();
-      setValidationMessage(
-        "В тексте есть рискованное обещание: 100% одобрение, гарантированно, деньги всем или без отказа как обещание.",
-      );
-      return;
-    }
-
     if (missingFields.length === 0) {
       markMissingFields(form, []);
       setValidationMessage("");
@@ -298,15 +302,28 @@ export function SeoPageEditorForm({
       ref={formRef}
       action={formAction}
       onSubmit={validatePublication}
+      onInput={(event) => refreshLegalWarning(new FormData(event.currentTarget))}
       noValidate
       className="grid gap-6 rounded-lg border border-slate-200 bg-slate-50 p-4"
     >
-      {validationMessage || state.error ? (
-        <div
-          aria-live="polite"
-          className="sticky top-3 z-30 rounded-lg border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-800 shadow-sm"
-        >
-          {validationMessage || state.error}
+      {legalWarning || validationMessage || state.error ? (
+        <div className="sticky top-3 z-30 grid gap-2">
+          {legalWarning ? (
+            <div
+              aria-live="polite"
+              className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm font-semibold leading-6 text-amber-900 shadow-sm"
+            >
+              {legalWarning}
+            </div>
+          ) : null}
+          {validationMessage || state.error ? (
+            <div
+              aria-live="polite"
+              className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-800 shadow-sm"
+            >
+              {validationMessage || state.error}
+            </div>
+          ) : null}
         </div>
       ) : null}
 

@@ -17,6 +17,17 @@ type FaqJsonLdItem = {
   answer: string;
 };
 
+type CategoryCollectionJsonLdInput = {
+  path: string;
+  name: string;
+  description: string;
+  dateModified: Date;
+  items: Array<{
+    name: string;
+    path: string;
+  }>;
+};
+
 export function serializeJsonLd(data: unknown) {
   return JSON.stringify(data).replace(/</g, "\\u003c");
 }
@@ -110,5 +121,49 @@ export function getFaqPageJsonLd(items: FaqJsonLdItem[]) {
         text: item.answer,
       },
     })),
+  };
+}
+
+export function getCategoryCollectionJsonLd({
+  path,
+  name,
+  description,
+  dateModified,
+  items,
+}: CategoryCollectionJsonLdInput) {
+  const url = getAbsoluteUrl(path);
+
+  return {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    "@id": `${url}#collection`,
+    url,
+    name,
+    description,
+    inLanguage: "ru-RU",
+    dateModified: dateModified.toISOString(),
+    isPartOf: {
+      "@id": WEBSITE_ID,
+    },
+    publisher: {
+      "@id": ORGANIZATION_ID,
+    },
+    mainEntity: {
+      "@type": "ItemList",
+      "@id": `${url}#offers`,
+      name: `Предложения в подборке «${name}»`,
+      numberOfItems: items.length,
+      itemListOrder: "https://schema.org/ItemListOrderAscending",
+      itemListElement: items.map((item, index) => ({
+        "@type": "ListItem",
+        position: index + 1,
+        item: {
+          "@type": "WebPage",
+          "@id": getAbsoluteUrl(item.path),
+          url: getAbsoluteUrl(item.path),
+          name: item.name,
+        },
+      })),
+    },
   };
 }

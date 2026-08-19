@@ -8,6 +8,7 @@ import type {
   SeoTool,
 } from "@prisma/client";
 import { ArticleRichTextEditor } from "./article-rich-text-editor";
+import { CategoryContentBlocksEditor } from "./category-content-blocks-editor";
 import { createSeoPage, updateSeoPage } from "./seo-actions";
 import { SeoPageEditorForm } from "./seo-page-editor-form";
 import { getPromoFieldErrors, isPromoReady } from "@/lib/offer-promo";
@@ -229,6 +230,12 @@ function getAdvancedContentBlocks(blocks: unknown) {
   return advancedBlocks.length > 0 ? JSON.stringify(advancedBlocks, null, 2) : "";
 }
 
+function getAdvancedContentBlockValues(blocks: unknown) {
+  const serializedBlocks = getAdvancedContentBlocks(blocks);
+
+  return serializedBlocks ? JSON.parse(serializedBlocks) : [];
+}
+
 function getArticleAdvancedContentBlocks(blocks: unknown) {
   if (!Array.isArray(blocks)) {
     return "";
@@ -340,9 +347,19 @@ export function SeoPageEditor({
 
       return firstLabel.localeCompare(secondLabel, "ru");
     });
+  const relatedPageOptions = seoPages
+    .filter(
+      (page) => page.status === "PUBLISHED" && page.id !== seoPage?.id,
+    )
+    .map((page) => ({
+      slug: page.slug,
+      pageType: page.pageType,
+      label: page.h1 || page.title,
+    }))
+    .sort((first, second) => first.label.localeCompare(second.label, "ru"));
   const toolRows = [
     ...(seoPage?.tools ?? []),
-    ...Array.from({ length: Math.max(2, 4 - (seoPage?.tools?.length ?? 0)) }, (_, index) => ({
+    ...Array.from({ length: Math.max(0, 2 - (seoPage?.tools?.length ?? 0)) }, (_, index) => ({
       id: `new-tool-${index}`,
       toolId: "",
       position: (seoPage?.tools?.length ?? 0) + index + 1,
@@ -575,32 +592,37 @@ export function SeoPageEditor({
           rows={8}
         />
       )}
-      <details className="rounded-lg border border-slate-200 bg-white p-4">
-        <summary className="cursor-pointer font-semibold text-slate-950">
-          Расширенные contentBlocks JSON
-        </summary>
-        <p className="mt-2 text-sm text-slate-500">
-          {isArticle
-            ? "Для статьи это технический режим: основной текст редактируется выше без JSON."
-            : "Для подборок это fallback: коммерческие поля выше сохраняются отдельно в безопасные блоки."}
-        </p>
-        <div className="mt-4">
-          <TextArea
-            label="Content blocks JSON"
-            name="contentBlocks"
-            defaultValue={
-              isCategory
-                ? getAdvancedContentBlocks(seoPage?.contentBlocks)
-                : isArticle
+      {isCategory ? (
+        <CategoryContentBlocksEditor
+          initialBlocks={getAdvancedContentBlockValues(seoPage?.contentBlocks)}
+          relatedPages={relatedPageOptions}
+        />
+      ) : (
+        <details className="rounded-lg border border-slate-200 bg-white p-4">
+          <summary className="cursor-pointer font-semibold text-slate-950">
+            Расширенные contentBlocks JSON
+          </summary>
+          <p className="mt-2 text-sm text-slate-500">
+            {isArticle
+              ? "Для статьи это технический режим: основной текст редактируется выше без JSON."
+              : "Технический режим для служебных блоков страницы."}
+          </p>
+          <div className="mt-4">
+            <TextArea
+              label="Content blocks JSON"
+              name="contentBlocks"
+              defaultValue={
+                isArticle
                   ? getArticleAdvancedContentBlocks(seoPage?.contentBlocks)
-                : seoPage?.contentBlocks
-                  ? JSON.stringify(seoPage.contentBlocks, null, 2)
-                  : ""
-            }
-            rows={10}
-          />
-        </div>
-      </details>
+                  : seoPage?.contentBlocks
+                    ? JSON.stringify(seoPage.contentBlocks, null, 2)
+                    : ""
+              }
+              rows={10}
+            />
+          </div>
+        </details>
+      )}
       <TextArea
         label="Предупреждение о рисках"
         name="riskNotice"
@@ -784,104 +806,124 @@ export function SeoPageEditor({
       </section>
 
       <section
-        className="rounded-lg border border-slate-200 bg-white p-4"
+        className="overflow-hidden rounded-xl border border-sky-200 bg-white shadow-sm"
         data-publication-field={isService ? "pageToolToolId" : undefined}
       >
-        <h4 className="flex items-center gap-2 font-bold text-slate-950">
-          Интерактивные инструменты
-          {isService ? <PublicationRequiredMark /> : null}
-        </h4>
-        <p className="mt-1 text-sm text-slate-500">
-          {isArticle
-            ? "Подключи калькулятор, чек-лист или другой инструмент как дополнение к статье. Для публикации статьи инструмент не обязателен."
-            : "Подключи существующий инструмент и настрой локальное отображение без ручной правки JSON. Для сервисной страницы первый активный инструмент считается основным."}
-        </p>
-        <div className="mt-4 grid gap-3">
+        <div className="border-b border-sky-100 bg-gradient-to-r from-sky-50 to-white px-5 py-5">
+          <h4 className="flex items-center gap-2 text-lg font-bold text-slate-950">
+            Инструменты на странице
+            {isService ? <PublicationRequiredMark /> : null}
+          </h4>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+            {isArticle
+              ? "Подключите калькулятор, чек-лист или другой инструмент как дополнение к статье. Для публикации статьи инструмент не обязателен."
+              : "Выберите готовый калькулятор или сервис — он появится между карточками и SEO-текстом. Технические настройки скрыты внутри карточки."}
+          </p>
+        </div>
+        <div className="grid gap-4 p-4 sm:p-5">
           {toolRows.map((item, index) => (
-            <div
+            <article
               key={item.id}
-              className="grid gap-3 rounded-lg border border-slate-200 p-3 lg:grid-cols-[1.1fr_90px_140px_1fr]"
+              className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50/70"
             >
-              <label className="grid gap-2">
-                <span className="text-xs font-medium text-slate-500">
-                  Инструмент
+              <div className="flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-3">
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-sky-700 text-sm font-bold text-white">
+                  {index + 1}
                 </span>
-                <select
-                  name="pageToolToolId"
-                  defaultValue={item.toolId}
-                  className="h-10 rounded-md border border-slate-300 bg-white px-3"
-                >
-                  <option value="">Не выбран</option>
-                  {seoTools.map((tool) => (
-                    <option key={tool.id} value={tool.id}>
-                      {tool.name} · {tool.status}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="grid gap-2">
-                <span className="text-xs font-medium text-slate-500">Позиция</span>
-                <input
-                  name="pageToolPosition"
-                  type="number"
-                  min="1"
-                  defaultValue={item.position || index + 1}
-                  className="h-10 rounded-md border border-slate-300 bg-white px-3"
-                />
-              </label>
-              <label className="grid gap-2">
-                <span className="text-xs font-medium text-slate-500">Variant</span>
-                <select
-                  name="pageToolVariant"
-                  defaultValue={item.variant}
-                  className="h-10 rounded-md border border-slate-300 bg-white px-3"
-                >
-                  <option value="FULL">FULL</option>
-                  <option value="COMPACT">COMPACT</option>
-                  <option value="INLINE">INLINE</option>
-                </select>
-              </label>
-              <label className="grid gap-2">
-                <span className="text-xs font-medium text-slate-500">Block ID</span>
-                <input
-                  name="pageToolBlockId"
-                  defaultValue={item.blockId ?? ""}
-                  placeholder="overpayment-main"
-                  className="h-10 rounded-md border border-slate-300 bg-white px-3"
-                />
-              </label>
-              <label className="grid gap-2 lg:col-span-2">
-                <span className="text-xs font-medium text-slate-500">
-                  Локальный заголовок
-                </span>
-                <input
-                  name="pageToolTitle"
-                  defaultValue={item.title ?? ""}
-                  className="h-10 rounded-md border border-slate-300 bg-white px-3"
-                />
-              </label>
-              <label className="grid gap-2 lg:col-span-2">
-                <span className="text-xs font-medium text-slate-500">
-                  Локальный intro
-                </span>
-                <input
-                  name="pageToolIntro"
-                  defaultValue={item.intro ?? ""}
-                  className="h-10 rounded-md border border-slate-300 bg-white px-3"
-                />
-              </label>
-              <label className="grid gap-2 lg:col-span-2">
-                <span className="text-xs font-medium text-slate-500">CTA text</span>
-                <input
-                  name="pageToolCtaText"
-                  defaultValue={getConfigText(item.config, "cta", "text")}
-                  placeholder="Посмотреть предложения"
-                  className="h-10 rounded-md border border-slate-300 bg-white px-3"
-                />
-              </label>
-              <div className="grid gap-3 lg:col-span-2 lg:grid-cols-3">
+                <div>
+                  <p className="font-bold text-slate-900">
+                    {item.tool?.name ?? "Свободное место для инструмента"}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    Оставьте «Не добавлять», если второй инструмент не нужен
+                  </p>
+                </div>
+              </div>
+              <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_110px_190px]">
                 <label className="grid gap-2">
-                  <span className="text-xs font-medium text-slate-500">
+                  <span className="text-sm font-semibold text-slate-700">
+                    Какой инструмент добавить
+                  </span>
+                  <select
+                    name="pageToolToolId"
+                    defaultValue={item.toolId}
+                    className="h-11 rounded-lg border border-slate-300 bg-white px-3 shadow-sm"
+                  >
+                    <option value="">Не добавлять</option>
+                    {seoTools.map((tool) => (
+                      <option key={tool.id} value={tool.id}>
+                        {tool.name} · {tool.status}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="grid gap-2">
+                  <span className="text-sm font-semibold text-slate-700">Порядок</span>
+                  <input
+                    name="pageToolPosition"
+                    type="number"
+                    min="1"
+                    defaultValue={item.position || index + 1}
+                    className="h-11 rounded-lg border border-slate-300 bg-white px-3 shadow-sm"
+                  />
+                </label>
+                <label className="grid gap-2">
+                  <span className="text-sm font-semibold text-slate-700">Размер блока</span>
+                  <select
+                    name="pageToolVariant"
+                    defaultValue={item.variant}
+                    className="h-11 rounded-lg border border-slate-300 bg-white px-3 shadow-sm"
+                  >
+                    <option value="FULL">Полный</option>
+                    <option value="COMPACT">Компактный</option>
+                    <option value="INLINE">В строке</option>
+                  </select>
+                </label>
+                <input
+                  type="hidden"
+                  name="pageToolBlockId"
+                  value={item.blockId ?? ""}
+                />
+                <label className="grid gap-2 lg:col-span-1">
+                  <span className="text-sm font-semibold text-slate-700">
+                    Заголовок на этой странице
+                  </span>
+                  <input
+                    name="pageToolTitle"
+                    defaultValue={item.title ?? ""}
+                    placeholder="Можно оставить пустым"
+                    className="h-11 rounded-lg border border-slate-300 bg-white px-3 shadow-sm"
+                  />
+                </label>
+                <label className="grid gap-2 lg:col-span-2">
+                  <span className="text-sm font-semibold text-slate-700">
+                    Короткое пояснение
+                  </span>
+                  <input
+                    name="pageToolIntro"
+                    defaultValue={item.intro ?? ""}
+                    placeholder="Зачем посетителю использовать этот инструмент"
+                    className="h-11 rounded-lg border border-slate-300 bg-white px-3 shadow-sm"
+                  />
+                </label>
+              </div>
+              <details className="border-t border-slate-200 bg-white px-4 py-3">
+                <summary className="cursor-pointer text-sm font-bold text-sky-800">
+                  Дополнительные настройки
+                </summary>
+                <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                  <label className="grid gap-2 lg:col-span-2">
+                    <span className="text-sm font-semibold text-slate-700">Текст кнопки</span>
+                    <input
+                      name="pageToolCtaText"
+                      defaultValue={getConfigText(item.config, "cta", "text")}
+                      placeholder="Посмотреть предложения"
+                      className="h-11 rounded-lg border border-slate-300 bg-white px-3"
+                    />
+                  </label>
+                  <div className="grid gap-3 lg:col-span-2 lg:grid-cols-3">
+                <label className="grid gap-2">
+                  <span className="text-xs font-semibold text-slate-600">
                     Сумма по умолчанию
                   </span>
                   <input
@@ -893,7 +935,7 @@ export function SeoPageEditor({
                   />
                 </label>
                 <label className="grid gap-2">
-                  <span className="text-xs font-medium text-slate-500">
+                  <span className="text-xs font-semibold text-slate-600">
                     Срок, дней
                   </span>
                   <input
@@ -905,7 +947,7 @@ export function SeoPageEditor({
                   />
                 </label>
                 <label className="grid gap-2">
-                  <span className="text-xs font-medium text-slate-500">
+                  <span className="text-xs font-semibold text-slate-600">
                     Ставка в день
                   </span>
                   <input
@@ -917,30 +959,32 @@ export function SeoPageEditor({
                     className="h-10 rounded-md border border-slate-300 bg-white px-3"
                   />
                 </label>
-              </div>
-              <label className="grid gap-2 lg:col-span-4">
-                <span className="text-xs font-medium text-slate-500">
-                  Локальное предупреждение
-                </span>
-                <textarea
-                  name="pageToolRiskNotice"
-                  defaultValue={getConfigText(item.config, "riskNotice", "text")}
-                  rows={2}
-                  className="rounded-md border border-slate-300 bg-white px-3 py-2"
-                />
-              </label>
-              <details className="lg:col-span-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
-                <summary className="cursor-pointer text-sm font-semibold text-slate-700">
-                  Технический config override JSON
-                </summary>
-                <textarea
-                  name="pageToolConfig"
-                  defaultValue={getAdvancedToolConfig(item.config)}
-                  rows={3}
-                  className="mt-3 w-full rounded-md border border-slate-300 bg-white px-3 py-2 font-mono text-sm"
-                />
+                  </div>
+                  <label className="grid gap-2 lg:col-span-2">
+                    <span className="text-sm font-semibold text-slate-700">
+                      Предупреждение внутри инструмента
+                    </span>
+                    <textarea
+                      name="pageToolRiskNotice"
+                      defaultValue={getConfigText(item.config, "riskNotice", "text")}
+                      rows={2}
+                      className="rounded-lg border border-slate-300 bg-white px-3 py-2"
+                    />
+                  </label>
+                  <details className="lg:col-span-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                    <summary className="cursor-pointer text-sm font-semibold text-slate-700">
+                      Технические параметры
+                    </summary>
+                    <textarea
+                      name="pageToolConfig"
+                      defaultValue={getAdvancedToolConfig(item.config)}
+                      rows={3}
+                      className="mt-3 w-full rounded-md border border-slate-300 bg-white px-3 py-2 font-mono text-sm"
+                    />
+                  </details>
+                </div>
               </details>
-            </div>
+            </article>
           ))}
         </div>
       </section>
